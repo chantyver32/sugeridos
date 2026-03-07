@@ -49,24 +49,11 @@ with st.container(border=True):
     
     col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
-
-        permitir_nuevo = st.checkbox("Permitir agregar producto nuevo")
-
-if permitir_nuevo:
-    nombre_input = st.text_input("Escribe o busca producto").upper()
-
-    sugerencias = [p for p in nombres_prev if nombre_input in p]
-
-    if sugerencias:
-        opcion = st.selectbox("Sugerencias", sugerencias)
-        if opcion:
+        opcion = st.selectbox("Producto:", ["-- Nuevo Producto --"] + nombres_prev, key="sel_prod")
+        if opcion == "-- Nuevo Producto --":
+            nombre_input = st.text_input("Nombre del pan:", key="txt_prod").upper()
+        else:
             nombre_input = opcion
-else:
-    nombre_input = st.selectbox(
-        "Buscar producto",
-        nombres_prev,
-        placeholder="Empieza a escribir..."
-    )
     
     with col2:
         f_cad = st.date_input("Fecha de Caducidad:", value=fecha_hoy_mx, min_value=fecha_hoy_mx, key="date_cad")
@@ -210,4 +197,3 @@ with st.expander("📖 Historial General"):
     if not df_hist.empty:
         csv = df_hist.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Descargar CSV", data=csv, file_name=f"ventas_{fecha_hoy_mx}.csv")
-
