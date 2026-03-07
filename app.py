@@ -180,9 +180,10 @@ for _, row in df.iterrows():
 link = "https://wa.me/" + numero_whatsapp + "?text=" + urllib.parse.quote(mensaje)
 
 st.link_button("📲 Enviar tabla de ventas por WhatsApp", link)
-    if st.button("Cerrar Resumen"):
-        del st.session_state['ultimo_corte']
-        st.rerun()
+
+if st.button("Cerrar Resumen"):
+    del st.session_state['ultimo_corte']
+    st.rerun()
 
 # ------------------ SECCIÓN 3: ALERTAS Y ESTADO ACTUAL ------------------
 st.divider()
@@ -241,4 +242,5 @@ with st.expander("📖 Historial General"):
     if not df_hist.empty:
         csv = df_hist.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Descargar CSV", data=csv, file_name=f"ventas_{fecha_hoy_mx}.csv")
+
 
