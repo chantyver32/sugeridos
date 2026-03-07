@@ -176,10 +176,13 @@ if not df_hoy_captura.empty:
                 )
 
         conn.commit()
-        msg = st.success("Conteo actualizado")
-        time.sleep(2)
-        msg.empty()
-        st.rerun()
+        mensaje = st.empty()
+mensaje.success("💾 Conteo actualizado")
+
+time.sleep(2)
+mensaje.empty()
+
+st.rerun()
             
     with col_cancel:
         if st.button("🗑️ Borrar TODO el conteo actual", use_container_width=True):
@@ -195,9 +198,12 @@ if st.button("REALIZAR CORTE Y REINICIAR FORMULARIO", type="primary", use_contai
     df_actualizado = pd.read_sql("SELECT * FROM captura_actual", conn)
     
    if df_actualizado.empty:
-    msg = st.warning("No hay nada que comparar.")
-    time.sleep(2)
-    msg.empty()
+       mensaje = st.empty()
+mensaje.warning("⚠️ No hay nada que comparar.")
+
+time.sleep(2)
+mensaje.empty()
+       
        
     else:
         df_anterior = pd.read_sql("SELECT * FROM base_anterior", conn)
@@ -231,10 +237,13 @@ if st.button("REALIZAR CORTE Y REINICIAR FORMULARIO", type="primary", use_contai
         c.execute("INSERT INTO base_anterior SELECT * FROM captura_actual")
         c.execute("DELETE FROM captura_actual")
         conn.commit()
-        msg = st.success("Corte realizado con éxito")
-        time.sleep(2)
-        msg.empty()
-        st.rerun()
+        mensaje = st.empty()
+mensaje.success("🏁 Corte realizado con éxito")
+
+time.sleep(2)
+mensaje.empty()
+
+st.rerun()
 
 if 'ultimo_corte' in st.session_state:
     st.balloons()
@@ -359,6 +368,7 @@ with st.expander("📖 Historial General"):
             data=csv,
             file_name=f"ventas_{fecha_hoy_mx}.csv"
         )
+
 
 
 
