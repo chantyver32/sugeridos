@@ -31,7 +31,6 @@ with st.container(border=True):
     
     col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
-        # Usamos una clave (key) para resetear el widget si es necesario
         opcion = st.selectbox("Producto:", ["-- Nuevo Producto --"] + nombres_prev, key="sel_prod")
         if opcion == "-- Nuevo Producto --":
             nombre_input = st.text_input("Nombre del pan:", key="txt_prod").upper()
@@ -53,29 +52,61 @@ with st.container(border=True):
             else:
                 c.execute("INSERT INTO captura_actual VALUES (?, ?, ?)", (nombre_final, f_cad, int(cant)))
             conn.commit()
-            st.rerun() # Limpia el formulario tras agregar individualmente
+            st.rerun()
 
-# --- Tabla de Captura Actual ---
-df_hoy_captura = pd.read_sql("SELECT * FROM captura_actual", conn)
+# --- TABLA EDITABLE DE CAPTURA ACTUAL ---
+df_hoy_captura = pd.read_sql("SELECT rowid, nombre, fecha_cad, cantidad FROM captura_actual", conn)
+
 if not df_hoy_captura.empty:
-    st.subheader("📋 Tu conteo de este momento:")
-    st.dataframe(df_hoy_captura, use_container_width=True, hide_index=True)
-    if st.button("🗑️ Cancelar este conteo (Limpiar pantalla)"):
-        c.execute("DELETE FROM captura_actual")
-        conn.commit()
-        st.rerun()
+    st.subheader("📋 Revisión de Captura (Edita o elimina aquí)")
+    st.info("💡 Haz doble clic en una celda para editar. Selecciona una fila y presiona 'Suprimir' para borrar.")
+    
+    # Editor interactivo
+    df_editado = st.data_editor(
+        df_hoy_captura,
+        column_config={
+            "rowid": None, # Oculto para el usuario
+            "nombre": st.column_config.TextColumn("Producto"),
+            "fecha_cad": st.column_config.DateColumn("Caducidad"),
+            "cantidad": st.column_config.NumberColumn("Cantidad", min_value=0)
+        },
+        use_container_width=True,
+        hide_index=True,
+        num_rows="dynamic",
+        key="editor_captura"
+    )
+
+    col_btn1, col_btn2 = st.columns(2)
+    with col_btn1:
+        if st.button("💾 Guardar Cambios Realizados", use_container_width=True, type="secondary"):
+            c.execute("DELETE FROM captura_actual")
+            for _, row in df_editado.iterrows():
+                if row['cantidad'] > 0:
+                    c.execute("INSERT INTO captura_actual VALUES (?, ?, ?)", 
+                             (row['nombre'].upper(), row['fecha_cad'], int(row['cantidad'])))
+            conn.commit()
+            st.success("¡Cambios guardados!")
+            st.rerun()
+            
+    with col_btn2:
+        if st.button("🗑️ Limpiar Toda la Pantalla", use_container_width=True):
+            c.execute("DELETE FROM captura_actual")
+            conn.commit()
+            st.rerun()
 
 # ------------------ SECCIÓN 2: CORTE Y COMPARACIÓN (PASO 2) ------------------
 st.divider()
-st.header("🏁 Paso 2: Finalizar y Limpiar Todo")
+st.header("🏁 Paso 2: Finalizar y Calcular Ventas")
 
-if st.button("REALIZAR CORTE Y REINICIAR FORMULARIO", type="primary", use_container_width=True):
-    if df_hoy_captura.empty:
+if st.button("REALIZAR CORTE FINAL", type="primary", use_container_width=True):
+    # Volvemos a leer para asegurar que tenemos lo último guardado
+    df_final_captura = pd.read_sql("SELECT * FROM captura_actual", conn)
+    
+    if df_final_captura.empty:
         st.warning("No hay nada que comparar. La lista de captura está vacía.")
     else:
         df_anterior = pd.read_sql("SELECT * FROM base_anterior", conn)
         
-        # Lógica de comparación
         if not df_anterior.empty:
             ventas_detectadas = []
             ts_mx = ahora_mx.strftime("%Y-%m-%d %H:%M:%S")
@@ -98,25 +129,23 @@ if st.button("REALIZAR CORTE Y REINICIAR FORMULARIO", type="primary", use_contai
                     c.execute("INSERT INTO historial_ventas VALUES (?, ?, ?, ?)", 
                              (fila_ant['nombre'], fila_ant['fecha_cad'], diferencia, ts_mx))
             
-            # Guardamos los resultados en la sesión para mostrarlos tras el rerun
             if ventas_detectadas:
                 st.session_state['ultimo_corte'] = pd.DataFrame(ventas_detectadas)
         
-        # EL RELEVO: Lo de hoy es la nueva base
+        # EL RELEVO
         c.execute("DELETE FROM base_anterior")
         c.execute("INSERT INTO base_anterior SELECT * FROM captura_actual")
         c.execute("DELETE FROM captura_actual")
         conn.commit()
-        
-        st.success("✅ Corte realizado. Los campos se han limpiado para la siguiente captura.")
-        st.rerun() # ESTA ES LA MAGIA: Limpia todos los inputs y tablas de captura
+        st.success("✅ Corte realizado. Inventario actualizado.")
+        st.rerun()
 
-# Mostrar resultados del último corte si existen
+# Mostrar resultados del último corte
 if 'ultimo_corte' in st.session_state:
     st.balloons()
-    st.subheader("📊 Resultados del Último Corte Realizado:")
+    st.subheader("📊 Resultados del Último Corte:")
     st.table(st.session_state['ultimo_corte'])
-    if st.button("Entendido (Cerrar tabla de resultados)"):
+    if st.button("Cerrar Tabla de Resultados"):
         del st.session_state['ultimo_corte']
         st.rerun()
 
@@ -133,17 +162,17 @@ if not df_caducan_hoy.empty:
 else:
     st.success("✅ No hay caducidades para hoy.")
 
-st.header("🏪 Inventario Real en Estantes")
+st.header("🏪 Inventario Actual en Estantes")
 df_estantes = pd.read_sql("SELECT nombre as Producto, fecha_cad as [Fecha Caducidad], cantidad as Cantidad FROM base_anterior", conn)
 if not df_estantes.empty:
     st.metric("Total piezas en exhibición", f"{int(df_estantes['Cantidad'].sum())} panes")
     st.dataframe(df_estantes, use_container_width=True, hide_index=True)
 
 # ------------------ HISTORIAL ------------------
-with st.expander("📖 Historial de Ventas"):
+with st.expander("📖 Ver Historial de Ventas Acumulado"):
     st.dataframe(pd.read_sql("SELECT * FROM historial_ventas ORDER BY fecha_corte DESC", conn), use_container_width=True)
 
-if st.sidebar.button("⚠️ RESET TOTAL"):
+if st.sidebar.button("⚠️ RESET TOTAL (Borrar todo)"):
     c.execute("DELETE FROM captura_actual"); c.execute("DELETE FROM base_anterior"); c.execute("DELETE FROM historial_ventas")
     conn.commit()
     st.rerun()
