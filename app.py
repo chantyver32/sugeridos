@@ -4,106 +4,131 @@ import sqlite3
 from datetime import datetime
 
 # ------------------ CONFIGURACIÓN ------------------
-st.set_page_config(page_title="Inventario Pastelería", page_icon="🥐")
-st.title("Comparador de Inventario Real-Time 🥐")
+st.set_page_config(page_title="Control Pastelería", page_icon="🥐")
+st.title("Sistema de Captura y Comparación 🥐")
 
 conn = sqlite3.connect('inventario_pan.db', check_same_thread=False)
 c = conn.cursor()
 
-c.execute('CREATE TABLE IF NOT EXISTS existencias (nombre TEXT, fecha_cad DATE, revision_id INTEGER)')
-c.execute('CREATE TABLE IF NOT EXISTS historial_ventas (nombre TEXT, fecha_cad DATE, cantidad INTEGER, fecha_corte DATETIME)')
+# 1. Tabla de CAPTURA ACTUAL (Lo que el usuario ve y anota ahora)
+c.execute('CREATE TABLE IF NOT EXISTS captura_actual (nombre TEXT, fecha_cad DATE, cantidad INTEGER)')
+# 2. Tabla de BASE ANTERIOR (Lo que se anotó en la revisión pasada, para comparar)
+c.execute('CREATE TABLE IF NOT EXISTS base_anterior (nombre TEXT, fecha_cad DATE, cantidad INTEGER)')
+# 3. Historial de Ventas
+c.execute('CREATE TABLE IF NOT EXISTS historial_ventas (nombre TEXT, fecha_cad DATE, vendidos INTEGER, fecha_corte DATETIME)')
 conn.commit()
 
-# --- Obtener ID Actual ---
-res_id = c.execute("SELECT MAX(revision_id) FROM existencias").fetchone()
-rev_actual = res_id[0] if res_id[0] else 1
+# ------------------ PASO 1: CAPTURA FÍSICA ------------------
+st.header("🛒 Nueva Revisión: Captura de Estantes")
+st.write("Anota los productos que hay **físicamente** en este momento.")
 
-# ------------------ CAPTURA ------------------
-st.header(f"📍 Paso 1: Conteo Físico (Revisión #{rev_actual})")
 with st.container(border=True):
     col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
-        # Buscamos nombres existentes para sugerir
-        nombres_sugeridos = [r[0] for r in c.execute("SELECT DISTINCT nombre FROM existencias").fetchall()]
-        nombre = st.selectbox("Producto:", ["-- Nuevo --"] + nombres_sugeridos)
+        # Sugerencias basadas en lo que ya conocemos
+        nombres_conocidos = [r[0] for r in c.execute("SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual").fetchall()]
+        nombre = st.selectbox("Producto:", ["-- Nuevo --"] + nombres_conocidos)
         if nombre == "-- Nuevo --":
-            nombre = st.text_input("Nombre del pan:").upper()
+            nombre = st.text_input("Escribe el nombre:").upper()
     with col2:
-        f_cad = st.date_input("Caducidad:")
+        f_cad = st.date_input("Caducidad:", value=datetime.now().date())
     with col3:
-        cant = st.number_input("¿Cuántos ves?", min_value=1, value=1)
+        cant = st.number_input("Cantidad:", min_value=1, value=1)
 
-    if st.button("➕ Registrar Pan"):
-        for _ in range(int(cant)):
-            c.execute("INSERT INTO existencias VALUES (?, ?, ?)", (nombre, f_cad, rev_actual))
-        conn.commit()
-        st.rerun()
+    if st.button("➕ Agregar al Conteo", use_container_width=True):
+        if nombre:
+            # Buscamos si ya existe ese pan con esa fecha para SUMAR en lugar de crear fila nueva
+            existe = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", (nombre, f_cad)).fetchone()
+            if existe:
+                c.execute("UPDATE captura_actual SET cantidad = cantidad + ? WHERE nombre=? AND fecha_cad=?", (cant, nombre, f_cad))
+            else:
+                c.execute("INSERT INTO captura_actual VALUES (?, ?, ?)", (nombre, f_cad, int(cant)))
+            conn.commit()
+            st.rerun()
 
-# --- Tabla de lo que hay hoy ---
-df_hoy = pd.read_sql("SELECT nombre, fecha_cad, COUNT(*) as cantidad FROM existencias WHERE revision_id = ? GROUP BY nombre, fecha_cad", conn, params=(rev_actual,))
+# --- Mostrar lo que se está capturando AHORA ---
+df_hoy = pd.read_sql("SELECT * FROM captura_actual", conn)
 if not df_hoy.empty:
-    st.subheader("Tu conteo de hoy:")
+    st.subheader("📋 Tu conteo actual (lo que ves ahora):")
     st.dataframe(df_hoy, use_container_width=True)
-
-# ------------------ COMPARACIÓN (EL CORTE) ------------------
-st.divider()
-st.header("🏁 Paso 2: Realizar Corte")
-
-if st.button("CALCULAR VENTAS (Comparar con revisión anterior)", type="primary"):
-    rev_anterior = rev_actual - 1
     
-    if rev_anterior < 1:
-        st.info("Esta es tu primera revisión. No hay nada contra qué comparar todavía. ¡Sigue capturando!")
-        # Forzamos el salto a la siguiente revisión para que ya haya un "pasado"
-        c.execute("UPDATE existencias SET revision_id = 2 WHERE revision_id = 1")
+    if st.button("🗑️ Borrar todo el conteo actual (Limpiar pantalla)"):
+        c.execute("DELETE FROM captura_actual")
         conn.commit()
         st.rerun()
+else:
+    st.info("La pantalla está limpia. Empieza a anotar los productos.")
+
+# ------------------ PASO 2: CORTE Y COMPARACIÓN ------------------
+st.divider()
+st.header("🏁 Finalizar y Comparar")
+st.write("Al presionar este botón, compararemos lo que acabas de anotar contra lo que había en la revisión pasada.")
+
+if st.button("REALIZAR CORTE DE VENTAS", type="primary", use_container_width=True):
+    if df_hoy.empty:
+        st.warning("No puedes hacer un corte si no has anotado nada hoy.")
     else:
-        # 1. Traer datos de ambos conteos
-        df_ant = pd.read_sql("SELECT nombre, fecha_cad, COUNT(*) as cant FROM existencias WHERE revision_id = ? GROUP BY nombre, fecha_cad", conn, params=(rev_anterior,))
+        # 1. Traer la Base Anterior (lo que se quedó guardado internamente la vez pasada)
+        df_anterior = pd.read_sql("SELECT * FROM base_anterior", conn)
         
-        # 2. Comparar en Python (para que sea visual e inmediato)
-        comparativa = []
-        for _, fila in df_ant.iterrows():
-            # ¿Cuántos hay de este mismo pan y fecha en el conteo de HOY?
-            ahora = len(c.execute("SELECT 1 FROM existencias WHERE nombre=? AND fecha_cad=? AND revision_id=?", 
-                                 (fila['nombre'], fila['fecha_cad'], rev_actual)).fetchall())
-            
-            diferencia = fila['cant'] - ahora
-            if diferencia > 0:
-                comparativa.append({
-                    "Producto": fila['nombre'],
-                    "Caducidad": fila['fecha_cad'],
-                    "Había": fila['cant'],
-                    "Quedan": ahora,
-                    "VENDIDOS": diferencia
-                })
-                # Guardar en historial
-                c.execute("INSERT INTO historial_ventas VALUES (?, ?, ?, ?)", 
-                         (fila['nombre'], fila['fecha_cad'], diferencia, datetime.now()))
-
-        # 3. MOSTRAR RESULTADOS ANTES DE BORRAR
-        if comparativa:
-            st.success("¡Ventas detectadas!")
-            st.table(pd.DataFrame(comparativa))
+        if df_anterior.empty:
+            st.success("✅ Primer registro guardado con éxito.")
+            st.info("Como es la primera vez, no hay con qué comparar. Estos datos ahora son tu 'Base Interna'.")
+            # Movemos lo de hoy a la base anterior y limpiamos pantalla
+            c.execute("INSERT INTO base_anterior SELECT * FROM captura_actual")
+            c.execute("DELETE FROM captura_actual")
+            conn.commit()
+            st.rerun()
         else:
-            st.warning("No se detectaron ventas. El inventario está igual.")
+            # 2. COMPARACIÓN LÓGICA
+            analisis_ventas = []
+            ahora_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            for _, fila_ant in df_anterior.iterrows():
+                # Buscamos el mismo pan en el conteo de hoy
+                res_hoy = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", 
+                                   (fila_ant['nombre'], fila_ant['fecha_cad'])).fetchone()
+                
+                cant_hoy = res_hoy[0] if res_hoy else 0
+                vendidos = fila_ant['cantidad'] - cant_hoy
+                
+                if vendidos > 0:
+                    analisis_ventas.append({
+                        "Producto": fila_ant['nombre'],
+                        "Caducidad": fila_ant['fecha_cad'],
+                        "Había": fila_ant['cantidad'],
+                        "Hay ahora": cant_hoy,
+                        "VENDIDOS": vendidos
+                    })
+                    c.execute("INSERT INTO historial_ventas VALUES (?, ?, ?, ?)", 
+                             (fila_ant['nombre'], fila_ant['fecha_cad'], vendidos, ahora_timestamp))
 
-        # 4. LIMPIEZA DE BASE DE DATOS
-        # Borramos el registro "viejo" (el que era el pasado)
-        c.execute("DELETE FROM existencias WHERE revision_id = ?", (rev_anterior,))
-        # El conteo de HOY se convierte en el nuevo PASADO (ID + 1)
-        c.execute("UPDATE existencias SET revision_id = ? WHERE revision_id = ?", (rev_actual + 1, rev_actual))
-        conn.commit()
-        
-        st.info(f"Corte completado. La base de datos se preparó para la Revisión #{rev_actual + 1}")
+            # 3. ACTUALIZAR BASE INTERNA
+            # Borramos la base vieja y la reemplazamos por lo que contamos HOY
+            c.execute("DELETE FROM base_anterior")
+            c.execute("INSERT INTO base_anterior SELECT * FROM captura_actual")
+            # Limpiamos la pantalla (captura actual)
+            c.execute("DELETE FROM captura_actual")
+            conn.commit()
+            
+            # 4. MOSTRAR RESULTADOS
+            if analisis_ventas:
+                st.balloons()
+                st.subheader("📊 Resultados del Corte:")
+                st.table(pd.DataFrame(analisis_ventas))
+            else:
+                st.info("El inventario coincide perfectamente. No se registraron ventas.")
+            
+            st.warning("⚠️ La pantalla de captura se ha limpiado. Lo que anotaste ahora es la base para la siguiente revisión.")
 
-# --- HISTORIAL ---
-with st.expander("Ver todas las ventas pasadas"):
-    st.dataframe(pd.read_sql("SELECT * FROM historial_ventas", conn))
+# ------------------ HISTORIAL ------------------
+with st.expander("📖 Ver todas las ventas acumuladas"):
+    df_hist = pd.read_sql("SELECT * FROM historial_ventas ORDER BY fecha_corte DESC", conn)
+    st.dataframe(df_hist, use_container_width=True)
 
-if st.sidebar.button("Reiniciar TODA la App (Borrar todo)"):
-    c.execute("DELETE FROM existencias")
+if st.sidebar.button("RESETEAR TODO (Borrar memoria interna)"):
+    c.execute("DELETE FROM captura_actual")
+    c.execute("DELETE FROM base_anterior")
     c.execute("DELETE FROM historial_ventas")
     conn.commit()
     st.rerun()
