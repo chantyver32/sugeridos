@@ -52,7 +52,7 @@ with st.sidebar.expander("🚨 Zona de Peligro"):
             c.execute("DELETE FROM historial_ventas")
             conn.commit()
             st.sidebar.success("Base de datos limpiada con éxito.")
-            st.rerun()
+            
         else:
             st.sidebar.error("Primero debes marcar la casilla de confirmación.")
 
@@ -85,7 +85,7 @@ with st.container(border=True):
         st.session_state.sel_prod = "-- Nuevo Producto --"
         st.session_state.txt_prod = ""
         st.session_state.conteo_temp = 0
-        st.rerun()
+        
     
     with col2:
         f_cad = st.date_input("Fecha de Caducidad:", value=fecha_hoy_mx, min_value=fecha_hoy_mx, key="date_cad")
@@ -158,7 +158,7 @@ st.session_state.conteo_temp = 0
 
 mensaje_global.empty()
 
-st.rerun()
+
 
 # --- TABLA DE CAPTURA ACTUAL (EDITABLE) ---
 df_hoy_captura = pd.read_sql("SELECT rowid, nombre, fecha_cad, cantidad FROM captura_actual", conn)
@@ -203,13 +203,13 @@ if not df_hoy_captura.empty:
         time.sleep(2)
         mensaje_global.empty()
 
-        st.rerun()
+        
             
     with col_cancel:
         if st.button("🗑️ Borrar TODO el conteo actual", use_container_width=True):
             c.execute("DELETE FROM captura_actual")
             conn.commit()
-            st.rerun()
+            
 
 # ------------------ SECCIÓN 2: CORTE Y COMPARACIÓN (PASO 2) ------------------
 st.divider()
@@ -265,7 +265,7 @@ mensaje_global.success("🏁 Corte realizado con éxito")
 time.sleep(2)
 mensaje_global.empty()
 
-st.rerun()
+
       
 
 if 'ultimo_corte' in st.session_state:
@@ -299,7 +299,7 @@ if 'ultimo_corte' in st.session_state:
     with col_close:
         if st.button("Cerrar Resumen", use_container_width=True):
             del st.session_state['ultimo_corte']
-            st.rerun()
+            
 
 # ------------------ SECCIÓN 3: ALERTAS Y ESTADO ACTUAL ------------------
 st.divider()
@@ -391,6 +391,7 @@ with st.expander("📖 Historial General"):
             data=csv,
             file_name=f"ventas_{fecha_hoy_mx}.csv"
         )
+
 
 
 
