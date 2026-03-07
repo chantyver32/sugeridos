@@ -74,24 +74,45 @@ with st.sidebar.expander("🚨 Zona de Peligro"):
 # ------------------ TABS ------------------
 tab1, tab2 = st.tabs(["📦 Inventario", "📊 Análisis de Ventas"])
 
+# ------------------ TAB 1: INVENTARIO ------------------
 with tab1:
-    # ------------------ PASO 1: CAPTURA FÍSICA ------------------
     st.header(f"📝 Paso 1: Conteo en Estantes ({fecha_hoy_mx.strftime('%d/%m/%Y')})")
 
     if "conteo_temp" not in st.session_state:
         st.session_state.conteo_temp = 0
+    if "buscar_prod" not in st.session_state:
+        st.session_state.buscar_prod = ""
 
     nombres_prev = [r[0] for r in c.execute(
         "SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual").fetchall()]
 
     col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
-        buscar = st.text_input("🔎 Buscar o escribir producto", key="buscar_prod").upper()
-        sugerencias = [p for p in nombres_prev if buscar in p.upper()]
+        # Input con tache y autocompletado
+        buscar_input = st.text_input(
+            "🔎 Buscar o escribir producto", 
+            value=st.session_state.buscar_prod,
+            key="buscar_prod_input"
+        )
+        st.session_state.buscar_prod = buscar_input
+
+        if st.button("❌", key="limpiar_buscar"):
+            st.session_state.buscar_prod = ""
+            buscar_input = ""
+
+        # Autocompletado
+        sugerencias = [p for p in nombres_prev if st.session_state.buscar_prod.upper() in p.upper()]
         if sugerencias:
-            nombre_input = st.selectbox("Sugerencias", sugerencias, key="sel_prod")
+            nombre_input = st.selectbox(
+                "Sugerencias",
+                [""] + sugerencias,
+                index=0,
+                key="sel_prod"
+            )
+            if nombre_input != "":
+                st.session_state.buscar_prod = nombre_input
         else:
-            nombre_input = buscar
+            nombre_input = st.session_state.buscar_prod
 
     with col2:
         f_cad = st.date_input("Fecha de Caducidad:", value=fecha_hoy_mx, min_value=fecha_hoy_mx, key="date_cad")
@@ -166,6 +187,8 @@ with tab1:
     # ------------------ PASO 2: CORTE Y COMPARACIÓN ------------------
     st.divider()
     st.header("🏁 Paso 2: Finalizar y Calcular Ventas")
+    if "mostrar_resumen" not in st.session_state:
+        st.session_state['mostrar_resumen'] = False
 
     if st.button("REALIZAR CORTE Y REINICIAR FORMULARIO", type="primary", use_container_width=True):
         df_actualizado = pd.read_sql("SELECT * FROM captura_actual", conn)
@@ -199,7 +222,7 @@ with tab1:
 
             if ventas_detectadas:
                 st.session_state['ultimo_corte'] = pd.DataFrame(ventas_detectadas)
-                st.session_state['mostrar_resumen'] = True  # Mostrar resumen automáticamente
+                st.session_state['mostrar_resumen'] = True
 
             c.execute("DELETE FROM base_anterior")
             c.execute("INSERT INTO base_anterior SELECT * FROM captura_actual")
@@ -207,10 +230,7 @@ with tab1:
             conn.commit()
             mostrar_exito("🏁 Corte realizado y guardado en el historial con éxito")
 
-    # ------------------ RESUMEN DE VENTAS CON UN CLIC ------------------
-    if 'mostrar_resumen' not in st.session_state:
-        st.session_state['mostrar_resumen'] = False
-
+    # ------------------ RESUMEN DE VENTAS ------------------
     resumen_container = st.container()
     with resumen_container:
         if st.session_state.get('ultimo_corte') is not None and st.session_state['mostrar_resumen']:
@@ -241,70 +261,9 @@ with tab1:
                 st.link_button("📲 Enviar reporte por WhatsApp", link, use_container_width=True)
             with col_close:
                 if st.button("Cerrar Resumen", key="cerrar_resumen", use_container_width=True):
-                    st.session_state['mostrar_resumen'] = False  # Cierra con un solo clic
+                    st.session_state['mostrar_resumen'] = False
 
-    # ------------------ ALERTAS Y ESTADO ------------------
-    st.divider()
-    col_left, col_right = st.columns(2)
-    with col_left:
-        st.header("⚠️ Alertas de Caducidad")
-        fecha_str = fecha_hoy_mx.strftime('%Y-%m-%d')
-        df_caducan_hoy = pd.read_sql(
-            "SELECT nombre as Producto, cantidad as Cantidad FROM base_anterior WHERE fecha_cad = ?",
-            conn,
-            params=(fecha_str,)
-        )
-        if not df_caducan_hoy.empty:
-            st.error(f"¡Atención! Retirar {int(df_caducan_hoy['Cantidad'].sum())} piezas.")
-            st.dataframe(df_caducan_hoy, use_container_width=True, hide_index=True)
-
-            mensaje_alerta = "⚠️ PRODUCTOS QUE CADUCAN HOY\n\n"
-            for _, row in df_caducan_hoy.iterrows():
-                mensaje_alerta += f"Producto: {row['Producto']}\nCantidad: {row['Cantidad']}\n-----------------\n"
-
-            link_alerta = "https://wa.me/" + numero_whatsapp + "?text=" + urllib.parse.quote(mensaje_alerta)
-            st.link_button("⚠️ Enviar tabla de caducidad por WhatsApp", link_alerta)
-        else:
-            st.success("✅ Todo bien hoy.")
-
-    with col_right:
-        st.header("🏪 Inventario Actual")
-        df_estantes = pd.read_sql(
-            "SELECT nombre as Producto, fecha_cad as [Fecha Caducidad], cantidad as Cantidad FROM base_anterior",
-            conn
-        )
-        if not df_estantes.empty:
-            st.metric("Piezas totales", f"{int(df_estantes['Cantidad'].sum())}")
-            st.dataframe(df_estantes, use_container_width=True, hide_index=True)
-
-            mensaje_inv = "📦 INVENTARIO ACTUAL\n\n"
-            for _, row in df_estantes.iterrows():
-                mensaje_inv += f"Producto: {row['Producto']}\nCaducidad: {row['Fecha Caducidad']}\nCantidad: {row['Cantidad']}\n-----------------\n"
-
-            link_inv = "https://wa.me/" + numero_whatsapp + "?text=" + urllib.parse.quote(mensaje_inv)
-            st.link_button("📦 Enviar tabla de inventario por WhatsApp", link_inv)
-        else:
-            st.info("Sin inventario.")
-
-    st.divider()
-
-    # ------------------ HISTORIAL ------------------
-    with st.expander("📖 Historial General"):
-        df_hist = pd.read_sql(
-            """SELECT nombre as Producto, fecha_cad as Caducidad, habia as Había, quedan as Quedan,
-               vendidos as Vendidos, fecha_corte as Fecha_Hora
-               FROM historial_ventas ORDER BY fecha_corte DESC""",
-            conn
-        )
-        st.dataframe(df_hist, use_container_width=True)
-        if not df_hist.empty:
-            csv = df_hist.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                "📥 Descargar CSV",
-                data=csv,
-                file_name=f"ventas_{fecha_hoy_mx}.csv"
-            )
-
+# ------------------ TAB 2: ANÁLISIS ------------------
 with tab2:
     st.header("📊 Análisis de Ventas")
     df_hist = pd.read_sql(
@@ -320,7 +279,7 @@ with tab2:
     df_hist['Fecha_Hora'] = pd.to_datetime(df_hist['Fecha_Hora'])
     df_hist['Fecha'] = df_hist['Fecha_Hora'].dt.date
 
-    # ---------------- BUSCADOR ----------------
+    # BUSCADOR
     st.subheader("🔎 Buscar en historial")
     buscar = st.text_input("Buscar producto", key="buscar_hist")
     if buscar:
@@ -329,24 +288,24 @@ with tab2:
         df_filtrado = df_hist
     st.dataframe(df_filtrado, use_container_width=True)
 
-    # ---------------- FILTRO POR FECHA ----------------
+    # FILTRO POR FECHA
     st.subheader("📅 Ventas por fecha")
     fechas = df_hist["Fecha"].unique()
     fecha_sel = st.selectbox("Seleccionar fecha", sorted(fechas, reverse=True))
     df_fecha = df_hist[df_hist["Fecha"] == fecha_sel]
     st.dataframe(df_fecha, use_container_width=True)
 
-    # ---------------- HISTORIAL POR DIA ----------------
+    # HISTORIAL POR DÍA
     st.subheader("📊 Historial por día")
     ventas_dia = df_hist.groupby("Fecha")["Vendidos"].sum().reset_index()
     st.dataframe(ventas_dia, use_container_width=True)
 
-    # ---------------- GRAFICA ----------------
+    # GRAFICA
     st.subheader("📈 Gráfica de ventas")
     grafica = df_hist.groupby("Fecha")["Vendidos"].sum()
     st.line_chart(grafica)
 
-    # ---------------- PRODUCTO MÁS VENDIDO ----------------
+    # PRODUCTO MÁS VENDIDO
     st.subheader("🥐 Producto más vendido")
     top_productos = df_hist.groupby("Producto")["Vendidos"].sum().sort_values(ascending=False)
     if not top_productos.empty:
