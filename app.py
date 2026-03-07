@@ -72,27 +72,24 @@ with st.container(border=True):
             conn.commit()
             st.rerun()
 
-# --- TABLA DE CAPTURA ACTUAL (EDITABLE Y CON BORRADO) ---
+# --- TABLA DE CAPTURA ACTUAL (EDITABLE) ---
 df_hoy_captura = pd.read_sql("SELECT rowid, nombre, fecha_cad, cantidad FROM captura_actual", conn)
 
 if not df_hoy_captura.empty:
+    # Corrección de tipo para el editor
     df_hoy_captura['fecha_cad'] = pd.to_datetime(df_hoy_captura['fecha_cad']).dt.date
     
-    # Añadimos columna de control para eliminar
-    df_hoy_captura["Eliminar"] = False
-
-    st.subheader("📋 Revisión del conteo")
-    st.info("💡 Corrige cantidades o marca 'Eliminar' y presiona 'Guardar' para quitar productos.")
+    st.subheader("📋 Revisión del conteo (Edita o elimina filas aquí):")
     
     df_editado = st.data_editor(
         df_hoy_captura,
         column_config={
             "rowid": None,
-            "nombre": st.column_config.TextColumn("Producto", disabled=True),
-            "fecha_cad": st.column_config.DateColumn("Fecha Caducidad", disabled=True),
-            "cantidad": st.column_config.NumberColumn("Cantidad", min_value=0),
-            "Eliminar": st.column_config.CheckboxColumn("¿Borrar?", help="Marca para eliminar este producto")
+            "nombre": st.column_config.TextColumn("Producto"),
+            "fecha_cad": st.column_config.DateColumn("Fecha Caducidad"),
+            "cantidad": st.column_config.NumberColumn("Cantidad", min_value=0)
         },
+        num_rows="dynamic",
         use_container_width=True,
         hide_index=True,
         key="editor_conteo"
@@ -100,12 +97,9 @@ if not df_hoy_captura.empty:
 
     col_save, col_cancel = st.columns(2)
     with col_save:
-        if st.button("💾 Guardar Cambios y Limpiar Marcados", use_container_width=True, type="primary"):
-            # Filtrar solo lo que NO se marcó para eliminar
-            filas_finales = df_editado[df_editado["Eliminar"] == False]
-            
+        if st.button("💾 Guardar cambios realizados arriba", use_container_width=True):
             c.execute("DELETE FROM captura_actual")
-            for _, fila in filas_finales.iterrows():
+            for _, fila in df_editado.iterrows():
                 if fila['nombre']:
                     c.execute("INSERT INTO captura_actual (nombre, fecha_cad, cantidad) VALUES (?, ?, ?)", 
                              (fila['nombre'].strip().upper(), str(fila['fecha_cad']), int(fila['cantidad'])))
