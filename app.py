@@ -61,10 +61,7 @@ with st.container(border=True):
         f_cad = st.date_input("Fecha de Caducidad:", value=fecha_hoy_mx, min_value=fecha_hoy_mx, key="date_cad")
     
     with col3:
-
-    with col3:
-
-    st.write("Cantidad que ves")
+        st.write("Cantidad que ves")
 
     # Inicializar contador
     if "conteo_temp" not in st.session_state:
@@ -318,6 +315,7 @@ with st.expander("📖 Historial General"):
             data=csv,
             file_name=f"ventas_{fecha_hoy_mx}.csv"
         )
+
 
 
 
