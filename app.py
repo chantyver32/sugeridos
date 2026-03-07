@@ -3,84 +3,86 @@ import pandas as pd
 import sqlite3
 from datetime import datetime
 
-# ------------------ CONEXIÓN A LA BASE DE DATOS ------------------
-conn = sqlite3.connect('sucursal.db', check_same_thread=False)
+# ------------------ CONFIGURACIÓN DE BASE DE DATOS ------------------
+conn = sqlite3.connect('sucursal_pan.db', check_same_thread=False)
 c = conn.cursor()
 
-# Tabla Maestro: Catálogo fijo
-c.execute('CREATE TABLE IF NOT EXISTS maestro (codigo TEXT PRIMARY KEY, nombre TEXT)')
-# Tabla Inventario: Lo que realmente hay en estante (incluye fecha_cad)
+# Tabla de inventario actual: nombre del producto, su caducidad y cuándo se revisó por última vez
 c.execute('''CREATE TABLE IF NOT EXISTS inventario 
-             (codigo TEXT, nombre TEXT, fecha_cad DATE, ultima_revision DATE)''')
+             (nombre TEXT, fecha_cad DATE, ultima_revision DATE)''')
 conn.commit()
 
-st.title("Control de Inventario y Ventas 🥖")
+st.set_page_config(page_title="Control de Panadería", page_icon="🥖")
+st.title("Control de Existencias y Ventas 🥖")
 
-menu = st.sidebar.selectbox("Selecciona:", ["Revisión Diaria", "Maestro de Productos", "Reporte de Ventas"])
+# ------------------ LÓGICA DE SUGERENCIAS ------------------
+# Obtenemos nombres únicos de productos que ya hemos registrado antes
+productos_conocidos = [res[0] for res in c.execute("SELECT DISTINCT nombre FROM inventario").fetchall()]
 
-# ------------------ MAESTRO DE PRODUCTOS ------------------
-if menu == "Maestro de Productos":
-    st.header("Catálogo de Productos")
-    with st.form("nuevo_producto"):
-        cod = st.text_input("Código de Barras")
-        nom = st.text_input("Nombre del Producto")
-        if st.form_submit_button("Guardar en Catálogo"):
-            if cod and nom:
-                c.execute("INSERT OR REPLACE INTO maestro VALUES (?,?)", (cod, nom))
-                conn.commit()
-                st.success(f"Registrado: {nom}")
+# ------------------ REGISTRO DE PRODUCTOS ------------------
+st.header("📝 Registro de Revisión")
+col1, col2 = st.columns(2)
 
-# ------------------ REVISIÓN DIARIA (Lógica Principal) ------------------
-elif menu == "Revisión Diaria":
-    st.header("Escaneo de Existencias")
-    hoy = datetime.now().date()
+with col1:
+    # El selectbox con 'index=None' y 'placeholder' permite escribir y buscar
+    nombre_input = st.selectbox(
+        "Nombre del Producto (Escribe para buscar):",
+        options=productos_conocidos,
+        index=None,
+        placeholder="Ej: Concha Vainilla",
+        help="Si el producto es nuevo, escríbelo y presiona Enter",
+    )
     
-    # 1. Entrada de datos
-    with st.expander("Registrar Producto en Estante", expanded=True):
-        cod_escaneado = st.text_input("Código de Barras:")
-        # Buscamos el nombre automáticamente si existe en el maestro
-        res = c.execute("SELECT nombre FROM maestro WHERE codigo = ?", (cod_escaneado,)).fetchone()
-        nombre_sugerido = res[0] if res else ""
-        
-        nom_prod = st.text_input("Producto:", value=nombre_sugerido)
-        f_cad = st.date_input("Fecha de Caducidad:", value=hoy)
-        
-        if st.button("Confirmar en Estante ✅"):
-            if cod_escaneado and nom_prod:
-                # Insertamos el registro con la fecha de revisión de hoy
-                c.execute("INSERT INTO inventario VALUES (?, ?, ?, ?)", 
-                          (cod_escaneado, nom_prod, f_cad, hoy))
-                conn.commit()
-                st.toast(f"Confirmado: {nom_prod} (Cad: {f_cad})")
+    # Si el usuario quiere escribir uno nuevo que no está en la lista:
+    nombre_nuevo = st.text_input("O registra uno nuevo aquí:")
+    nombre_final = nombre_nuevo if nombre_nuevo else nombre_input
 
-    # 2. Resumen de lo revisado hoy
-    st.subheader("Productos detectados hoy")
-    df_hoy = pd.read_sql("SELECT nombre, fecha_cad FROM inventario WHERE ultima_revision = ?", 
-                         conn, params=(hoy,))
-    st.table(df_hoy)
+with col2:
+    f_cad = st.date_input("Fecha de Caducidad:", value=datetime.now().date())
+    cantidad = st.number_input("¿Cuántas piezas?", min_value=1, value=1)
 
-    # 3. CIERRE DE DÍA / CALCULAR VENTAS
-    st.divider()
-    if st.button("🧹 Finalizar Revisión (Calcular Ventas)"):
-        # Buscamos lo que había antes de hoy que NO fue registrado hoy
-        ventas = pd.read_sql("""SELECT nombre, fecha_cad FROM inventario 
-                                WHERE ultima_revision < ?""", conn, params=(hoy,))
-        
-        if not ventas.empty:
-            st.warning("🛍️ Productos vendidos (no encontrados en esta revisión):")
-            st.dataframe(ventas)
-            # Borramos lo viejo para dejar solo el inventario fresco
-            c.execute("DELETE FROM inventario WHERE ultima_revision < ?", (hoy,))
-            conn.commit()
-            st.success("Inventario actualizado. Se eliminaron los productos vendidos.")
-        else:
-            st.info("No se detectaron bajas (ventas) o es la primera revisión del día.")
-
-# ------------------ REPORTE DE VENTAS ------------------
-elif menu == "Reporte de Ventas":
-    st.header("Inventario Actual en Tienda")
-    df_total = pd.read_sql("SELECT nombre, fecha_cad, ultima_revision FROM inventario", conn)
-    if not df_total.empty:
-        st.dataframe(df_total)
+if st.button("Confirmar en Estante ✅", use_container_width=True):
+    if nombre_final:
+        hoy = datetime.now().date()
+        # Insertamos tantas filas como piezas haya (para manejo individual de ventas)
+        for _ in range(cantidad):
+            c.execute("INSERT INTO inventario VALUES (?, ?, ?)", (nombre_final, f_cad, hoy))
+        conn.commit()
+        st.success(f"Registrado: {cantidad}x {nombre_final} (Cad: {f_cad})")
+        st.rerun() # Para limpiar campos y actualizar lista
     else:
-        st.write("El inventario está vacío. Realiza una revisión.")
+        st.error("Por favor selecciona o escribe un nombre de producto.")
+
+st.divider()
+
+# ------------------ INVENTARIO ACTUAL Y CIERRE ------------------
+st.header("📊 Inventario en Tienda")
+hoy = datetime.now().date()
+
+# Mostrar lo que se ha confirmado HOY
+df_hoy = pd.read_sql("SELECT nombre, fecha_cad, COUNT(*) as cantidad FROM inventario WHERE ultima_revision = ? GROUP BY nombre, fecha_cad", conn, params=(hoy,))
+
+if not df_hoy.empty:
+    st.subheader("Productos revisados hoy:")
+    st.dataframe(df_hoy, use_container_width=True)
+else:
+    st.info("Aún no has registrado productos hoy.")
+
+# ------------------ BOTÓN MÁGICO: CALCULAR VENTAS ------------------
+if st.button("🧹 Finalizar Día (Calcular Ventas)"):
+    # 1. Identificar lo que había antes que NO se volvió a registrar hoy
+    ventas = pd.read_sql("""SELECT nombre, fecha_cad, COUNT(*) as cantidad 
+                            FROM inventario 
+                            WHERE ultima_revision < ? 
+                            GROUP BY nombre, fecha_cad""", conn, params=(hoy,))
+    
+    if not ventas.empty:
+        st.warning("🚨 Se detectaron ventas (productos que ya no están en estante):")
+        st.table(ventas)
+        
+        # 2. Borrar lo que no se revisó (lo vendido)
+        c.execute("DELETE FROM inventario WHERE ultima_revision < ?", (hoy,))
+        conn.commit()
+        st.success("Inventario actualizado. Solo queda lo que registraste hoy.")
+    else:
+        st.info("No hay productos antiguos para eliminar. Todo está al día.")
