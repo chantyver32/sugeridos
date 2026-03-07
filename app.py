@@ -277,3 +277,4 @@ with st.expander("📖 Historial General"):
         )
 
 
+
