@@ -22,6 +22,14 @@ c.execute('CREATE TABLE IF NOT EXISTS base_anterior (nombre TEXT, fecha_cad DATE
 c.execute('CREATE TABLE IF NOT EXISTS historial_ventas (nombre TEXT, fecha_cad DATE, vendidos INTEGER, fecha_corte DATETIME)')
 conn.commit()
 
+# ------------------ FUNCIONES DE LIMPIEZA ------------------
+def limpiar_formulario():
+    st.session_state["sel_prod"] = "-- Nuevo Producto --"
+    if "txt_prod" in st.session_state:
+        st.session_state["txt_prod"] = ""
+    st.session_state["num_cant"] = 1
+    st.session_state["date_cad"] = fecha_hoy_mx
+
 # ------------------ SIDEBAR: CONFIGURACIÓN Y RESET ------------------
 st.sidebar.header("⚙️ Configuración")
 
@@ -35,6 +43,7 @@ with st.sidebar.expander("🚨 Zona de Peligro"):
             c.execute("DELETE FROM base_anterior")
             c.execute("DELETE FROM historial_ventas")
             conn.commit()
+            limpiar_formulario()
             st.sidebar.success("Base de datos limpiada con éxito.")
             st.rerun()
         else:
@@ -44,7 +53,6 @@ with st.sidebar.expander("🚨 Zona de Peligro"):
 st.header(f"📝 Paso 1: Conteo en Estantes ({fecha_hoy_mx.strftime('%d/%m/%Y')})")
 
 with st.container(border=True):
-    # Sugerencias dinámicas
     nombres_prev = [r[0] for r in c.execute("SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual").fetchall()]
     
     col1, col2, col3 = st.columns([2, 1, 1])
@@ -70,15 +78,14 @@ with st.container(border=True):
             else:
                 c.execute("INSERT INTO captura_actual VALUES (?, ?, ?)", (nombre_final, f_cad, int(cant)))
             conn.commit()
+            limpiar_formulario() # Limpia los campos antes de recargar
             st.rerun()
 
 # --- TABLA DE CAPTURA ACTUAL (EDITABLE) ---
 df_hoy_captura = pd.read_sql("SELECT rowid, nombre, fecha_cad, cantidad FROM captura_actual", conn)
 
 if not df_hoy_captura.empty:
-    # Corrección de tipo para el editor
     df_hoy_captura['fecha_cad'] = pd.to_datetime(df_hoy_captura['fecha_cad']).dt.date
-    
     st.subheader("📋 Revisión del conteo (Edita o elimina filas aquí):")
     
     df_editado = st.data_editor(
@@ -111,6 +118,7 @@ if not df_hoy_captura.empty:
         if st.button("🗑️ Borrar TODO el conteo actual", use_container_width=True):
             c.execute("DELETE FROM captura_actual")
             conn.commit()
+            limpiar_formulario()
             st.rerun()
 
 # ------------------ SECCIÓN 2: CORTE Y COMPARACIÓN (PASO 2) ------------------
@@ -124,29 +132,21 @@ if st.button("REALIZAR CORTE Y REINICIAR FORMULARIO", type="primary", use_contai
         st.warning("No hay nada que comparar. La lista de captura está vacía.")
     else:
         df_anterior = pd.read_sql("SELECT * FROM base_anterior", conn)
-        
         if not df_anterior.empty:
             ventas_detectadas = []
             ts_mx = ahora_mx.strftime("%Y-%m-%d %H:%M:%S")
-            
             for _, fila_ant in df_anterior.iterrows():
                 res_hoy = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", 
                                    (fila_ant['nombre'], fila_ant['fecha_cad'])).fetchone()
-                
                 cant_hoy = res_hoy[0] if res_hoy else 0
                 diferencia = fila_ant['cantidad'] - cant_hoy
-                
                 if diferencia > 0:
                     ventas_detectadas.append({
-                        "Producto": fila_ant['nombre'],
-                        "Caducidad": fila_ant['fecha_cad'],
-                        "Había": fila_ant['cantidad'],
-                        "Quedan": cant_hoy,
-                        "VENDIDOS": diferencia
+                        "Producto": fila_ant['nombre'], "Caducidad": fila_ant['fecha_cad'],
+                        "Había": fila_ant['cantidad'], "Quedan": cant_hoy, "VENDIDOS": diferencia
                     })
                     c.execute("INSERT INTO historial_ventas VALUES (?, ?, ?, ?)", 
                              (fila_ant['nombre'], fila_ant['fecha_cad'], diferencia, ts_mx))
-            
             if ventas_detectadas:
                 st.session_state['ultimo_corte'] = pd.DataFrame(ventas_detectadas)
         
@@ -154,6 +154,7 @@ if st.button("REALIZAR CORTE Y REINICIAR FORMULARIO", type="primary", use_contai
         c.execute("INSERT INTO base_anterior SELECT * FROM captura_actual")
         c.execute("DELETE FROM captura_actual")
         conn.commit()
+        limpiar_formulario() # Limpia los campos tras el corte
         st.success("✅ Corte realizado con éxito.")
         st.rerun()
 
@@ -174,7 +175,6 @@ with col_left:
     fecha_str = fecha_hoy_mx.strftime('%Y-%m-%d')
     df_caducan_hoy = pd.read_sql("SELECT nombre as Producto, cantidad as Cantidad FROM base_anterior WHERE fecha_cad = ?", 
                                  conn, params=(fecha_str,))
-
     if not df_caducan_hoy.empty:
         st.error(f"¡Atención! Retirar {int(df_caducan_hoy['Cantidad'].sum())} piezas.")
         st.dataframe(df_caducan_hoy, use_container_width=True, hide_index=True)
