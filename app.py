@@ -17,6 +17,8 @@ numero_whatsapp = "522283530069"
 # ------------------ CONFIGURACIÓN DE PÁGINA ------------------
 st.set_page_config(page_title="Inventario Champlitte MX", page_icon="🥐", layout="wide")
 st.title("Sistema de Inventario: Control de Ventas y Caducidades 🥐")
+tab1, tab2 = st.tabs(["📦 Inventario", "📊 Análisis de Ventas"])
+with tab1:
 
 # --------- SONIDO DE CLICK ---------
 def sonido_click():
@@ -419,3 +421,87 @@ with st.expander("📖 Historial General"):
             data=csv,
             file_name=f"ventas_{fecha_hoy_mx}.csv"
         )
+
+with tab2:
+
+    st.header("📊 Análisis de Ventas")
+
+    df_hist = pd.read_sql(
+        """
+        SELECT 
+            nombre as Producto,
+            fecha_cad as Caducidad,
+            habia as Habia,
+            quedan as Quedan,
+            vendidos as Vendidos,
+            fecha_corte as Fecha_Hora
+        FROM historial_ventas
+        """,
+        conn
+    )
+
+    if df_hist.empty:
+        st.info("No hay historial de ventas todavía.")
+        st.stop()
+
+    df_hist['Fecha_Hora'] = pd.to_datetime(df_hist['Fecha_Hora'])
+    df_hist['Fecha'] = df_hist['Fecha_Hora'].dt.date
+
+    # ---------------- BUSCADOR ----------------
+    st.subheader("🔎 Buscar en historial")
+
+    buscar = st.text_input("Buscar producto")
+
+    if buscar:
+        df_filtrado = df_hist[df_hist["Producto"].str.contains(buscar.upper(), case=False)]
+    else:
+        df_filtrado = df_hist
+
+    st.dataframe(df_filtrado, use_container_width=True)
+
+    # ---------------- FILTRO POR FECHA ----------------
+    st.subheader("📅 Ventas por fecha")
+
+    fechas = df_hist["Fecha"].unique()
+
+    fecha_sel = st.selectbox(
+        "Seleccionar fecha",
+        sorted(fechas, reverse=True)
+    )
+
+    df_fecha = df_hist[df_hist["Fecha"] == fecha_sel]
+
+    st.dataframe(df_fecha, use_container_width=True)
+
+    # ---------------- HISTORIAL POR DIA ----------------
+    st.subheader("📊 Historial por día")
+
+    ventas_dia = df_hist.groupby("Fecha")["Vendidos"].sum().reset_index()
+
+    st.dataframe(ventas_dia, use_container_width=True)
+
+    # ---------------- GRAFICA ----------------
+    st.subheader("📈 Gráfica de ventas")
+
+    grafica = df_hist.groupby("Fecha")["Vendidos"].sum()
+
+    st.line_chart(grafica)
+
+    # ---------------- PRODUCTO MÁS VENDIDO ----------------
+    st.subheader("🥐 Producto más vendido")
+
+    top_productos = df_hist.groupby("Producto")["Vendidos"].sum().sort_values(ascending=False)
+
+    if not top_productos.empty:
+
+        producto_top = top_productos.index[0]
+        cantidad_top = int(top_productos.iloc[0])
+
+        st.metric(
+            label="Producto más vendido",
+            value=producto_top,
+            delta=f"{cantidad_top} vendidos"
+        )
+
+        st.bar_chart(top_productos)
+
