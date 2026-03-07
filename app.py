@@ -76,12 +76,16 @@ with st.container(border=True):
         st.write("Cantidad que ves")
 
     # Inicializar contador
-    if "conteo_temp" not in st.session_state:
-    st.session_state.conteo.temp = False
+if "conteo_temp" not in st.session_state:
+    st.session_state.conteo_temp = 0  
 
     # Funciones para modificar el contador
   def sumar(valor):
     st.session_state.conteo_temp += valor
+    sonido_click()
+
+def resetear():
+    st.session_state.conteo_temp = 0
     sonido_click()
 
 def resetear():
@@ -128,16 +132,12 @@ if st.button("➕ Registrar en el Conteo", use_container_width=True, type="prima
                 (nombre_final, f_cad, int(cant))
             )
 
-conn.commit()
-sonido_click()
-
-msg = st.toast("Producto agregado", icon="✅")
-
-time.sleep(2)
-
-msg.empty()
-
-st.rerun()
+        conn.commit()
+        sonido_click()
+        msg = st.success("Producto agregado")
+        time.sleep(2)
+        msg.empty()
+        st.rerun()
 
 # --- TABLA DE CAPTURA ACTUAL (EDITABLE) ---
 df_hoy_captura = pd.read_sql("SELECT rowid, nombre, fecha_cad, cantidad FROM captura_actual", conn)
@@ -163,19 +163,23 @@ if not df_hoy_captura.empty:
     )
 
     col_save, col_cancel = st.columns(2)
-    with col_save:
-        if st.button("💾 Guardar cambios realizados arriba", use_container_width=True):
-            c.execute("DELETE FROM captura_actual")
-            for _, fila in df_editado.iterrows():
-                if fila['nombre']:
-                    c.execute("INSERT INTO captura_actual (nombre, fecha_cad, cantidad) VALUES (?, ?, ?)", 
-                             (fila['nombre'].strip().upper(), str(fila['fecha_cad']), int(fila['cantidad'])))
 
-conn.commit()
-msg = st.toast("Conteo Actualizado", icon="✅")
-time.sleep(2)
-msg.empty()
-st.rerun()        
+    with col_save:
+    if st.button("💾 Guardar cambios realizados arriba", use_container_width=True):
+        c.execute("DELETE FROM captura_actual")
+
+        for _, fila in df_editado.iterrows():
+            if fila['nombre']:
+                c.execute(
+                    "INSERT INTO captura_actual (nombre, fecha_cad, cantidad) VALUES (?, ?, ?)", 
+                    (fila['nombre'].strip().upper(), str(fila['fecha_cad']), int(fila['cantidad']))
+                )
+
+        conn.commit()
+        msg = st.success("Conteo actualizado")
+        time.sleep(2)
+        msg.empty()
+        st.rerun()
             
     with col_cancel:
         if st.button("🗑️ Borrar TODO el conteo actual", use_container_width=True):
@@ -190,10 +194,11 @@ st.header("🏁 Paso 2: Finalizar y Calcular Ventas")
 if st.button("REALIZAR CORTE Y REINICIAR FORMULARIO", type="primary", use_container_width=True):
     df_actualizado = pd.read_sql("SELECT * FROM captura_actual", conn)
     
-    if df_actualizado.empty:
-        msg = st.warning("No hay nada que comparar.")
-time.sleep(2)
-msg.empty()
+   if df_actualizado.empty:
+    msg = st.warning("No hay nada que comparar.")
+    time.sleep(2)
+    msg.empty()
+       
     else:
         df_anterior = pd.read_sql("SELECT * FROM base_anterior", conn)
         
@@ -226,7 +231,9 @@ msg.empty()
         c.execute("INSERT INTO base_anterior SELECT * FROM captura_actual")
         c.execute("DELETE FROM captura_actual")
         conn.commit()
-        st.toast("Corte realizado con éxito.", icon="✅")
+        msg = st.success("Corte realizado con éxito")
+        time.sleep(2)
+        msg.empty()
         st.rerun()
 
 if 'ultimo_corte' in st.session_state:
@@ -352,6 +359,7 @@ with st.expander("📖 Historial General"):
             data=csv,
             file_name=f"ventas_{fecha_hoy_mx}.csv"
         )
+
 
 
 
