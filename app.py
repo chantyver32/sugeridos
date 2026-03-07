@@ -65,37 +65,32 @@ with st.container(border=True):
     
     col1, col2, col3 = st.columns([2, 1, 1])
 
-   with col1:
+with col1:
 
-    # Obtener productos existentes
+    # Obtener lista de productos
     nombres_prev = [r[0] for r in c.execute(
         "SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual"
     ).fetchall()]
 
-    # Buscador
-    buscar = st.text_input("🔎 Buscar o escribir producto", key="buscar_prod")
+    nombres_prev = sorted(list(set(nombres_prev)))
 
-    # Filtrar sugerencias
-    sugerencias = [p for p in nombres_prev if buscar.upper() in p.upper()]
-
-    # Selector
-    nombre_seleccionado = st.selectbox(
-        "Sugerencias",
-        [""] + sugerencias,
-        key="sel_prod"
+    # Selector con búsqueda integrada
+    nombre_input = st.selectbox(
+        "Producto (puedes escribir para buscar)",
+        [""] + nombres_prev,
+        key="producto_selector"
     )
 
-    # Lógica final del nombre
-    if nombre_seleccionado != "":
-        nombre_input = nombre_seleccionado
-    else:
-        nombre_input = buscar
+    # Si está vacío permitir escribir uno nuevo
+    nuevo_producto = st.text_input("O escribir producto nuevo")
+
+    if nuevo_producto:
+        nombre_input = nuevo_producto.upper()
 
     # Botón limpiar
-    if st.button("🧹 Limpiar búsqueda / Nuevo producto", use_container_width=True):
+    if st.button("🧹 Limpiar / Nuevo producto", use_container_width=True):
 
-        st.session_state.buscar_prod = ""
-        st.session_state.sel_prod = ""
+        st.session_state.producto_selector = ""
         st.session_state.conteo_temp = 0
 
         st.rerun()
@@ -404,6 +399,7 @@ with st.expander("📖 Historial General"):
             data=csv,
             file_name=f"ventas_{fecha_hoy_mx}.csv"
         )
+
 
 
 
