@@ -3,11 +3,13 @@ import pandas as pd
 import sqlite3
 from datetime import datetime
 import pytz
+import urllib.parse
 
-# ------------------ CONFIGURACIÓN DE ZONA HORARIA (MÉXICO) ------------------
+# ------------------ CONFIGURACIÓN DE ZONA HORARIA (MÉXICO) Y WHATSAPP ENVÍO------------------
 zona_mx = pytz.timezone('America/Mexico_City')
 ahora_mx = datetime.now(zona_mx)
 fecha_hoy_mx = ahora_mx.date()
+numero_whatsapp = "522283530069"
 
 # ------------------ CONFIGURACIÓN DE PÁGINA ------------------
 st.set_page_config(page_title="Inventario Champlitte MX", page_icon="🥐", layout="wide")
@@ -161,6 +163,23 @@ if 'ultimo_corte' in st.session_state:
     st.balloons()
     st.subheader("📊 Resumen de ventas detectadas:")
     st.table(st.session_state['ultimo_corte'])
+    df = st.session_state['ultimo_corte']
+
+mensaje = "📊 CORTE DE VENTAS\n\n"
+
+for _, row in df.iterrows():
+    mensaje += (
+        f"Producto: {row['Producto']}\n"
+        f"Caducidad: {row['Caducidad']}\n"
+        f"Había: {row['Había']}\n"
+        f"Quedan: {row['Quedan']}\n"
+        f"Vendidos: {row['VENDIDOS']}\n"
+        "-----------------\n"
+    )
+
+link = "https://wa.me/" + numero_whatsapp + "?text=" + urllib.parse.quote(mensaje)
+
+st.link_button("📲 Enviar tabla de ventas por WhatsApp", link)
     if st.button("Cerrar Resumen"):
         del st.session_state['ultimo_corte']
         st.rerun()
@@ -178,6 +197,18 @@ with col_left:
     if not df_caducan_hoy.empty:
         st.error(f"¡Atención! Retirar {int(df_caducan_hoy['Cantidad'].sum())} piezas.")
         st.dataframe(df_caducan_hoy, use_container_width=True, hide_index=True)
+        mensaje_alerta = "⚠️ PRODUCTOS QUE CADUCAN HOY\n\n"
+
+for _, row in df_caducan_hoy.iterrows():
+    mensaje_alerta += (
+        f"Producto: {row['Producto']}\n"
+        f"Cantidad: {row['Cantidad']}\n"
+        "-----------------\n"
+    )
+
+link_alerta = "https://wa.me/" + numero_whatsapp + "?text=" + urllib.parse.quote(mensaje_alerta)
+
+st.link_button("⚠️ Enviar tabla de caducidad por WhatsApp", link_alerta)
     else:
         st.success("✅ Todo bien hoy.")
 
@@ -187,6 +218,19 @@ with col_right:
     if not df_estantes.empty:
         st.metric("Piezas totales", f"{int(df_estantes['Cantidad'].sum())}")
         st.dataframe(df_estantes, use_container_width=True, hide_index=True)
+        mensaje_inv = "📦 INVENTARIO ACTUAL\n\n"
+
+for _, row in df_estantes.iterrows():
+    mensaje_inv += (
+        f"Producto: {row['Producto']}\n"
+        f"Caducidad: {row['Fecha Caducidad']}\n"
+        f"Cantidad: {row['Cantidad']}\n"
+        "-----------------\n"
+    )
+
+link_inv = "https://wa.me/" + numero_whatsapp + "?text=" + urllib.parse.quote(mensaje_inv)
+
+st.link_button("📦 Enviar tabla de inventario por WhatsApp", link_inv)
     else:
         st.info("Sin inventario.")
 
@@ -197,3 +241,4 @@ with st.expander("📖 Historial General"):
     if not df_hist.empty:
         csv = df_hist.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Descargar CSV", data=csv, file_name=f"ventas_{fecha_hoy_mx}.csv")
+
