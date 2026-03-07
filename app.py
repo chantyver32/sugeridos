@@ -83,52 +83,57 @@ with tab1:
     if "buscar_prod" not in st.session_state:
         st.session_state.buscar_prod = ""
 
+    # Obtener nombres para autocompletado una sola vez
     nombres_prev = [r[0] for r in c.execute(
         "SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual").fetchall()]
 
     col1, col2, col3 = st.columns([2, 1, 1])
     
     with col1:
-    # Input con autocompletado y botón de tache
-    buscar_input = st.text_input(
-        "🔎 Buscar o escribir producto",
-        value=st.session_state.get("buscar_prod", ""),
-        key="buscar_prod_input"
-    )
-
-    # Botón de tache
-    if st.button("❌", key="limpiar_buscar"):
-        st.session_state.buscar_prod = ""
-        st.session_state.buscar_prod_input = ""
-        buscar_input = ""
-    
-    # Actualizar variable de sesión
-    st.session_state.buscar_prod = buscar_input
-
-    # Autocompletado
-    nombres_prev = [r[0] for r in c.execute(
-        "SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual"
-    ).fetchall()]
-    sugerencias = [p for p in nombres_prev if st.session_state.buscar_prod.upper() in p.upper()]
-
-    # Mostrar selectbox solo si hay sugerencias
-    if sugerencias:
-        nombre_input = st.selectbox(
-            "Sugerencias",
-            [""] + sugerencias,
-            index=0,
-            key="sel_prod"
+        # --- AQUÍ ESTABA EL ERROR: Todo este bloque debe estar indentado ---
+        buscar_input = st.text_input(
+            "🔎 Buscar o escribir producto",
+            value=st.session_state.get("buscar_prod", ""),
+            key="buscar_prod_input"
         )
-        if nombre_input != "":
-            st.session_state.buscar_prod = nombre_input
-    else:
-        nombre_input = st.session_state.buscar_prod
+
+        # Botón de tache
+        if st.button("❌", key="limpiar_buscar"):
+            st.session_state.buscar_prod = ""
+            # Reiniciamos el widget de input también
+            st.rerun() 
+        
+        # Actualizar variable de sesión
+        st.session_state.buscar_prod = buscar_input
+
+        # Filtrar sugerencias
+        sugerencias = [p for p in nombres_prev if st.session_state.buscar_prod.upper() in p.upper()]
+
+        # Mostrar selectbox solo si hay sugerencias
+        if sugerencias:
+            nombre_input_sel = st.selectbox(
+                "Sugerencias",
+                [""] + sugerencias,
+                index=0,
+                key="sel_prod"
+            )
+            if nombre_input_sel != "":
+                nombre_input = nombre_input_sel
+            else:
+                nombre_input = st.session_state.buscar_prod
+        else:
+            nombre_input = st.session_state.buscar_prod
+        # --- FIN DEL BLOQUE INDENTADO ---
 
     with col2:
         f_cad = st.date_input("Fecha de Caducidad:", value=fecha_hoy_mx, min_value=fecha_hoy_mx, key="date_cad")
 
     with col3:
         st.write("Cantidad que ves")
+        # El total se muestra aquí para alinearlo con el texto
+        st.subheader(f"Total: {st.session_state.conteo_temp}")
+
+# ... (sigue el resto de tu código de botones de suma y registro)
 
     # Botones de suma
     c1, c2, c3, c4 = st.columns(4)
@@ -323,4 +328,5 @@ with tab2:
         cantidad_top = int(top_productos.iloc[0])
         st.metric(label="Producto más vendido", value=producto_top, delta=f"{cantidad_top} vendidos")
         st.bar_chart(top_productos)
+
 
