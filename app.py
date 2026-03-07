@@ -72,7 +72,7 @@ with st.sidebar.expander("🚨 Zona de Peligro"):
             st.sidebar.error("Primero debes marcar la casilla de confirmación.")
 
 # ------------------ TABS ------------------
-tab1, tab2 = st.tabs(["📦 Inventario", "📊 Análisis de Ventas"])
+tab1, tab2, tab3 = st.tabs(["📝Añadir productos" ,"📦 Inventario", "📊 Análisis de Ventas"])
 
 with tab1:
     # ------------------ PASO 1: CAPTURA FÍSICA ------------------
@@ -162,6 +162,8 @@ with tab1:
                 c.execute("DELETE FROM captura_actual")
                 conn.commit()
                 mostrar_exito("🗑️ Conteo borrado")
+
+    with tab2:
 
     # ------------------ PASO 2: CORTE Y COMPARACIÓN ------------------
     st.divider()
@@ -305,7 +307,7 @@ with tab1:
                 file_name=f"ventas_{fecha_hoy_mx}.csv"
             )
 
-with tab2:
+with tab3:
     st.header("📊 Análisis de Ventas")
     df_hist = pd.read_sql(
         """SELECT nombre as Producto, fecha_cad as Caducidad, habia as Habia, quedan as Quedan,
