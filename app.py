@@ -35,7 +35,16 @@ c = conn.cursor()
 
 c.execute('CREATE TABLE IF NOT EXISTS captura_actual (nombre TEXT, fecha_cad DATE, cantidad INTEGER)')
 c.execute('CREATE TABLE IF NOT EXISTS base_anterior (nombre TEXT, fecha_cad DATE, cantidad INTEGER)')
-c.execute('CREATE TABLE IF NOT EXISTS historial_ventas (nombre TEXT, fecha_cad DATE, vendidos INTEGER, fecha_corte DATETIME)')
+c.execute('''
+CREATE TABLE IF NOT EXISTS historial_ventas (
+    nombre TEXT,
+    fecha_cad DATE,
+    habia INTEGER,
+    quedan INTEGER,
+    vendidos INTEGER,
+    fecha_corte DATETIME
+)
+''')
 conn.commit()
 
 # ------------------ SIDEBAR: CONFIGURACIÓN Y RESET ------------------
@@ -52,7 +61,7 @@ with st.sidebar.expander("🚨 Zona de Peligro"):
             c.execute("DELETE FROM historial_ventas")
             conn.commit()
             st.sidebar.success("Base de datos limpiada con éxito.")
-            
+            st.rerun()
         else:
             st.sidebar.error("Primero debes marcar la casilla de confirmación.")
 
@@ -85,7 +94,7 @@ with st.container(border=True):
         st.session_state.sel_prod = "-- Nuevo Producto --"
         st.session_state.txt_prod = ""
         st.session_state.conteo_temp = 0
-        
+        st.rerun()
     
     with col2:
         f_cad = st.date_input("Fecha de Caducidad:", value=fecha_hoy_mx, min_value=fecha_hoy_mx, key="date_cad")
@@ -158,7 +167,7 @@ st.session_state.conteo_temp = 0
 
 mensaje_global.empty()
 
-
+st.rerun()
 
 # --- TABLA DE CAPTURA ACTUAL (EDITABLE) ---
 df_hoy_captura = pd.read_sql("SELECT rowid, nombre, fecha_cad, cantidad FROM captura_actual", conn)
@@ -203,13 +212,13 @@ if not df_hoy_captura.empty:
         time.sleep(2)
         mensaje_global.empty()
 
-        
+        st.rerun()
             
     with col_cancel:
         if st.button("🗑️ Borrar TODO el conteo actual", use_container_width=True):
             c.execute("DELETE FROM captura_actual")
             conn.commit()
-            
+            st.rerun()
 
 # ------------------ SECCIÓN 2: CORTE Y COMPARACIÓN (PASO 2) ------------------
 st.divider()
@@ -249,8 +258,17 @@ if df_actualizado.empty:
                         "Quedan": cant_hoy,
                         "VENDIDOS": diferencia
                     })
-                    c.execute("INSERT INTO historial_ventas VALUES (?, ?, ?, ?)", 
-                             (fila_ant['nombre'], fila_ant['fecha_cad'], diferencia, ts_mx))
+                    c.execute(
+    "INSERT INTO historial_ventas VALUES (?, ?, ?, ?, ?, ?)",
+    (
+        fila_ant['nombre'],
+        fila_ant['fecha_cad'],
+        fila_ant['cantidad'],   # habia
+        cant_hoy,               # quedan
+        diferencia,             # vendidos
+        ts_mx                   # fecha y hora
+    )
+)
             
             if ventas_detectadas:
                 st.session_state['ultimo_corte'] = pd.DataFrame(ventas_detectadas)
@@ -265,11 +283,11 @@ mensaje_global.success("🏁 Corte realizado con éxito")
 time.sleep(2)
 mensaje_global.empty()
 
-
+st.rerun()
       
 
 if 'ultimo_corte' in st.session_state:
-    st.toast("✔ Registrado")
+    st.balloons()
     st.subheader("📊 Resumen de ventas detectadas:")
     
     # Recuperamos el DataFrame de la sesión
@@ -299,7 +317,7 @@ if 'ultimo_corte' in st.session_state:
     with col_close:
         if st.button("Cerrar Resumen", use_container_width=True):
             del st.session_state['ultimo_corte']
-            
+            st.rerun()
 
 # ------------------ SECCIÓN 3: ALERTAS Y ESTADO ACTUAL ------------------
 st.divider()
@@ -376,9 +394,19 @@ st.divider()
 with st.expander("📖 Historial General"):
 
     df_hist = pd.read_sql(
-        "SELECT * FROM historial_ventas ORDER BY fecha_corte DESC",
-        conn
-    )
+    """
+    SELECT 
+        nombre as Producto,
+        fecha_cad as Caducidad,
+        habia as Había,
+        quedan as Quedan,
+        vendidos as Vendidos,
+        fecha_corte as Fecha_Hora
+    FROM historial_ventas
+    ORDER BY fecha_corte DESC
+    """,
+    conn
+)
 
     st.dataframe(df_hist, use_container_width=True)
 
@@ -391,23 +419,3 @@ with st.expander("📖 Historial General"):
             data=csv,
             file_name=f"ventas_{fecha_hoy_mx}.csv"
         )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
