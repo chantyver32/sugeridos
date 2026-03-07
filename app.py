@@ -167,18 +167,23 @@ if 'ultimo_corte' in st.session_state:
         del st.session_state['ultimo_corte']
         st.rerun()
 
-    mensaje = "📊 Ventas Champlitte\n\n"
+  mensaje = "📊 CORTE DE VENTAS\n\n"
 
-    total = 0
-    for _, row in st.session_state['ultimo_corte'].iterrows():
-        mensaje += f"{row['Producto']} - {row['VENDIDOS']}\n"
-        total += row['VENDIDOS']
+df = st.session_state['ultimo_corte']
 
-    mensaje += f"\nTotal vendidos: {total}"
+for _, row in df.iterrows():
+    mensaje += (
+        f"Producto: {row['Producto']}\n"
+        f"Caducidad: {row['Caducidad']}\n"
+        f"Había: {row['Había']}\n"
+        f"Quedan: {row['Quedan']}\n"
+        f"Vendidos: {row['VENDIDOS']}\n"
+        "-----------------\n"
+    )
 
-    link = "https://wa.me/" + numero_whatsapp + "?text=" + urllib.parse.quote(mensaje)
+link = "https://wa.me/" + numero_whatsapp + "?text=" + urllib.parse.quote(mensaje)
 
-    st.link_button("📲 Enviar ventas por WhatsApp", link)
+st.link_button("📲 Enviar tabla de ventas por WhatsApp", link)
 
 # ------------------ SECCIÓN 3: ALERTAS Y ESTADO ACTUAL ------------------
 st.divider()
@@ -212,3 +217,4 @@ with st.expander("📖 Historial General"):
     if not df_hist.empty:
         csv = df_hist.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Descargar CSV", data=csv, file_name=f"ventas_{fecha_hoy_mx}.csv")
+
