@@ -26,12 +26,16 @@ conn.commit()
 st.header(f"📝 Paso 1: Conteo en Estantes ({fecha_hoy_mx.strftime('%d/%m/%Y')})")
 
 with st.container(border=True):
+    # Sugerencias dinámicas
     nombres_prev = [r[0] for r in c.execute("SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual").fetchall()]
     
     col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
         opcion = st.selectbox("Producto:", ["-- Nuevo Producto --"] + nombres_prev, key="sel_prod")
-        nombre_input = st.text_input("Nombre del pan:", key="txt_prod").upper() if opcion == "-- Nuevo Producto --" else opcion
+        if opcion == "-- Nuevo Producto --":
+            nombre_input = st.text_input("Nombre del pan:", key="txt_prod").upper()
+        else:
+            nombre_input = opcion
     
     with col2:
         f_cad = st.date_input("Fecha de Caducidad:", value=fecha_hoy_mx, min_value=fecha_hoy_mx, key="date_cad")
@@ -42,54 +46,50 @@ with st.container(border=True):
     if st.button("➕ Registrar en el Conteo", use_container_width=True):
         if nombre_input and nombre_input.strip() != "":
             nombre_final = nombre_input.strip().upper()
-            # Convertimos la fecha a string para SQLite
-            f_cad_str = f_cad.strftime('%Y-%m-%d')
-            existe = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", (nombre_final, f_cad_str)).fetchone()
+            existe = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", (nombre_final, f_cad)).fetchone()
             if existe:
-                c.execute("UPDATE captura_actual SET cantidad = cantidad + ? WHERE nombre=? AND fecha_cad=?", (int(cant), nombre_final, f_cad_str))
+                c.execute("UPDATE captura_actual SET cantidad = cantidad + ? WHERE nombre=? AND fecha_cad=?", (int(cant), nombre_final, f_cad))
             else:
-                c.execute("INSERT INTO captura_actual VALUES (?, ?, ?)", (nombre_final, f_cad_str, int(cant)))
+                c.execute("INSERT INTO captura_actual VALUES (?, ?, ?)", (nombre_final, f_cad, int(cant)))
             conn.commit()
             st.rerun()
 
-# --- TABLA EDITABLE DE CAPTURA ACTUAL ---
-# Cargamos los datos asegurando que la fecha sea reconocida como objeto fecha para el editor
-df_hoy_captura = pd.read_sql("SELECT nombre, fecha_cad, cantidad FROM captura_actual", conn)
-if not df_hoy_captura.empty:
-    df_hoy_captura['fecha_cad'] = pd.to_datetime(df_hoy_captura['fecha_cad']).dt.date
+# --- TABLA DE CAPTURA ACTUAL (EDITABLE) ---
+df_hoy_captura = pd.read_sql("SELECT rowid, nombre, fecha_cad, cantidad FROM captura_actual", conn)
 
 if not df_hoy_captura.empty:
-    st.subheader("📋 Revisión de Captura (Edita o elimina aquí)")
-    st.info("💡 Haz doble clic para editar. Para borrar: selecciona la fila y presiona 'Suprimir' (Delete).")
+    st.subheader("📋 Revisión del conteo (Edita o elimina filas aquí):")
     
-    # Usamos el editor sin 'key' conflictiva o con una lógica de guardado más limpia
+    # Editor interactivo
     df_editado = st.data_editor(
         df_hoy_captura,
         column_config={
-            "nombre": st.column_config.TextColumn("Producto", required=True),
-            "fecha_cad": st.column_config.DateColumn("Caducidad", required=True),
-            "cantidad": st.column_config.NumberColumn("Cantidad", min_value=0, required=True)
+            "rowid": None, # Ocultamos el ID interno de la DB
+            "nombre": st.column_config.TextColumn("Producto"),
+            "fecha_cad": st.column_config.DateColumn("Fecha Caducidad"),
+            "cantidad": st.column_config.NumberColumn("Cantidad", min_value=0)
         },
+        num_rows="dynamic", # Permite al usuario borrar filas
         use_container_width=True,
         hide_index=True,
-        num_rows="dynamic"
+        key="editor_conteo"
     )
 
-    col_btn1, col_btn2 = st.columns(2)
-    with col_btn1:
-        if st.button("💾 Guardar Cambios Realizados", use_container_width=True, type="primary"):
+    col_save, col_cancel = st.columns(2)
+    with col_save:
+        if st.button("💾 Guardar cambios realizados arriba", use_container_width=True):
             c.execute("DELETE FROM captura_actual")
-            for _, row in df_editado.iterrows():
-                # Validar que no haya nulos y cantidad > 0
-                if pd.notnull(row['nombre']) and row['cantidad'] > 0:
+            for _, fila in df_editado.iterrows():
+                # Evitamos insertar filas vacías si el usuario borró el nombre pero no la fila
+                if fila['nombre']:
                     c.execute("INSERT INTO captura_actual VALUES (?, ?, ?)", 
-                             (str(row['nombre']).upper(), str(row['fecha_cad']), int(row['cantidad'])))
+                             (fila['nombre'].strip().upper(), str(fila['fecha_cad']), int(fila['cantidad'])))
             conn.commit()
-            st.success("¡Captura actualizada!")
+            st.success("¡Conteo actualizado correctamente!")
             st.rerun()
             
-    with col_btn2:
-        if st.button("🗑️ Borrar toda la lista", use_container_width=True):
+    with col_cancel:
+        if st.button("🗑️ Borrar TODO el conteo actual", use_container_width=True):
             c.execute("DELETE FROM captura_actual")
             conn.commit()
             st.rerun()
@@ -98,54 +98,72 @@ if not df_hoy_captura.empty:
 st.divider()
 st.header("🏁 Paso 2: Finalizar y Calcular Ventas")
 
-if st.button("REALIZAR CORTE FINAL (Cerrar caja)", use_container_width=True):
-    df_actual = pd.read_sql("SELECT * FROM captura_actual", conn)
-    
-    if df_actual.empty:
-        st.warning("Agrega productos primero.")
+if st.button("REALIZAR CORTE Y REINICIAR FORMULARIO", type="primary", use_container_width=True):
+    if df_hoy_captura.empty:
+        st.warning("No hay nada que comparar. La lista de captura está vacía.")
     else:
         df_anterior = pd.read_sql("SELECT * FROM base_anterior", conn)
+        
         if not df_anterior.empty:
+            ventas_detectadas = []
             ts_mx = ahora_mx.strftime("%Y-%m-%d %H:%M:%S")
-            ventas_list = []
             
-            for _, ant in df_anterior.iterrows():
-                # Buscamos el mismo producto y fecha en la captura de hoy
-                hoy = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", 
-                               (ant['nombre'], ant['fecha_cad'])).fetchone()
+            for _, fila_ant in df_anterior.iterrows():
+                res_hoy = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", 
+                                   (fila_ant['nombre'], fila_ant['fecha_cad'])).fetchone()
                 
-                cant_hoy = hoy[0] if hoy else 0
-                dif = ant['cantidad'] - cant_hoy
+                cant_hoy = res_hoy[0] if res_hoy else 0
+                diferencia = fila_ant['cantidad'] - cant_hoy
                 
-                if dif > 0:
-                    ventas_list.append({"Producto": ant['nombre'], "Caducidad": ant['fecha_cad'], "Vendidos": dif})
-                    c.execute("INSERT INTO historial_ventas VALUES (?, ?, ?, ?)", (ant['nombre'], ant['fecha_cad'], dif, ts_mx))
+                if diferencia > 0:
+                    ventas_detectadas.append({
+                        "Producto": fila_ant['nombre'],
+                        "Caducidad": fila_ant['fecha_cad'],
+                        "Había": fila_ant['cantidad'],
+                        "Quedan": cant_hoy,
+                        "VENDIDOS": diferencia
+                    })
+                    c.execute("INSERT INTO historial_ventas VALUES (?, ?, ?, ?)", 
+                             (fila_ant['nombre'], fila_ant['fecha_cad'], diferencia, ts_mx))
             
-            if ventas_list:
-                st.session_state['res_corte'] = pd.DataFrame(ventas_list)
-
-        # Relevo de inventario
+            if ventas_detectadas:
+                st.session_state['ultimo_corte'] = pd.DataFrame(ventas_detectadas)
+        
+        # El Relevo
         c.execute("DELETE FROM base_anterior")
         c.execute("INSERT INTO base_anterior SELECT * FROM captura_actual")
         c.execute("DELETE FROM captura_actual")
         conn.commit()
+        st.success("✅ Corte realizado. Inventario actualizado.")
         st.rerun()
 
-if 'res_corte' in st.session_state:
-    st.success("✅ Corte finalizado con éxito.")
-    st.table(st.session_state['res_corte'])
+# Mostrar resultados tras el corte
+if 'ultimo_corte' in st.session_state:
+    st.balloons()
+    st.subheader("📊 Resultados del Último Corte:")
+    st.table(st.session_state['ultimo_corte'])
     if st.button("Entendido"):
-        del st.session_state['res_corte']
+        del st.session_state['ultimo_corte']
         st.rerun()
 
-# ------------------ SECCIÓN 3: ESTADO ------------------
+# ------------------ SECCIÓN 3: ALERTAS Y ESTADO ACTUAL ------------------
 st.divider()
-st.subheader("🏪 Inventario Actual en Piso")
-df_piso = pd.read_sql("SELECT nombre, fecha_cad, cantidad FROM base_anterior", conn)
-if not df_piso.empty:
-    st.dataframe(df_piso, use_container_width=True, hide_index=True)
+st.header("⚠️ Alertas de Caducidad (HOY)")
+fecha_str = fecha_hoy_mx.strftime('%Y-%m-%d')
+df_caducan_hoy = pd.read_sql("SELECT nombre as Producto, cantidad as Cantidad FROM base_anterior WHERE fecha_cad = ?", 
+                             conn, params=(fecha_str,))
+
+if not df_caducan_hoy.empty:
+    st.error(f"¡Atención! Retirar {int(df_caducan_hoy['Cantidad'].sum())} piezas que caducan hoy.")
+    st.dataframe(df_caducan_hoy, use_container_width=True, hide_index=True)
 else:
-    st.write("El estante está vacío.")
+    st.success("✅ No hay caducidades para hoy.")
+
+st.header("🏪 Inventario Real en Estantes")
+df_estantes = pd.read_sql("SELECT nombre as Producto, fecha_cad as [Fecha Caducidad], cantidad as Cantidad FROM base_anterior", conn)
+if not df_estantes.empty:
+    st.metric("Total piezas en exhibición", f"{int(df_estantes['Cantidad'].sum())} panes")
+    st.dataframe(df_estantes, use_container_width=True, hide_index=True)
 
 with st.expander("📖 Historial de Ventas"):
     st.dataframe(pd.read_sql("SELECT * FROM historial_ventas ORDER BY fecha_corte DESC", conn), use_container_width=True)
