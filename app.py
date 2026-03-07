@@ -269,7 +269,7 @@ st.rerun()
       
 
 if 'ultimo_corte' in st.session_state:
-    st.balloons()
+    st.toast("✔ Registrado")
     st.subheader("📊 Resumen de ventas detectadas:")
     
     # Recuperamos el DataFrame de la sesión
@@ -391,6 +391,7 @@ with st.expander("📖 Historial General"):
             data=csv,
             file_name=f"ventas_{fecha_hoy_mx}.csv"
         )
+
 
 
 
