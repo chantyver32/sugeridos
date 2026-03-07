@@ -22,7 +22,17 @@ c.execute('CREATE TABLE IF NOT EXISTS base_anterior (nombre TEXT, fecha_cad DATE
 c.execute('CREATE TABLE IF NOT EXISTS historial_ventas (nombre TEXT, fecha_cad DATE, vendidos INTEGER, fecha_corte DATETIME)')
 conn.commit()
 
-# --- Función para limpiar los campos del Paso 1 ---
+# --- INICIALIZACIÓN DE SESSION STATE (Evita Errores de Lectura) ---
+if "prod_input" not in st.session_state:
+    st.session_state["prod_input"] = "-- Nuevo Producto --"
+if "txt_nombre" not in st.session_state:
+    st.session_state["txt_nombre"] = ""
+if "fecha_input" not in st.session_state:
+    st.session_state["fecha_input"] = fecha_hoy_mx
+if "cant_input" not in st.session_state:
+    st.session_state["cant_input"] = 1
+
+# --- Función para limpiar los campos ---
 def limpiar_formulario():
     st.session_state["prod_input"] = "-- Nuevo Producto --"
     st.session_state["txt_nombre"] = ""
@@ -33,6 +43,7 @@ def limpiar_formulario():
 st.header(f"📝 Paso 1: Conteo en Estantes ({fecha_hoy_mx.strftime('%d/%m/%Y')})")
 
 with st.container(border=True):
+    # Consultar nombres previos para sugerencias
     nombres_prev = [r[0] for r in c.execute("SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual").fetchall()]
     
     col1, col2, col3 = st.columns([2, 1, 1])
@@ -44,10 +55,10 @@ with st.container(border=True):
             nombre_final = opcion
     
     with col2:
-        f_cad = st.date_input("Fecha de Caducidad:", value=fecha_hoy_mx, min_value=fecha_hoy_mx, key="fecha_input")
+        f_cad = st.date_input("Fecha de Caducidad:", value=st.session_state["fecha_input"], min_value=fecha_hoy_mx, key="fecha_input")
     
     with col3:
-        cant = st.number_input("Cantidad que ves AHORA:", min_value=1, value=1, step=1, key="cant_input")
+        cant = st.number_input("Cantidad que ves AHORA:", min_value=1, value=st.session_state["cant_input"], step=1, key="cant_input")
 
     if st.button("➕ Registrar en el Conteo", use_container_width=True):
         if nombre_final and nombre_final.strip() != "":
@@ -58,34 +69,31 @@ with st.container(border=True):
             else:
                 c.execute("INSERT INTO captura_actual VALUES (?, ?, ?)", (nombre_limpio, f_cad, int(cant)))
             conn.commit()
+            
+            # Limpiar campo de texto si era nuevo para la siguiente entrada rápida
             if opcion == "-- Nuevo Producto --":
                 st.session_state["txt_nombre"] = ""
             st.rerun()
 
-# --- TABLA DE CAPTURA CON OPCIÓN DE ELIMINAR INDIVIDUAL ---
+# --- TABLA DE VISTA PREVIA ---
 df_hoy = pd.read_sql("SELECT * FROM captura_actual", conn)
 if not df_hoy.empty:
     st.subheader("📋 Tu conteo actual:")
     st.dataframe(df_hoy, use_container_width=True, hide_index=True)
     
-    # --- NUEVA FUNCIÓN: ELIMINAR REGISTRO ESPECÍFICO ---
+    # ELIMINACIÓN INDIVIDUAL
     with st.expander("🛠️ Editar o Eliminar un registro de la lista"):
-        # Creamos una lista de textos descriptivos para el selectbox
         opciones_borrar = [f"{row['nombre']} ({row['fecha_cad']})" for _, row in df_hoy.iterrows()]
-        seleccion_borrar = st.selectbox("Selecciona el pan que quieres quitar:", opciones_borrar)
+        seleccion_borrar = st.selectbox("Selecciona para quitar:", opciones_borrar)
         
-        if st.button("🗑️ Eliminar este pan de la lista", type="secondary"):
-            # Extraemos el nombre y la fecha para el DELETE
-            # (El formato es "NOMBRE (FECHA)")
+        if st.button("🗑️ Eliminar seleccionado"):
             nombre_borrar = seleccion_borrar.split(" (")[0]
             fecha_borrar = seleccion_borrar.split(" (")[1].replace(")", "")
-            
             c.execute("DELETE FROM captura_actual WHERE nombre=? AND fecha_cad=?", (nombre_borrar, fecha_borrar))
             conn.commit()
-            st.success(f"Eliminado: {nombre_borrar}")
             st.rerun()
 
-    if st.button("⚠️ Borrar toda la lista", type="secondary"):
+    if st.button("⚠️ Borrar toda la lista"):
         c.execute("DELETE FROM captura_actual")
         conn.commit()
         st.rerun()
@@ -104,9 +112,11 @@ if st.button("REALIZAR CORTE Y LIMPIAR TODO", type="primary", use_container_widt
         if not df_anterior.empty:
             ventas_detectadas = []
             for _, fila_ant in df_anterior.iterrows():
+                # Lógica robusta: Si no está hoy, hay 0 (se vendió todo)
                 res_hoy = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", (fila_ant['nombre'], fila_ant['fecha_cad'])).fetchone()
                 cant_hoy = res_hoy[0] if res_hoy else 0
                 diff = fila_ant['cantidad'] - cant_hoy
+                
                 if diff > 0:
                     ventas_detectadas.append({"Producto": fila_ant['nombre'], "VENDIDOS": diff})
                     c.execute("INSERT INTO historial_ventas VALUES (?, ?, ?, ?)", (fila_ant['nombre'], fila_ant['fecha_cad'], diff, ts_mx))
@@ -114,16 +124,18 @@ if st.button("REALIZAR CORTE Y LIMPIAR TODO", type="primary", use_container_widt
             if ventas_detectadas:
                 st.session_state["ultimo_corte"] = pd.DataFrame(ventas_detectadas)
 
+        # RELEVO DE DATOS Y LIMPIEZA
         c.execute("DELETE FROM base_anterior")
         c.execute("INSERT INTO base_anterior SELECT * FROM captura_actual")
         c.execute("DELETE FROM captura_actual")
         conn.commit()
         
+        # Limpiamos visualmente
         limpiar_formulario()
-        st.success("✅ Corte realizado. El formulario se ha reiniciado.")
+        st.success("✅ Corte realizado. Formulario limpio.")
         st.rerun()
 
-# Mostrar resultados flotantes
+# Mostrar resultados tras el rerun
 if "ultimo_corte" in st.session_state:
     st.balloons()
     st.subheader("📊 Ventas del último turno:")
@@ -132,7 +144,7 @@ if "ultimo_corte" in st.session_state:
         del st.session_state["ultimo_corte"]
         st.rerun()
 
-# ------------------ SECCIÓN 3: ESTADO DE ESTANTES Y CADUCIDADES ------------------
+# ------------------ SECCIÓN 3: ESTADO ACTUAL Y CADUCIDADES ------------------
 st.divider()
 col_a, col_b = st.columns(2)
 
@@ -153,7 +165,7 @@ with col_b:
     else:
         st.write("Estantes vacíos.")
 
-# ------------------ HISTORIAL ------------------
+# HISTORIAL
 with st.expander("📖 Historial de Ventas"):
     st.dataframe(pd.read_sql("SELECT * FROM historial_ventas ORDER BY fecha_corte DESC", conn), use_container_width=True)
 
