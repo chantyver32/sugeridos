@@ -162,28 +162,35 @@ if st.button("REALIZAR CORTE Y REINICIAR FORMULARIO", type="primary", use_contai
 if 'ultimo_corte' in st.session_state:
     st.balloons()
     st.subheader("📊 Resumen de ventas detectadas:")
-    st.table(st.session_state['ultimo_corte'])
-    df = st.session_state['ultimo_corte']
+    
+    # Recuperamos el DataFrame de la sesión
+    df_ventas = st.session_state['ultimo_corte']
+    st.table(df_ventas)
 
-mensaje = "📊 CORTE DE VENTAS\n\n"
+    # --- CONSTRUCCIÓN DEL MENSAJE DE WHATSAPP ---
+    mensaje = "📊 *CORTE DE VENTAS CHAMPLITTE*\n"
+    mensaje += f"📅 Fecha: {fecha_hoy_mx.strftime('%d/%m/%Y')}\n"
+    mensaje += "---------------------------------\n\n"
 
-for _, row in df_estantes.iterrows():
-    mensaje += (
-        f"Producto: {row['Producto']}\n"
-        f"Caducidad: {row['Caducidad']}\n"
-        f"Había: {row['Había']}\n"
-        f"Quedan: {row['Quedan']}\n"
-        f"Vendidos: {row['VENDIDOS']}\n"
-        "-----------------\n"
-    )
+    for _, row in df_ventas.iterrows():
+        mensaje += (
+            f"🍞 *{row['Producto']}*\n"
+            f"📅 Cad: {row['Caducidad']}\n"
+            f"📥 Había: {row['Había']} | 📤 Quedan: {row['Quedan']}\n"
+            f"💰 *VENDIDOS: {row['VENDIDOS']}*\n"
+            "---------------------------------\n"
+        )
 
-link = "https://wa.me/" + numero_whatsapp + "?text=" + urllib.parse.quote(mensaje)
+    # Codificar el mensaje para URL
+    link = f"https://wa.me/{numero_whatsapp}?text={urllib.parse.quote(mensaje)}"
 
-st.link_button("📲 Enviar tabla de ventas por WhatsApp", link)
-
-if st.button("Cerrar Resumen"):
-    del st.session_state['ultimo_corte']
-    st.rerun()
+    col_wa, col_close = st.columns(2)
+    with col_wa:
+        st.link_button("📲 Enviar reporte por WhatsApp", link, use_container_width=True)
+    with col_close:
+        if st.button("Cerrar Resumen", use_container_width=True):
+            del st.session_state['ultimo_corte']
+            st.rerun()
 
 # ------------------ SECCIÓN 3: ALERTAS Y ESTADO ACTUAL ------------------
 st.divider()
@@ -275,6 +282,7 @@ with st.expander("📖 Historial General"):
             data=csv,
             file_name=f"ventas_{fecha_hoy_mx}.csv"
         )
+
 
 
 
