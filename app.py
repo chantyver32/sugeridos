@@ -6,6 +6,8 @@ import pytz
 import urllib.parse
 import time
 
+mensaje_global = st.empty()
+
 # ------------------ CONFIGURACIÓN DE ZONA HORARIA (MÉXICO) Y WHATSAPP ENVÍO------------------
 zona_mx = pytz.timezone('America/Mexico_City')
 ahora_mx = datetime.now(zona_mx)
@@ -62,12 +64,28 @@ with st.container(border=True):
     nombres_prev = [r[0] for r in c.execute("SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual").fetchall()]
     
     col1, col2, col3 = st.columns([2, 1, 1])
+
     with col1:
-        opcion = st.selectbox("Producto:", ["-- Nuevo Producto --"] + nombres_prev, key="sel_prod")
-        if opcion == "-- Nuevo Producto --":
-            nombre_input = st.text_input("Nombre del pan:", key="txt_prod").upper()
-        else:
-            nombre_input = opcion
+
+    buscar = st.text_input("🔎 Buscar o escribir producto", key="buscar_prod").upper()
+
+    sugerencias = [p for p in nombres_prev if buscar in p.upper()]
+
+    if sugerencias:
+        nombre_input = st.selectbox(
+            "Sugerencias",
+            sugerencias,
+            key="sel_prod"
+        )
+    else:
+        nombre_input = buscar
+
+    # BOTÓN LIMPIAR FORMULARIO
+    if st.button("🧹 Limpiar formulario", use_container_width=True):
+        st.session_state.sel_prod = "-- Nuevo Producto --"
+        st.session_state.txt_prod = ""
+        st.session_state.conteo_temp = 0
+        st.rerun()
     
     with col2:
         f_cad = st.date_input("Fecha de Caducidad:", value=fecha_hoy_mx, min_value=fecha_hoy_mx, key="date_cad")
@@ -128,11 +146,19 @@ if st.button("➕ Registrar en el Conteo", use_container_width=True, type="prima
             )
 
         conn.commit()
-        sonido_click()
-        msg = st.success("Producto agregado")
-        time.sleep(2)
-        msg.empty()
-        st.rerun()
+sonido_click()
+
+mensaje_global.success("✅ Producto agregado")
+time.sleep(2)
+
+# LIMPIAR FORMULARIO AUTOMÁTICAMENTE
+st.session_state.sel_prod = "-- Nuevo Producto --"
+st.session_state.txt_prod = ""
+st.session_state.conteo_temp = 0
+
+mensaje_global.empty()
+
+st.rerun()
 
 # --- TABLA DE CAPTURA ACTUAL (EDITABLE) ---
 df_hoy_captura = pd.read_sql("SELECT rowid, nombre, fecha_cad, cantidad FROM captura_actual", conn)
@@ -159,7 +185,7 @@ if not df_hoy_captura.empty:
 
     col_save, col_cancel = st.columns(2)
 
-   with col_save:
+  with col_save:
     if st.button("💾 Guardar cambios realizados arriba", use_container_width=True):
 
         c.execute("DELETE FROM captura_actual")
@@ -173,11 +199,9 @@ if not df_hoy_captura.empty:
 
         conn.commit()
 
-        mensaje = st.empty()
-        mensaje.success("💾 Conteo actualizado")
-
+        mensaje_global.success("💾 Conteo actualizado")
         time.sleep(2)
-        mensaje.empty()
+        mensaje_global.empty()
 
         st.rerun()
             
@@ -194,13 +218,14 @@ st.header("🏁 Paso 2: Finalizar y Calcular Ventas")
 if st.button("REALIZAR CORTE Y REINICIAR FORMULARIO", type="primary", use_container_width=True):
     df_actualizado = pd.read_sql("SELECT * FROM captura_actual", conn)
 
-    if df_actualizado.empty:
+if df_actualizado.empty:
 
-    mensaje = st.empty()
-    mensaje.warning("⚠️ No hay nada que comparar.")
-
+    mensaje_global.warning("⚠️ No hay nada que comparar")
     time.sleep(2)
-    mensaje.empty()        
+    mensaje_global.empty()
+
+    st.stop()
+          
        
     else:
         df_anterior = pd.read_sql("SELECT * FROM base_anterior", conn)
@@ -235,11 +260,10 @@ if st.button("REALIZAR CORTE Y REINICIAR FORMULARIO", type="primary", use_contai
         c.execute("DELETE FROM captura_actual")
         
         conn.commit()
-        mensaje = st.empty()
-mensaje.success("🏁 Corte realizado con éxito")
 
+mensaje_global.success("🏁 Corte realizado con éxito")
 time.sleep(2)
-mensaje.empty()
+mensaje_global.empty()
 
 st.rerun()
       
@@ -367,6 +391,7 @@ with st.expander("📖 Historial General"):
             data=csv,
             file_name=f"ventas_{fecha_hoy_mx}.csv"
         )
+
 
 
 
