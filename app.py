@@ -62,33 +62,40 @@ with st.container(border=True):
     
     with col3:
 
-    st.write("Cantidad que ves AHORA:")
+    with col3:
 
+    st.write("Cantidad que ves")
+
+    # Inicializar contador
     if "conteo_temp" not in st.session_state:
         st.session_state.conteo_temp = 0
 
+    # Funciones para modificar el contador
+    def sumar(valor):
+        st.session_state.conteo_temp += valor
+
+    def resetear():
+        st.session_state.conteo_temp = 0
+
+    # Botones
     c1, c2, c3, c4 = st.columns(4)
 
     with c1:
-        if st.button("+1", use_container_width=True):
-            st.session_state.conteo_temp += 1
+        st.button("+1", use_container_width=True, on_click=sumar, args=(1,))
 
     with c2:
-        if st.button("+5", use_container_width=True):
-            st.session_state.conteo_temp += 5
+        st.button("+5", use_container_width=True, on_click=sumar, args=(5,))
 
     with c3:
-        if st.button("+10", use_container_width=True):
-            st.session_state.conteo_temp += 10
+        st.button("+10", use_container_width=True, on_click=sumar, args=(10,))
 
     with c4:
-        if st.button("Reset", use_container_width=True):
-            st.session_state.conteo_temp = 0
+        st.button("Reset", use_container_width=True, on_click=resetear)
 
+    # Mostrar resultado
     st.metric("Total contado", st.session_state.conteo_temp)
 
     cant = st.session_state.conteo_temp
-
     if st.button("➕ Registrar en el Conteo", use_container_width=True):
         if nombre_input and nombre_input.strip() != "":
             nombre_final = nombre_input.strip().upper()
@@ -311,6 +318,7 @@ with st.expander("📖 Historial General"):
             data=csv,
             file_name=f"ventas_{fecha_hoy_mx}.csv"
         )
+
 
 
 
