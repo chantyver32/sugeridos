@@ -65,42 +65,37 @@ with st.container(border=True):
     
     col1, col2, col3 = st.columns([2, 1, 1])
 
-    with col1:
-
-    # ---------------- BUSCADOR INTELIGENTE ----------------
-    buscar = st.text_input("🔎 Buscar producto", key="buscar_prod").upper()
+   with col1:
 
     # Obtener productos existentes
     nombres_prev = [r[0] for r in c.execute(
         "SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual"
     ).fetchall()]
 
-    # Filtrar sugerencias según lo que se escribe
-    sugerencias = [p for p in nombres_prev if buscar in p.upper()]
+    # Buscador
+    buscar = st.text_input("🔎 Buscar o escribir producto", key="buscar_prod")
 
-    if buscar == "":
-        nombre_input = st.selectbox(
-            "Selecciona producto",
-            ["-- Nuevo Producto --"] + nombres_prev,
-            key="sel_prod"
-        )
+    # Filtrar sugerencias
+    sugerencias = [p for p in nombres_prev if buscar.upper() in p.upper()]
 
-    elif sugerencias:
-        nombre_input = st.selectbox(
-            "Sugerencias encontradas",
-            sugerencias,
-            key="sel_prod"
-        )
+    # Selector
+    nombre_seleccionado = st.selectbox(
+        "Sugerencias",
+        [""] + sugerencias,
+        key="sel_prod"
+    )
 
+    # Lógica final del nombre
+    if nombre_seleccionado != "":
+        nombre_input = nombre_seleccionado
     else:
-        st.info("Producto nuevo")
         nombre_input = buscar
 
-    # -------- BOTÓN LIMPIAR BÚSQUEDA --------
-    if st.button("🧹 Nueva búsqueda / Nuevo producto", use_container_width=True):
+    # Botón limpiar
+    if st.button("🧹 Limpiar búsqueda / Nuevo producto", use_container_width=True):
 
         st.session_state.buscar_prod = ""
-        st.session_state.sel_prod = "-- Nuevo Producto --"
+        st.session_state.sel_prod = ""
         st.session_state.conteo_temp = 0
 
         st.rerun()
@@ -409,6 +404,7 @@ with st.expander("📖 Historial General"):
             data=csv,
             file_name=f"ventas_{fecha_hoy_mx}.csv"
         )
+
 
 
 
