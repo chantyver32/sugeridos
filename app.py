@@ -40,7 +40,7 @@ with st.sidebar.expander("🚨 Zona de Peligro"):
         else:
             st.sidebar.error("Primero debes marcar la casilla de confirmación.")
 
-# ------------------ SECCIÓN 1: CAPTURA FÍSICA (PASO 1) ------------------
+# ------------------ SECCIÓN 1: CAPTURA FÍSICA ------------------
 st.header(f"📝 Paso 1: Conteo en Estantes ({fecha_hoy_mx.strftime('%d/%m/%Y')})")
 
 with st.container(border=True):
@@ -48,7 +48,7 @@ with st.container(border=True):
     nombres_prev = [r[0] for r in c.execute(
         "SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual"
     ).fetchall()]
-
+    
     col1, col2, col3 = st.columns([2,1,1])
 
     with col1:
@@ -57,19 +57,20 @@ with st.container(border=True):
             nombre_input = st.text_input("Nombre del pan:", key="txt_prod").upper()
         else:
             nombre_input = opcion
-
+    
     with col2:
         f_cad = st.date_input("Fecha de Caducidad:", value=fecha_hoy_mx, min_value=fecha_hoy_mx, key="date_cad")
-
+    
     with col3:
         cant = st.number_input("Cantidad que ves AHORA:", min_value=1, value=1, step=1, key="num_cant")
 
     col_add, col_clear = st.columns(2)
 
-    # BOTÓN AGREGAR
     with col_add:
         if st.button("➕ Registrar en el Conteo", use_container_width=True):
+
             if nombre_input and nombre_input.strip() != "":
+
                 nombre_final = nombre_input.strip().upper()
 
                 existe = c.execute(
@@ -91,28 +92,29 @@ with st.container(border=True):
                 conn.commit()
 
                 # limpiar formulario
-                st.session_state.sel_prod = "-- Nuevo Producto --"
-                st.session_state.txt_prod = ""
-                st.session_state.num_cant = 1
+                st.session_state.pop("sel_prod", None)
+                st.session_state.pop("txt_prod", None)
+                st.session_state.pop("num_cant", None)
 
                 st.rerun()
 
-    # BOTÓN LIMPIAR
     with col_clear:
         if st.button("🧹 Limpiar formulario", use_container_width=True):
-            st.session_state.sel_prod = "-- Nuevo Producto --"
-            st.session_state.txt_prod = ""
-            st.session_state.num_cant = 1
+
+            st.session_state.pop("sel_prod", None)
+            st.session_state.pop("txt_prod", None)
+            st.session_state.pop("num_cant", None)
+
             st.rerun()
 
-# --- TABLA DE CAPTURA ACTUAL (EDITABLE) ---
+# ------------------ TABLA CAPTURA ACTUAL ------------------
 df_hoy_captura = pd.read_sql("SELECT rowid, nombre, fecha_cad, cantidad FROM captura_actual", conn)
 
 if not df_hoy_captura.empty:
 
     df_hoy_captura['fecha_cad'] = pd.to_datetime(df_hoy_captura['fecha_cad']).dt.date
 
-    st.subheader("📋 Revisión del conteo (Edita o elimina filas aquí):")
+    st.subheader("📋 Revisión del conteo")
 
     df_editado = st.data_editor(
         df_hoy_captura,
@@ -124,14 +126,14 @@ if not df_hoy_captura.empty:
         },
         num_rows="dynamic",
         use_container_width=True,
-        hide_index=True,
-        key="editor_conteo"
+        hide_index=True
     )
 
     col_save, col_cancel = st.columns(2)
 
     with col_save:
         if st.button("💾 Guardar cambios realizados arriba", use_container_width=True):
+
             c.execute("DELETE FROM captura_actual")
 
             for _, fila in df_editado.iterrows():
@@ -144,25 +146,26 @@ if not df_hoy_captura.empty:
             conn.commit()
             st.success("¡Conteo actualizado!")
             st.rerun()
-
+            
     with col_cancel:
         if st.button("🗑️ Borrar TODO el conteo actual", use_container_width=True):
             c.execute("DELETE FROM captura_actual")
             conn.commit()
             st.rerun()
 
-# ------------------ SECCIÓN 2: CORTE Y COMPARACIÓN ------------------
+# ------------------ CORTE DE VENTAS ------------------
 st.divider()
 st.header("🏁 Paso 2: Finalizar y Calcular Ventas")
 
 if st.button("REALIZAR CORTE Y REINICIAR FORMULARIO", type="primary", use_container_width=True):
 
     df_actualizado = pd.read_sql("SELECT * FROM captura_actual", conn)
-
+    
     if df_actualizado.empty:
-        st.warning("No hay nada que comparar. La lista de captura está vacía.")
+        st.warning("No hay nada que comparar.")
 
     else:
+
         df_anterior = pd.read_sql("SELECT * FROM base_anterior", conn)
 
         if not df_anterior.empty:
@@ -201,22 +204,23 @@ if st.button("REALIZAR CORTE Y REINICIAR FORMULARIO", type="primary", use_contai
         c.execute("DELETE FROM base_anterior")
         c.execute("INSERT INTO base_anterior SELECT * FROM captura_actual")
         c.execute("DELETE FROM captura_actual")
+
         conn.commit()
 
-        st.success("✅ Corte realizado con éxito.")
+        st.success("✅ Corte realizado")
         st.rerun()
 
 if 'ultimo_corte' in st.session_state:
 
     st.balloons()
-    st.subheader("📊 Resumen de ventas detectadas:")
+    st.subheader("📊 Resumen de ventas detectadas")
     st.table(st.session_state['ultimo_corte'])
 
     if st.button("Cerrar Resumen"):
         del st.session_state['ultimo_corte']
         st.rerun()
 
-# ------------------ SECCIÓN 3: ALERTAS Y ESTADO ACTUAL ------------------
+# ------------------ ALERTAS ------------------
 st.divider()
 
 col_left, col_right = st.columns(2)
@@ -236,7 +240,6 @@ with col_left:
     if not df_caducan_hoy.empty:
         st.error(f"¡Atención! Retirar {int(df_caducan_hoy['Cantidad'].sum())} piezas.")
         st.dataframe(df_caducan_hoy, use_container_width=True, hide_index=True)
-
     else:
         st.success("✅ Todo bien hoy.")
 
@@ -252,10 +255,10 @@ with col_right:
     if not df_estantes.empty:
         st.metric("Piezas totales", f"{int(df_estantes['Cantidad'].sum())}")
         st.dataframe(df_estantes, use_container_width=True, hide_index=True)
-
     else:
         st.info("Sin inventario.")
 
+# ------------------ HISTORIAL ------------------
 st.divider()
 
 with st.expander("📖 Historial General"):
