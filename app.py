@@ -105,7 +105,7 @@ with st.container(border=True):
             st.toast("Registro guardado ✅")
 st.balloons()
 st.session_state.conteo_temp = 0
-            st.rerun()
+st.rerun()
 
 # --- TABLA DE CAPTURA ACTUAL (EDITABLE) ---
 df_hoy_captura = pd.read_sql("SELECT rowid, nombre, fecha_cad, cantidad FROM captura_actual", conn)
@@ -315,6 +315,7 @@ with st.expander("📖 Historial General"):
             data=csv,
             file_name=f"ventas_{fecha_hoy_mx}.csv"
         )
+
 
 
 
