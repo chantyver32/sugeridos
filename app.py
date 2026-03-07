@@ -57,13 +57,8 @@ with st.sidebar.expander("🚨 Zona de Peligro"):
             st.sidebar.error("Primero debes marcar la casilla de confirmación.")
 
 # ------------------ SECCIÓN 1: CAPTURA FÍSICA (PASO 1) ------------------
-st.header(f"📝 Paso 1: Conteo en Estantes ({fecha_hoy_mx.strftime('%d/%m/%Y')})")
 
-with st.container(border=True):
-    # Sugerencias dinámicas
-    nombres_prev = [r[0] for r in c.execute("SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual").fetchall()]
-    
-    col1, col2, col3 = st.columns([2, 1, 1])
+st.header(f"📝 Paso 1: Conteo en Estantes ({fecha_hoy_mx.strftime('%d/%m/%Y')})")
 
 with st.container(border=True):
 
@@ -82,17 +77,20 @@ with st.container(border=True):
 
         col_exist, col_new = st.columns(2)
 
-        # -------- PRODUCTOS EXISTENTES --------
+        # -------- BUSCAR PRODUCTO EXISTENTE --------
         with col_exist:
 
             st.write("🔎 Buscar producto existente")
 
-            buscar = st.text_input("Escribe para filtrar", key="buscar_prod")
+            buscar = st.text_input(
+                "Escribe para filtrar",
+                key="buscar_prod"
+            )
 
             if buscar:
-                lista_filtrada = [p for p in nombres_prev if buscar.upper() in p.upper()]
+                lista_filtrada = [p for p in nombres_prev if buscar.upper() in p.upper()][:8]
             else:
-                lista_filtrada = nombres_prev
+                lista_filtrada = nombres_prev[:8]
 
             if lista_filtrada:
                 nombre_existente = st.selectbox(
@@ -104,10 +102,10 @@ with st.container(border=True):
                 nombre_existente = None
                 st.warning("No hay coincidencias")
 
-        # -------- PRODUCTO NUEVO --------
+        # -------- AGREGAR PRODUCTO NUEVO --------
         with col_new:
 
-            st.write("➕ Agregar producto nuevo")
+            st.write("➕ Producto nuevo (si no aparece)")
 
             nombre_nuevo = st.text_input(
                 "Nombre nuevo",
@@ -120,11 +118,11 @@ with st.container(border=True):
         else:
             nombre_input = nombre_existente
 
-
     # ---------------- FECHA CADUCIDAD ----------------
     with col2:
+
         f_cad = st.date_input(
-            "Fecha de Caducidad:",
+            "Fecha de Caducidad",
             value=fecha_hoy_mx,
             min_value=fecha_hoy_mx,
             key="date_cad"
@@ -134,9 +132,9 @@ with st.container(border=True):
     with col3:
         st.write("Cantidad que ves")
 
-  # Inicializar contador
+# Inicializar contador
 if "conteo_temp" not in st.session_state:
-    st.session_state.conteo_temp = 0  
+    st.session_state.conteo_temp = 0
 
 def sumar(valor):
     st.session_state.conteo_temp += valor
@@ -146,7 +144,7 @@ def resetear():
     st.session_state.conteo_temp = 0
     sonido_click()
 
-# Botones
+# Botones contador
 c1, c2, c3, c4 = st.columns(4)
 
 with c1:
@@ -161,13 +159,17 @@ with c3:
 with c4:
     st.button("Borrar", use_container_width=True, on_click=resetear)
 
-# Mostrar resultado
+# Mostrar total
 st.metric("Total contado", st.session_state.conteo_temp)
 
 cant = st.session_state.conteo_temp
 
+# ---------------- REGISTRAR PRODUCTO ----------------
+
 if st.button("➕ Registrar en el Conteo", use_container_width=True, type="primary"):
+
     if nombre_input and nombre_input.strip() != "":
+
         nombre_final = nombre_input.strip().upper()
 
         existe = c.execute(
@@ -187,19 +189,21 @@ if st.button("➕ Registrar en el Conteo", use_container_width=True, type="prima
             )
 
         conn.commit()
-sonido_click()
 
-mensaje_global.success("✅ Producto agregado")
-time.sleep(2)
+        sonido_click()
 
-# LIMPIAR FORMULARIO AUTOMÁTICAMENTE
-st.session_state.sel_prod = "-- Nuevo Producto --"
-st.session_state.txt_prod = ""
-st.session_state.conteo_temp = 0
+        st.success("✅ Producto agregado")
 
-mensaje_global.empty()
+        st.session_state.conteo_temp = 0
 
-st.rerun()
+        time.sleep(1)
+
+        st.rerun()
+
+    else:
+
+        st.warning("⚠️ Debes seleccionar o escribir un producto")
+
 
 # --- TABLA DE CAPTURA ACTUAL (EDITABLE) ---
 df_hoy_captura = pd.read_sql("SELECT rowid, nombre, fecha_cad, cantidad FROM captura_actual", conn)
@@ -432,6 +436,7 @@ with st.expander("📖 Historial General"):
             data=csv,
             file_name=f"ventas_{fecha_hoy_mx}.csv"
         )
+
 
 
 
