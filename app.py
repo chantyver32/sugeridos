@@ -35,6 +35,51 @@ conn.commit()
 
 # ------------------ FUNCIONES ------------------
 
+# ------------------ FUNCIONES PARA WHATSAPP ------------------
+def enviar_whatsapp(texto):
+    """Genera un enlace de WhatsApp con el mensaje dado y lo abre en el navegador"""
+    import webbrowser
+    mensaje = urllib.parse.quote(texto)
+    url = f"https://api.whatsapp.com/send?phone={numero_whatsapp}&text={mensaje}"
+    webbrowser.open(url)
+
+def reporte_conteo_para_whatsapp():
+    """Genera un mensaje amigable del conteo actual"""
+    df = pd.read_sql("SELECT nombre, fecha_cad, cantidad FROM captura_actual", conn)
+    if df.empty:
+        return "⚠️ No hay productos registrados en el conteo actual."
+    
+    mensaje = "📝 *Reporte de Conteo Actual* 🥐\n\n"
+    for _, fila in df.iterrows():
+        mensaje += f"- {fila['nombre']} | Cad: {fila['fecha_cad']} | Cantidad: {fila['cantidad']}\n"
+    mensaje += f"\nFecha: {fecha_hoy_mx.strftime('%d/%m/%Y')}"
+    return mensaje
+
+def reporte_corte_para_whatsapp():
+    """Genera un mensaje amigable del último corte realizado"""
+    if not st.session_state.get('ultimo_corte'):
+        return "⚠️ No se ha realizado ningún corte."
+    
+    df = st.session_state['ultimo_corte']
+    mensaje = "🏁 *Reporte de Corte de Ventas* 🥐\n\n"
+    for _, fila in df.iterrows():
+        mensaje += f"- {fila['Producto']} | Cad: {fila['Caducidad']} | Había: {fila['Había']} | Quedan: {fila['Quedan']} | Vendidos: {fila['VENDIDOS']}\n"
+    mensaje += f"\nFecha Corte: {datetime.now(zona_mx).strftime('%d/%m/%Y %H:%M')}"
+    return mensaje
+
+def reporte_historial_para_whatsapp():
+    """Genera un mensaje amigable del historial completo"""
+    df = pd.read_sql("SELECT nombre as Producto, fecha_cad as Caducidad, habia as Habia, quedan as Quedan, vendidos as Vendidos, fecha_corte as Fecha_Hora FROM historial_ventas", conn)
+    if df.empty:
+        return "⚠️ No hay historial de ventas todavía."
+    
+    mensaje = "📊 *Historial de Ventas* 🥐\n\n"
+    resumen = df.groupby("Producto")["Vendidos"].sum().sort_values(ascending=False)
+    for producto, vendidos in resumen.items():
+        mensaje += f"- {producto}: {int(vendidos)} vendidos\n"
+    mensaje += f"\nTotal histórico: {int(df['Vendidos'].sum())} piezas"
+    return mensaje
+
 def enviar_whatsapp(titulo, df):
     """Genera un enlace de WhatsApp con el contenido del DataFrame"""
     if df.empty:
@@ -146,6 +191,10 @@ with tab1:
             conn.commit()
             st.rerun()
 
+    if st.button("📤 Enviar reporte de conteo por WhatsApp"):
+        texto = reporte_conteo_para_whatsapp()
+        enviar_whatsapp(texto)
+
 with tab2:
     st.header("🏁 Paso 2: Finalizar y Calcular Ventas")
     if st.button("REALIZAR CORTE", type="primary", use_container_width=True):
@@ -204,6 +253,11 @@ with tab2:
         df_inv = pd.read_sql("SELECT nombre, cantidad FROM base_anterior", conn)
         st.dataframe(df_inv, use_container_width=True)
 
+    if st.session_state.get('mostrar_resumen'):
+        if st.button("📤 Enviar corte por WhatsApp"):
+            texto = reporte_corte_para_whatsapp()
+            enviar_whatsapp(texto)
+
 with tab3:
     st.header("📊 Análisis de Ventas")
     df_hist = pd.read_sql("SELECT nombre as Producto, fecha_cad as Caducidad, vendidos as Vendidos, fecha_corte as Fecha FROM historial_ventas", conn)
@@ -219,3 +273,7 @@ with tab3:
         st.subheader("📈 Top Ventas")
         top = df_hist.groupby("Producto")["Vendidos"].sum().sort_values(ascending=False).head(10)
         st.bar_chart(top)
+
+   if st.button("📤 Enviar historial por WhatsApp"):
+        texto = reporte_historial_para_whatsapp()
+        enviar_whatsapp(texto)
