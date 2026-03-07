@@ -93,19 +93,33 @@ with st.container(border=True):
     st.metric("Total contado", st.session_state.conteo_temp)
 
     cant = st.session_state.conteo_temp
-    if st.button("➕ Registrar en el Conteo", use_container_width=True):
-        if nombre_input and nombre_input.strip() != "":
-            nombre_final = nombre_input.strip().upper()
-            existe = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", (nombre_final, f_cad)).fetchone()
-            if existe:
-                c.execute("UPDATE captura_actual SET cantidad = cantidad + ? WHERE nombre=? AND fecha_cad=?", (int(cant), nombre_final, f_cad))
-            else:
-                c.execute("INSERT INTO captura_actual VALUES (?, ?, ?)", (nombre_final, f_cad, int(cant)))
-            conn.commit()
-            st.toast("Registro guardado ✅")
-st.balloons()
-st.session_state.conteo_temp = 0
-st.rerun()
+
+if st.button("➕ Registrar en el Conteo", use_container_width=True):
+    if nombre_input and nombre_input.strip() != "":
+        nombre_final = nombre_input.strip().upper()
+
+        existe = c.execute(
+            "SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?",
+            (nombre_final, f_cad)
+        ).fetchone()
+
+        if existe:
+            c.execute(
+                "UPDATE captura_actual SET cantidad = cantidad + ? WHERE nombre=? AND fecha_cad=?",
+                (int(cant), nombre_final, f_cad)
+            )
+        else:
+            c.execute(
+                "INSERT INTO captura_actual VALUES (?, ?, ?)",
+                (nombre_final, f_cad, int(cant))
+            )
+
+        conn.commit()
+        st.toast("Registro guardado ✅")
+
+        st.balloons()
+        st.session_state.conteo_temp = 0
+        st.rerun()
 
 # --- TABLA DE CAPTURA ACTUAL (EDITABLE) ---
 df_hoy_captura = pd.read_sql("SELECT rowid, nombre, fecha_cad, cantidad FROM captura_actual", conn)
@@ -315,6 +329,7 @@ with st.expander("📖 Historial General"):
             data=csv,
             file_name=f"ventas_{fecha_hoy_mx}.csv"
         )
+
 
 
 
