@@ -4,6 +4,7 @@ import sqlite3
 from datetime import datetime
 import pytz
 import urllib.parse
+import time
 
 # ------------------ CONFIGURACIÓN DE ZONA HORARIA (MÉXICO) Y WHATSAPP ENVÍO------------------
 zona_mx = pytz.timezone('America/Mexico_City')
@@ -127,11 +128,16 @@ if st.button("➕ Registrar en el Conteo", use_container_width=True, type="prima
                 (nombre_final, f_cad, int(cant))
             )
 
-        conn.commit()
-        st.session_state.guardado_ok = True
+conn.commit()
 sonido_click()
-st.balloons()
-        st.rerun()
+
+msg = st.toast("Producto agregado", icon="✅")
+
+time.sleep(2)
+
+msg.empty()
+
+st.rerun()
 
 # --- TABLA DE CAPTURA ACTUAL (EDITABLE) ---
 df_hoy_captura = pd.read_sql("SELECT rowid, nombre, fecha_cad, cantidad FROM captura_actual", conn)
@@ -164,9 +170,12 @@ if not df_hoy_captura.empty:
                 if fila['nombre']:
                     c.execute("INSERT INTO captura_actual (nombre, fecha_cad, cantidad) VALUES (?, ?, ?)", 
                              (fila['nombre'].strip().upper(), str(fila['fecha_cad']), int(fila['cantidad'])))
-            conn.commit()
-            st.success("¡Conteo actualizado!")
-            st.rerun()
+
+conn.commit()
+msg = st.success("¡Conteo actualizado!")
+time.sleep(2)
+msg.empty()
+st.rerun()        
             
     with col_cancel:
         if st.button("🗑️ Borrar TODO el conteo actual", use_container_width=True):
@@ -182,7 +191,9 @@ if st.button("REALIZAR CORTE Y REINICIAR FORMULARIO", type="primary", use_contai
     df_actualizado = pd.read_sql("SELECT * FROM captura_actual", conn)
     
     if df_actualizado.empty:
-        st.warning("No hay nada que comparar. La lista de captura está vacía.")
+        msg = st.warning("No hay nada que comparar.")
+time.sleep(2)
+msg.empty()
     else:
         df_anterior = pd.read_sql("SELECT * FROM base_anterior", conn)
         
@@ -215,7 +226,7 @@ if st.button("REALIZAR CORTE Y REINICIAR FORMULARIO", type="primary", use_contai
         c.execute("INSERT INTO base_anterior SELECT * FROM captura_actual")
         c.execute("DELETE FROM captura_actual")
         conn.commit()
-        st.success("✅ Corte realizado con éxito.")
+        st.toast("Corte realizado con éxito.", icon="✅")
         st.rerun()
 
 if 'ultimo_corte' in st.session_state:
@@ -341,6 +352,7 @@ with st.expander("📖 Historial General"):
             data=csv,
             file_name=f"ventas_{fecha_hoy_mx}.csv"
         )
+
 
 
 
