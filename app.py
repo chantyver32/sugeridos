@@ -62,7 +62,7 @@ with st.container(border=True):
     
     with col3:
 
-    st.write("Cantidad")
+    st.write("Cantidad que ves AHORA:")
 
     if "conteo_temp" not in st.session_state:
         st.session_state.conteo_temp = 0
@@ -311,6 +311,7 @@ with st.expander("📖 Historial General"):
             data=csv,
             file_name=f"ventas_{fecha_hoy_mx}.csv"
         )
+
 
 
 
