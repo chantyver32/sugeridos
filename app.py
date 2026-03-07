@@ -75,12 +75,11 @@ with st.container(border=True):
     with col3:
         st.write("Cantidad que ves")
 
-    # Inicializar contador
+  # Inicializar contador
 if "conteo_temp" not in st.session_state:
     st.session_state.conteo_temp = 0  
 
-    # Funciones para modificar el contador
-  def sumar(valor):
+def sumar(valor):
     st.session_state.conteo_temp += valor
     sonido_click()
 
@@ -88,29 +87,25 @@ def resetear():
     st.session_state.conteo_temp = 0
     sonido_click()
 
-def resetear():
-    st.session_state.conteo_temp = 0
-    sonido_click()
+# Botones
+c1, c2, c3, c4 = st.columns(4)
 
-    # Botones
-    c1, c2, c3, c4 = st.columns(4)
+with c1:
+    st.button("+1", use_container_width=True, on_click=sumar, args=(1,))
 
-    with c1:
-        st.button("+1", use_container_width=True, on_click=sumar, args=(1,))
+with c2:
+    st.button("+5", use_container_width=True, on_click=sumar, args=(5,))
 
-    with c2:
-        st.button("+5", use_container_width=True, on_click=sumar, args=(5,))
+with c3:
+    st.button("+10", use_container_width=True, on_click=sumar, args=(10,))
 
-    with c3:
-        st.button("+10", use_container_width=True, on_click=sumar, args=(10,))
+with c4:
+    st.button("Borrar", use_container_width=True, on_click=resetear)
 
-    with c4:
-        st.button("Borrar", use_container_width=True, on_click=resetear)
+# Mostrar resultado
+st.metric("Total contado", st.session_state.conteo_temp)
 
-    # Mostrar resultado
-    st.metric("Total contado", st.session_state.conteo_temp)
-
-    cant = st.session_state.conteo_temp
+cant = st.session_state.conteo_temp
 
 if st.button("➕ Registrar en el Conteo", use_container_width=True, type="primary"):
     if nombre_input and nombre_input.strip() != "":
@@ -164,8 +159,9 @@ if not df_hoy_captura.empty:
 
     col_save, col_cancel = st.columns(2)
 
-    with col_save:
+   with col_save:
     if st.button("💾 Guardar cambios realizados arriba", use_container_width=True):
+
         c.execute("DELETE FROM captura_actual")
 
         for _, fila in df_editado.iterrows():
@@ -176,13 +172,14 @@ if not df_hoy_captura.empty:
                 )
 
         conn.commit()
+
         mensaje = st.empty()
-mensaje.success("💾 Conteo actualizado")
+        mensaje.success("💾 Conteo actualizado")
 
-time.sleep(2)
-mensaje.empty()
+        time.sleep(2)
+        mensaje.empty()
 
-st.rerun()
+        st.rerun()
             
     with col_cancel:
         if st.button("🗑️ Borrar TODO el conteo actual", use_container_width=True):
@@ -196,14 +193,14 @@ st.header("🏁 Paso 2: Finalizar y Calcular Ventas")
 
 if st.button("REALIZAR CORTE Y REINICIAR FORMULARIO", type="primary", use_container_width=True):
     df_actualizado = pd.read_sql("SELECT * FROM captura_actual", conn)
-    
-   if df_actualizado.empty:
-       mensaje = st.empty()
-mensaje.warning("⚠️ No hay nada que comparar.")
 
-time.sleep(2)
-mensaje.empty()
-       
+    if df_actualizado.empty:
+
+    mensaje = st.empty()
+    mensaje.warning("⚠️ No hay nada que comparar.")
+
+    time.sleep(2)
+    mensaje.empty()        
        
     else:
         df_anterior = pd.read_sql("SELECT * FROM base_anterior", conn)
@@ -236,6 +233,7 @@ mensaje.empty()
         c.execute("DELETE FROM base_anterior")
         c.execute("INSERT INTO base_anterior SELECT * FROM captura_actual")
         c.execute("DELETE FROM captura_actual")
+        
         conn.commit()
         mensaje = st.empty()
 mensaje.success("🏁 Corte realizado con éxito")
@@ -244,6 +242,7 @@ time.sleep(2)
 mensaje.empty()
 
 st.rerun()
+      
 
 if 'ultimo_corte' in st.session_state:
     st.balloons()
@@ -368,6 +367,7 @@ with st.expander("📖 Historial General"):
             data=csv,
             file_name=f"ventas_{fecha_hoy_mx}.csv"
         )
+
 
 
 
