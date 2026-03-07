@@ -67,24 +67,42 @@ with st.container(border=True):
 
     with col1:
 
-    buscar = st.text_input("🔎 Buscar o escribir producto", key="buscar_prod").upper()
+    # ---------------- BUSCADOR INTELIGENTE ----------------
+    buscar = st.text_input("🔎 Buscar producto", key="buscar_prod").upper()
 
+    # Obtener productos existentes
+    nombres_prev = [r[0] for r in c.execute(
+        "SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual"
+    ).fetchall()]
+
+    # Filtrar sugerencias según lo que se escribe
     sugerencias = [p for p in nombres_prev if buscar in p.upper()]
 
-    if sugerencias:
+    if buscar == "":
         nombre_input = st.selectbox(
-            "Sugerencias",
+            "Selecciona producto",
+            ["-- Nuevo Producto --"] + nombres_prev,
+            key="sel_prod"
+        )
+
+    elif sugerencias:
+        nombre_input = st.selectbox(
+            "Sugerencias encontradas",
             sugerencias,
             key="sel_prod"
         )
+
     else:
+        st.info("Producto nuevo")
         nombre_input = buscar
 
-    # BOTÓN LIMPIAR FORMULARIO
-    if st.button("🧹 Limpiar formulario", use_container_width=True):
+    # -------- BOTÓN LIMPIAR BÚSQUEDA --------
+    if st.button("🧹 Nueva búsqueda / Nuevo producto", use_container_width=True):
+
+        st.session_state.buscar_prod = ""
         st.session_state.sel_prod = "-- Nuevo Producto --"
-        st.session_state.txt_prod = ""
         st.session_state.conteo_temp = 0
+
         st.rerun()
     
     with col2:
@@ -391,6 +409,7 @@ with st.expander("📖 Historial General"):
             data=csv,
             file_name=f"ventas_{fecha_hoy_mx}.csv"
         )
+
 
 
 
