@@ -93,11 +93,6 @@ with tab1:
         else:
             nombre_input = buscar
 
-        if st.button("🧹 Limpiar formulario", use_container_width=True):
-            st.session_state.sel_prod = "-- Nuevo Producto --"
-            st.session_state.buscar_prod = ""
-            st.session_state.conteo_temp = 0
-
     with col2:
         f_cad = st.date_input("Fecha de Caducidad:", value=fecha_hoy_mx, min_value=fecha_hoy_mx, key="date_cad")
 
@@ -213,7 +208,9 @@ with tab1:
 
     # ------------------ MOSTRAR RESUMEN ------------------
     if 'ultimo_corte' in st.session_state:
-        mostrar_exito("✅ Corte finalizado")  # reemplazo de st.balloons()
+        # Mostrar globos automáticamente al abrir el resumen
+        st.balloons()
+        
         st.subheader("📊 Resumen de ventas detectadas:")
         df_ventas = st.session_state['ultimo_corte']
         st.table(df_ventas)
