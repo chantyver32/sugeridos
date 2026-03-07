@@ -15,6 +15,17 @@ numero_whatsapp = "522283530069"
 st.set_page_config(page_title="Inventario Champlitte MX", page_icon="🥐", layout="wide")
 st.title("Sistema de Inventario: Control de Ventas y Caducidades 🥐")
 
+# --------- SONIDO DE CLICK ---------
+def sonido_click():
+    st.markdown(
+        """
+        <audio autoplay>
+        <source src="https://www.soundjay.com/buttons/sounds/button-16.mp3" type="audio/mpeg">
+        </audio>
+        """,
+        unsafe_allow_html=True
+    )
+
 # ------------------ BASE DE DATOS ------------------
 conn = sqlite3.connect('inventario_pan.db', check_same_thread=False)
 c = conn.cursor()
@@ -65,14 +76,16 @@ with st.container(border=True):
 
     # Inicializar contador
     if "conteo_temp" not in st.session_state:
-        st.session_state.conteo_temp = 0
+    st.session_state.conteo.temp = False
 
     # Funciones para modificar el contador
-    def sumar(valor):
-        st.session_state.conteo_temp += valor
+  def sumar(valor):
+    st.session_state.conteo_temp += valor
+    sonido_click()
 
-    def resetear():
-        st.session_state.conteo_temp = 0
+def resetear():
+    st.session_state.conteo_temp = 0
+    sonido_click()
 
     # Botones
     c1, c2, c3, c4 = st.columns(4)
@@ -94,7 +107,7 @@ with st.container(border=True):
 
     cant = st.session_state.conteo_temp
 
-if st.button("➕ Registrar en el Conteo", use_container_width=True):
+if st.button("➕ Registrar en el Conteo", use_container_width=True, type="primary"):
     if nombre_input and nombre_input.strip() != "":
         nombre_final = nombre_input.strip().upper()
 
@@ -115,8 +128,9 @@ if st.button("➕ Registrar en el Conteo", use_container_width=True):
             )
 
         conn.commit()
-        st.balloons()
-        st.session_state.conteo_temp = 0
+        st.session_state.guardado_ok = True
+sonido_click()
+st.balloons()
         st.rerun()
 
 # --- TABLA DE CAPTURA ACTUAL (EDITABLE) ---
@@ -327,6 +341,7 @@ with st.expander("📖 Historial General"):
             data=csv,
             file_name=f"ventas_{fecha_hoy_mx}.csv"
         )
+
 
 
 
