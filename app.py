@@ -67,27 +67,28 @@ with st.container(border=True):
 
 with col1:
 
-    # Obtener lista de productos existentes
+    # Obtener productos existentes
     nombres_prev = [r[0] for r in c.execute(
         "SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual"
     ).fetchall()]
 
     nombres_prev = sorted(list(set(nombres_prev)))
 
-    # Selector con búsqueda
-    nombre_input = st.selectbox(
-        "Producto (puedes escribir para buscar)",
-        nombres_prev,
-        key="producto_selector"
-    )
+    # Campo para buscar o escribir
+    buscar = st.text_input("🔎 Buscar o escribir producto", key="buscar_prod").upper()
 
-    # Botón limpiar búsqueda
-    if st.button("🧹 Limpiar búsqueda", use_container_width=True):
+    # Filtrar productos
+    sugerencias = [p for p in nombres_prev if buscar in p.upper()]
 
-        st.session_state.producto_selector = nombres_prev[0]
-        st.session_state.conteo_temp = 0
-
-        st.rerun()
+    # Selector de sugerencias
+    if sugerencias:
+        nombre_input = st.selectbox(
+            "Sugerencias",
+            sugerencias,
+            key="sel_prod"
+        )
+    else:
+        nombre_input = buscar
     
     with col2:
         f_cad = st.date_input("Fecha de Caducidad:", value=fecha_hoy_mx, min_value=fecha_hoy_mx, key="date_cad")
@@ -393,6 +394,7 @@ with st.expander("📖 Historial General"):
             data=csv,
             file_name=f"ventas_{fecha_hoy_mx}.csv"
         )
+
 
 
 
