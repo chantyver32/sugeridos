@@ -32,6 +32,29 @@ c.execute('''CREATE TABLE IF NOT EXISTS historial_ventas (
 conn.commit()
 
 # ------------------ FUNCIONES ------------------
+
+def enviar_whatsapp(titulo, df):
+    """Genera un enlace de WhatsApp con el contenido del DataFrame"""
+    if df.empty:
+        return
+    
+    texto = f"📊 *{titulo}* 🥐\n\n"
+    # Iterar sobre las filas para crear el mensaje
+    for _, fila in df.iterrows():
+        detalles = " | ".join([f"{k}: {v}" for k, v in fila.to_dict().items()])
+        texto += f"• {detalles}\n"
+    
+    texto_encoded = urllib.parse.quote(texto)
+    url = f"https://wa.me/{numero_whatsapp}?text={texto_encoded}"
+    
+    st.markdown(f'''
+        <a href="{url}" target="_blank">
+            <button style="width:100%; background-color:#25D366; color:white; border:none; padding:10px; border-radius:5px; cursor:pointer;">
+                Ver en WhatsApp ✅
+            </button>
+        </a>
+    ''', unsafe_allow_html=True)
+    
 def sonido_click():
     st.markdown(
         """
@@ -195,17 +218,24 @@ with tab2:
     if st.session_state.get('mostrar_resumen'):
         st.balloons()
         st.table(st.session_state['ultimo_corte'])
+        enviar_whatsapp("Resumen de Corte de Ventas", st.session_state['ultimo_corte']) # <-- NUEVO BOTÓN
         if st.button("Cerrar Resumen"):
+          
             st.session_state['mostrar_resumen'] = False
             st.rerun()
 
     st.divider()
     cl, cr = st.columns(2)
-    with cl:
-        st.header("⚠️ Alertas de Caducidad")
-        df_cad = pd.read_sql("SELECT nombre, cantidad FROM base_anterior WHERE fecha_cad = ?", conn, params=(fecha_hoy_mx.strftime('%Y-%m-%d'),))
-        if not df_cad.empty: st.error(f"Retirar {int(df_cad['cantidad'].sum())} piezas."); st.dataframe(df_cad, use_container_width=True)
-        else: st.success("✅ Sin caducidades hoy.")
+ with cl:
+    st.header("⚠️ Alertas de Caducidad")
+    df_cad = pd.read_sql("SELECT nombre, cantidad FROM base_anterior WHERE fecha_cad = ?", conn, params=(fecha_hoy_mx.strftime('%Y-%m-%d'),))
+    if not df_cad.empty: 
+        st.error(f"Retirar {int(df_cad['cantidad'].sum())} piezas.")
+        st.dataframe(df_cad, use_container_width=True)
+        enviar_whatsapp("⚠️ Productos por Caducar Hoy", df_cad) # <-- NUEVO BOTÓN
+    else: 
+        st.success("✅ Sin caducidades hoy.")
+        
     with cr:
         st.header("🏪 Inventario Actual")
         df_inv = pd.read_sql("SELECT nombre, fecha_cad, cantidad FROM base_anterior", conn)
@@ -215,12 +245,13 @@ with tab3:
     # ------------------ ANÁLISIS COMPLETO ------------------
     st.header("📊 Análisis de Ventas")
     df_hist = pd.read_sql("SELECT nombre as Producto, fecha_cad as Caducidad, habia as Habia, quedan as Quedan, vendidos as Vendidos, fecha_corte as Fecha_Hora FROM historial_ventas", conn)
+    st.dataframe(df_f, use_container_width=True)
+    enviar_whatsapp("Historial de Ventas Filtrado", df_f) # <-- NUEVO BOTÓN
     
     if df_hist.empty:
         st.info("No hay historial todavía.")
     else:
         df_hist['Fecha_Hora'] = pd.to_datetime(df_hist['Fecha_Hora'])
-        df_hist['Fecha'] = df_hist['Fecha_Hora'].dt.date
 
         # Búsqueda
         buscar_h = st.text_input("🔎 Buscar producto en historial", key="buscar_hist").upper()
@@ -236,3 +267,4 @@ with tab3:
         if not top.empty:
             col_m1.metric("Producto Estrella", top.index[0], f"{int(top.iloc[0])} vendidos")
             col_m2.metric("Total Vendido (Histórico)", f"{int(df_hist['Vendidos'].sum())} piezas")
+
