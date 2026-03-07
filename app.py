@@ -61,7 +61,33 @@ with st.container(border=True):
         f_cad = st.date_input("Fecha de Caducidad:", value=fecha_hoy_mx, min_value=fecha_hoy_mx, key="date_cad")
     
     with col3:
-        cant = st.number_input("Cantidad que ves AHORA:", min_value=1, value=1, step=1, key="num_cant")
+
+    st.write("Cantidad")
+
+    if "conteo_temp" not in st.session_state:
+        st.session_state.conteo_temp = 0
+
+    c1, c2, c3, c4 = st.columns(4)
+
+    with c1:
+        if st.button("+1", use_container_width=True):
+            st.session_state.conteo_temp += 1
+
+    with c2:
+        if st.button("+5", use_container_width=True):
+            st.session_state.conteo_temp += 5
+
+    with c3:
+        if st.button("+10", use_container_width=True):
+            st.session_state.conteo_temp += 10
+
+    with c4:
+        if st.button("Reset", use_container_width=True):
+            st.session_state.conteo_temp = 0
+
+    st.metric("Total contado", st.session_state.conteo_temp)
+
+    cant = st.session_state.conteo_temp
 
     if st.button("➕ Registrar en el Conteo", use_container_width=True):
         if nombre_input and nombre_input.strip() != "":
@@ -72,6 +98,9 @@ with st.container(border=True):
             else:
                 c.execute("INSERT INTO captura_actual VALUES (?, ?, ?)", (nombre_final, f_cad, int(cant)))
             conn.commit()
+            st.toast("Registro guardado ✅")
+st.balloons()
+st.session_state.conteo_temp = 0
             st.rerun()
 
 # --- TABLA DE CAPTURA ACTUAL (EDITABLE) ---
@@ -282,6 +311,7 @@ with st.expander("📖 Historial General"):
             data=csv,
             file_name=f"ventas_{fecha_hoy_mx}.csv"
         )
+
 
 
 
