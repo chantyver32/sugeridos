@@ -132,3 +132,32 @@ if st.sidebar.button("RESETEAR TODO (Borrar memoria interna)"):
     c.execute("DELETE FROM historial_ventas")
     conn.commit()
     st.rerun()
+
+
+# ------------------ SECCIÓN 5: INVENTARIO ACTUAL EN ESTANTES ------------------
+st.divider()
+st.header("🏪 Inventario Real en Estantes")
+st.write("Esta es la lista de productos que quedaron registrados tras el último corte.")
+
+# Consultamos la base_anterior que es donde se guarda el estado actual después de comparar
+df_estantes = pd.read_sql("SELECT nombre as Producto, fecha_cad as [Fecha Caducidad], cantidad as Cantidad FROM base_anterior", conn)
+
+if not df_estantes.empty:
+    # Mostramos una métrica rápida del total de piezas
+    total_piezas = df_estantes['Cantidad'].sum()
+    st.metric("Total de piezas en exhibición", f"{int(total_piezas)} panes")
+    
+    # Mostramos la tabla estética
+    st.dataframe(df_estantes, use_container_width=True, hide_index=True)
+    
+    # Botón para descargar a Excel
+    csv = df_estantes.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="📥 Descargar Inventario Actual (Excel/CSV)",
+        data=csv,
+        file_name=f"inventario_estantes_{datetime.now().strftime('%d_%m_%Y')}.csv",
+        mime="text/csv",
+    )
+else:
+    st.warning("No hay productos registrados en los estantes. Realiza tu primer corte para inicializar el inventario.")
+
