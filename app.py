@@ -173,8 +173,8 @@ df = st.session_state['ultimo_corte']
 
 for _, row in df.iterrows():
     mensaje += (
-        f"Producto: {row['Producto']}\n"
-        f"Caducidad: {row['Caducidad']}\n"
+        f"Producto: {row['nombre']}\n"
+        f"Caducidad: {row['fecha_cad']}\n"
         f"Había: {row['Había']}\n"
         f"Quedan: {row['Quedan']}\n"
         f"Vendidos: {row['VENDIDOS']}\n"
@@ -217,4 +217,5 @@ with st.expander("📖 Historial General"):
     if not df_hist.empty:
         csv = df_hist.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Descargar CSV", data=csv, file_name=f"ventas_{fecha_hoy_mx}.csv")
+
 
