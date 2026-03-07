@@ -1,6 +1,5 @@
 import streamlit as st
-import pd
-import pandas as pd
+import pandas as pd  # <--- Corregido: ya no dice 'import pd'
 import sqlite3
 from datetime import datetime
 import pytz
@@ -8,7 +7,7 @@ import pytz
 # ------------------ CONFIGURACIÓN DE PÁGINA (ESTILO LIMPIO) ------------------
 st.set_page_config(page_title="Inventario Champlitte MX", page_icon="🥐", layout="wide")
 
-# CSS para ocultar menús de Streamlit y "fork" para una app más limpia
+# CSS para ocultar menús de Streamlit y "fork"
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;}
@@ -34,6 +33,7 @@ c.execute('CREATE TABLE IF NOT EXISTS historial_ventas (nombre TEXT, fecha_cad D
 conn.commit()
 
 # ------------------ LÓGICA DE RESET DE FORMULARIO ------------------
+# Esta es la forma correcta de limpiar campos en Streamlit
 if "reset_key" not in st.session_state:
     st.session_state.reset_key = 0
 
@@ -44,14 +44,14 @@ def reset_formulario():
 st.header(f"📝 Paso 1: Conteo en Estantes ({fecha_hoy_mx.strftime('%d/%m/%Y')})")
 
 with st.container(border=True):
-    # Clave dinámica para resetear widgets
+    # Usamos la llave dinámica para forzar el vaciado de los campos
     rk = st.session_state.reset_key
     
-    # Sugerencias dinámicas
     nombres_prev = [r[0] for r in c.execute("SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual").fetchall()]
     
     col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
+        # Cada vez que rk aumenta, estos widgets se reinician
         opcion = st.selectbox("Producto:", ["-- Nuevo Producto --"] + nombres_prev, key=f"sel_prod_{rk}")
         if opcion == "-- Nuevo Producto --":
             nombre_input = st.text_input("Nombre del pan:", key=f"txt_prod_{rk}").upper()
@@ -75,7 +75,7 @@ with st.container(border=True):
                 else:
                     c.execute("INSERT INTO captura_actual VALUES (?, ?, ?)", (nombre_final, f_cad, int(cant)))
                 conn.commit()
-                reset_formulario()
+                reset_formulario() # <--- Aquí se limpian los campos
                 st.rerun()
     
     with col_btn2:
@@ -83,12 +83,12 @@ with st.container(border=True):
             reset_formulario()
             st.rerun()
 
-# --- TABLA DE CAPTURA ACTUAL (EDITABLE) ---
+# --- TABLA DE CAPTURA ACTUAL ---
 df_hoy_captura = pd.read_sql("SELECT rowid, nombre, fecha_cad, cantidad FROM captura_actual", conn)
 
 if not df_hoy_captura.empty:
     df_hoy_captura['fecha_cad'] = pd.to_datetime(df_hoy_captura['fecha_cad']).dt.date
-    st.subheader("📋 Revisión del conteo (Edita o elimina filas aquí):")
+    st.subheader("📋 Revisión del conteo:")
     
     df_editado = st.data_editor(
         df_hoy_captura,
@@ -126,36 +126,25 @@ if not df_hoy_captura.empty:
 st.divider()
 st.header("🏁 Paso 2: Finalizar y Calcular Ventas")
 
-if st.button("REALIZAR CORTE Y REINICIAR FORMULARIO", type="primary", use_container_width=True):
+if st.button("REALIZAR CORTE Y CERRAR DÍA", type="primary", use_container_width=True):
     df_actualizado = pd.read_sql("SELECT * FROM captura_actual", conn)
     
     if df_actualizado.empty:
         st.warning("No hay nada que comparar. La lista de captura está vacía.")
     else:
         df_anterior = pd.read_sql("SELECT * FROM base_anterior", conn)
-        
         if not df_anterior.empty:
             ventas_detectadas = []
             ts_mx = ahora_mx.strftime("%Y-%m-%d %H:%M:%S")
-            
             for _, fila_ant in df_anterior.iterrows():
                 res_hoy = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", 
                                    (fila_ant['nombre'], fila_ant['fecha_cad'])).fetchone()
-                
                 cant_hoy = res_hoy[0] if res_hoy else 0
                 diferencia = fila_ant['cantidad'] - cant_hoy
-                
                 if diferencia > 0:
-                    ventas_detectadas.append({
-                        "Producto": fila_ant['nombre'],
-                        "Caducidad": fila_ant['fecha_cad'],
-                        "Había": fila_ant['cantidad'],
-                        "Quedan": cant_hoy,
-                        "VENDIDOS": diferencia
-                    })
+                    ventas_detectadas.append({"Producto": fila_ant['nombre'], "VENDIDOS": diferencia})
                     c.execute("INSERT INTO historial_ventas VALUES (?, ?, ?, ?)", 
                              (fila_ant['nombre'], fila_ant['fecha_cad'], diferencia, ts_mx))
-            
             if ventas_detectadas:
                 st.session_state['ultimo_corte'] = pd.DataFrame(ventas_detectadas)
         
@@ -166,24 +155,14 @@ if st.button("REALIZAR CORTE Y REINICIAR FORMULARIO", type="primary", use_contai
         st.success("✅ Corte realizado con éxito.")
         st.rerun()
 
-if 'ultimo_corte' in st.session_state:
-    st.balloons()
-    st.subheader("📊 Resumen de ventas detectadas:")
-    st.table(st.session_state['ultimo_corte'])
-    if st.button("Cerrar Resumen"):
-        del st.session_state['ultimo_corte']
-        st.rerun()
-
 # ------------------ SECCIÓN 3: ALERTAS Y ESTADO ACTUAL ------------------
 st.divider()
 col_left, col_right = st.columns(2)
-
 with col_left:
     st.header("⚠️ Alertas de Caducidad")
     fecha_str = fecha_hoy_mx.strftime('%Y-%m-%d')
     df_caducan_hoy = pd.read_sql("SELECT nombre as Producto, cantidad as Cantidad FROM base_anterior WHERE fecha_cad = ?", 
                                  conn, params=(fecha_str,))
-
     if not df_caducan_hoy.empty:
         st.error(f"¡Atención! Retirar {int(df_caducan_hoy['Cantidad'].sum())} piezas.")
         st.dataframe(df_caducan_hoy, use_container_width=True, hide_index=True)
@@ -196,16 +175,11 @@ with col_right:
     if not df_estantes.empty:
         st.metric("Piezas totales", f"{int(df_estantes['Cantidad'].sum())}")
         st.dataframe(df_estantes, use_container_width=True, hide_index=True)
-    else:
-        st.info("Sin inventario.")
 
 st.divider()
 with st.expander("📖 Historial General"):
     df_hist = pd.read_sql("SELECT * FROM historial_ventas ORDER BY fecha_corte DESC", conn)
     st.dataframe(df_hist, use_container_width=True)
-    if not df_hist.empty:
-        csv = df_hist.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Descargar CSV", data=csv, file_name=f"ventas_{fecha_hoy_mx}.csv")
 
 # ------------------ SECCIÓN 4: BOTÓN DE RESET TOTAL (HASTA ABAJO) ------------------
 st.write("<br><br><br>", unsafe_allow_html=True)
