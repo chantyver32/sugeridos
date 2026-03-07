@@ -87,7 +87,7 @@ with st.container(border=True):
         st.button("+10", use_container_width=True, on_click=sumar, args=(10,))
 
     with c4:
-        st.button("Reset", use_container_width=True, on_click=resetear)
+        st.button("Borrar", use_container_width=True, on_click=resetear)
 
     # Mostrar resultado
     st.metric("Total contado", st.session_state.conteo_temp)
@@ -115,8 +115,6 @@ if st.button("➕ Registrar en el Conteo", use_container_width=True):
             )
 
         conn.commit()
-        st.toast("Registro guardado ✅")
-
         st.balloons()
         st.session_state.conteo_temp = 0
         st.rerun()
@@ -329,6 +327,7 @@ with st.expander("📖 Historial General"):
             data=csv,
             file_name=f"ventas_{fecha_hoy_mx}.csv"
         )
+
 
 
 
