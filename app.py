@@ -71,49 +71,55 @@ with st.sidebar.expander("🚨 Zona de Peligro"):
         else:
             st.sidebar.error("Primero debes marcar la casilla de confirmación.")
 
+# ... (Tu código previo de configuración y base de datos se mantiene igual)
+
 # ------------------ TABS ------------------
 tab1, tab2 = st.tabs(["📦 Inventario", "📊 Análisis de Ventas"])
 
 with tab1:
     # ------------------ PASO 1: CAPTURA FÍSICA ------------------
-st.header(f"📝 Paso 1: Conteo en Estantes ({fecha_hoy_mx.strftime('%d/%m/%Y')})")
+    st.header(f"📝 Paso 1: Conteo en Estantes ({fecha_hoy_mx.strftime('%d/%m/%Y')})")
 
-if "conteo_temp" not in st.session_state:
-    st.session_state.conteo_temp = 0
+    # 1. Inicializar estados
+    if "conteo_temp" not in st.session_state:
+        st.session_state.conteo_temp = 0
+    if "buscar_prod" not in st.session_state:
+        st.session_state.buscar_prod = ""
 
-# Función para limpiar el buscador
-def limpiar_buscador():
-    st.session_state.buscar_prod = ""
+    # 2. Función para limpiar el buscador
+    def limpiar_buscador():
+        st.session_state.buscar_prod = ""
 
-nombres_prev = [r[0] for r in c.execute(
-    "SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual").fetchall()]
+    # 3. Buscador con botón de limpiar
+    col_busq, col_btn = st.columns([3, 1])
+    with col_busq:
+        buscar = st.text_input("🔎 Buscar o escribir producto", key="buscar_prod").upper()
+    
+    with col_btn:
+        st.write("##") # Espaciador para alinear con el input
+        st.button("🧹 Limpiar", on_click=limpiar_buscador, use_container_width=True)
 
-col_busqueda, col_limpiar = st.columns([3, 1])
+    # 4. Lógica de sugerencias y selección
+    nombres_prev = [r[0] for r in c.execute(
+        "SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual").fetchall()]
+    
+    sugerencias = [p for p in nombres_prev if buscar in p.upper()] if buscar else []
 
-with col_busqueda:
-    # Usamos la key "buscar_prod" para controlar el contenido del texto
-    buscar = st.text_input("🔎 Buscar o escribir producto", key="buscar_prod").upper()
+    col1, col2, col3 = st.columns([2, 1, 1])
+    with col1:
+        if sugerencias:
+            nombre_input = st.selectbox("Sugerencias", sugerencias, key="sel_prod")
+        else:
+            nombre_input = buscar
 
-with col_limpiar:
-    st.write(" ") # Espacio para alinear con el input
-    st.button("🧹 Limpiar", on_click=limpiar_buscador, use_container_width=True)
+    with col2:
+        f_cad = st.date_input("Fecha de Caducidad:", value=fecha_hoy_mx, min_value=fecha_hoy_mx, key="date_cad")
 
-# Lógica de sugerencias
-sugerencias = [p for p in nombres_prev if buscar in p.upper()] if buscar else []
+    with col3:
+        st.write("Cantidad que ves")
 
-col1, col2, col3 = st.columns([2, 1, 1])
-with col1:
-    if sugerencias:
-        nombre_input = st.selectbox("Sugerencias", sugerencias, key="sel_prod")
-    else:
-        nombre_input = buscar
-
-with col2:
-    f_cad = st.date_input("Fecha de Caducidad:", value=fecha_hoy_mx, min_value=fecha_hoy_mx, key="date_cad")
-
-with col3:
-    st.write("Cantidad que ves")
-
+    # ... (Sigue el resto de tu código de botones +1, +5, etc.)
+    
     # Botones de suma
     c1, c2, c3, c4 = st.columns(4)
     with c1: st.button("+1", use_container_width=True, on_click=sumar, args=(1,))
@@ -362,3 +368,4 @@ with tab2:
         cantidad_top = int(top_productos.iloc[0])
         st.metric(label="Producto más vendido", value=producto_top, delta=f"{cantidad_top} vendidos")
         st.bar_chart(top_productos)
+
