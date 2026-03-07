@@ -3,6 +3,7 @@ import pandas as pd
 import sqlite3
 from datetime import datetime
 import pytz
+import urllib.parse
 
 # ------------------ CONFIGURACIÓN DE ZONA HORARIA (MÉXICO) ------------------
 zona_mx = pytz.timezone('America/Mexico_City')
@@ -190,6 +191,21 @@ with col_right:
     else:
         st.info("Sin inventario.")
 
+import urllib.parse
+
+if not df_estantes.empty:
+
+    mensaje = "📦 Inventario Champlitte\n\n"
+
+    for _, row in df_estantes.iterrows():
+        mensaje += f"{row['Producto']} - {row['Cantidad']}\n"
+
+    numero = "522283530069"
+
+    link = "https://wa.me/" + numero + "?text=" + urllib.parse.quote(mensaje)
+
+    st.link_button("📲 Enviar inventario por WhatsApp", link)
+
 st.divider()
 with st.expander("📖 Historial General"):
     df_hist = pd.read_sql("SELECT * FROM historial_ventas ORDER BY fecha_corte DESC", conn)
@@ -197,3 +213,4 @@ with st.expander("📖 Historial General"):
     if not df_hist.empty:
         csv = df_hist.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Descargar CSV", data=csv, file_name=f"ventas_{fecha_hoy_mx}.csv")
+
