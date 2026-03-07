@@ -4,14 +4,24 @@ import sqlite3
 from datetime import datetime
 import pytz
 
+# ------------------ CONFIGURACIÓN DE PÁGINA Y ESTILO (LIMPIEZA UI) ------------------
+st.set_page_config(page_title="Inventario Champlitte MX", page_icon="🥐", layout="wide")
+
+# CSS para ocultar elementos nativos de Streamlit y mejorar la estética
+hide_st_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header {visibility: hidden;}
+            .stButton>button {border-radius: 10px;}
+            </style>
+            """
+st.markdown(hide_st_style, unsafe_allow_html=True)
+
 # ------------------ CONFIGURACIÓN DE ZONA HORARIA ------------------
 zona_mx = pytz.timezone('America/Mexico_City')
 ahora_mx = datetime.now(zona_mx)
 fecha_hoy_mx = ahora_mx.date()
-
-# ------------------ PÁGINA ------------------
-st.set_page_config(page_title="Inventario Champlitte MX", page_icon="🥐", layout="wide")
-st.title("Sistema de Inventario: Control de Ventas y Caducidades 🥐")
 
 # ------------------ BASE DE DATOS ------------------
 conn = sqlite3.connect('inventario_pan.db', check_same_thread=False)
@@ -22,71 +32,93 @@ c.execute('CREATE TABLE IF NOT EXISTS base_anterior (nombre TEXT, fecha_cad DATE
 c.execute('CREATE TABLE IF NOT EXISTS historial_ventas (nombre TEXT, fecha_cad DATE, vendidos INTEGER, fecha_corte DATETIME)')
 conn.commit()
 
-# ------------------ LÓGICA DE LIMPIEZA AUTOMÁTICA ------------------
-# Esta función asegura que los campos queden en blanco sin causar errores de API
-def reset_campos():
-    st.session_state["sel_prod"] = "-- Nuevo Producto --"
-    st.session_state["num_cant"] = 1
-    st.session_state["date_cad"] = fecha_hoy_mx
-    if "txt_prod" in st.session_state:
-        st.session_state["txt_prod"] = ""
-
-# ------------------ SIDEBAR ------------------
+# ------------------ SIDEBAR: CONFIGURACIÓN ------------------
 st.sidebar.header("⚙️ Configuración")
+
 with st.sidebar.expander("🚨 Zona de Peligro"):
-    confirmar_reset = st.checkbox("Confirmar borrar todo")
-    if st.button("⚠️ EJECUTAR RESET TOTAL", use_container_width=True):
+    st.write("Esta acción borrará todo el historial y el inventario actual.")
+    confirmar_reset = st.checkbox("Confirmar borrado total", key="check_reset")
+    
+    if st.button("⚠️ EJECUTAR RESET TOTAL", type="secondary", use_container_width=True):
         if confirmar_reset:
             c.execute("DELETE FROM captura_actual")
             c.execute("DELETE FROM base_anterior")
             c.execute("DELETE FROM historial_ventas")
             conn.commit()
-            reset_campos()
+            st.sidebar.success("Base de datos limpiada con éxito.")
             st.rerun()
+        else:
+            st.sidebar.error("Marca la casilla de confirmación.")
 
-# ------------------ PASO 1: CAPTURA ------------------
-st.header(f"📝 Paso 1: Conteo en Estantes ({fecha_hoy_mx.strftime('%d/%m/%Y')})")
+# ------------------ SECCIÓN 1: CAPTURA FÍSICA (PASO 1) ------------------
+st.title("Sistema de Inventario Champlitte 🥐")
+st.header(f"📝 Paso 1: Conteo en Estantes")
+st.caption(f"Fecha actual: {fecha_hoy_mx.strftime('%d/%m/%Y')}")
+
+# Lógica para resetear campos manualmente mediante un botón de "Limpiar"
+if 'limpiar_campos' not in st.session_state:
+    st.session_state.limpiar_campos = False
+
+def limpiar_formulario():
+    st.session_state.txt_prod = ""
+    st.session_state.sel_prod = "-- Nuevo Producto --"
+    st.session_state.date_cad = fecha_hoy_mx
+    st.session_state.num_cant = 1
 
 with st.container(border=True):
     nombres_prev = [r[0] for r in c.execute("SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual").fetchall()]
     
     col1, col2, col3 = st.columns([2, 1, 1])
+    
     with col1:
         opcion = st.selectbox("Producto:", ["-- Nuevo Producto --"] + nombres_prev, key="sel_prod")
-        nombre_input = st.text_input("Nombre del pan:", key="txt_prod").upper() if opcion == "-- Nuevo Producto --" else opcion
+        if opcion == "-- Nuevo Producto --":
+            nombre_input = st.text_input("Nombre del pan:", key="txt_prod").upper()
+        else:
+            nombre_input = opcion
     
     with col2:
         f_cad = st.date_input("Fecha de Caducidad:", value=fecha_hoy_mx, min_value=fecha_hoy_mx, key="date_cad")
     
     with col3:
-        cant = st.number_input("Cantidad actual:", min_value=1, value=1, key="num_cant")
+        cant = st.number_input("Cantidad física:", min_value=1, value=1, step=1, key="num_cant")
 
-    if st.button("➕ Registrar en el Conteo", use_container_width=True):
-        if nombre_input and str(nombre_input).strip() != "":
-            nombre_final = str(nombre_input).strip().upper()
-            existe = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", (nombre_final, f_cad)).fetchone()
-            if existe:
-                c.execute("UPDATE captura_actual SET cantidad = cantidad + ? WHERE nombre=? AND fecha_cad=?", (int(cant), nombre_final, f_cad))
+    # BOTONES DE ACCIÓN
+    btn_col1, btn_col2 = st.columns(2)
+    
+    with btn_col1:
+        if st.button("➕ Registrar en el Conteo", type="primary", use_container_width=True):
+            if nombre_input and nombre_input.strip() != "":
+                nombre_final = nombre_input.strip().upper()
+                existe = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", (nombre_final, f_cad)).fetchone()
+                if existe:
+                    c.execute("UPDATE captura_actual SET cantidad = cantidad + ? WHERE nombre=? AND fecha_cad=?", (int(cant), nombre_final, f_cad))
+                else:
+                    c.execute("INSERT INTO captura_actual VALUES (?, ?, ?)", (nombre_final, f_cad, int(cant)))
+                conn.commit()
+                # Limpiar tras éxito para agilizar la siguiente captura
+                st.rerun()
             else:
-                c.execute("INSERT INTO captura_actual VALUES (?, ?, ?)", (nombre_final, f_cad, int(cant)))
-            conn.commit()
-            reset_campos() # <--- Limpia todo después de agregar
+                st.error("Escribe un nombre de producto.")
+
+    with btn_col2:
+        if st.button("🧹 Limpiar Campos", use_container_width=True):
+            limpiar_formulario()
             st.rerun()
 
-# ------------------ TABLA EDITABLE ------------------
-df_hoy = pd.read_sql("SELECT rowid, nombre, fecha_cad, cantidad FROM captura_actual", conn)
+# --- TABLA DE CAPTURA ACTUAL (EDITABLE) ---
+df_hoy_captura = pd.read_sql("SELECT rowid, nombre, fecha_cad, cantidad FROM captura_actual", conn)
 
-if not df_hoy.empty:
-    # IMPORTANTE: Esto arregla el error de "type_compatibilities" de la foto
-    df_hoy['fecha_cad'] = pd.to_datetime(df_hoy['fecha_cad']).dt.date
+if not df_hoy_captura.empty:
+    df_hoy_captura['fecha_cad'] = pd.to_datetime(df_hoy_captura['fecha_cad']).dt.date
+    st.subheader("📋 Revisión de Captura:")
     
-    st.subheader("📋 Revisión (Edita o borra si es necesario):")
     df_editado = st.data_editor(
-        df_hoy,
+        df_hoy_captura,
         column_config={
             "rowid": None,
-            "nombre": "Producto",
-            "fecha_cad": st.column_config.DateColumn("Caducidad"),
+            "nombre": st.column_config.TextColumn("Producto"),
+            "fecha_cad": st.column_config.DateColumn("Fecha Caducidad"),
             "cantidad": st.column_config.NumberColumn("Cantidad", min_value=0)
         },
         num_rows="dynamic",
@@ -95,51 +127,98 @@ if not df_hoy.empty:
         key="editor_conteo"
     )
 
-    if st.button("💾 Guardar cambios en la lista", use_container_width=True):
-        c.execute("DELETE FROM captura_actual")
-        for _, fila in df_editado.iterrows():
-            if fila['nombre']:
-                c.execute("INSERT INTO captura_actual VALUES (?, ?, ?)", (fila['nombre'], str(fila['fecha_cad']), int(fila['cantidad'])))
-        conn.commit()
-        st.success("Cambios guardados.")
-        st.rerun()
+    col_save, col_cancel = st.columns(2)
+    with col_save:
+        if st.button("💾 Guardar Cambios en Lista", use_container_width=True):
+            c.execute("DELETE FROM captura_actual")
+            for _, fila in df_editado.iterrows():
+                if fila['nombre']:
+                    c.execute("INSERT INTO captura_actual (nombre, fecha_cad, cantidad) VALUES (?, ?, ?)", 
+                             (fila['nombre'].strip().upper(), str(fila['fecha_cad']), int(fila['cantidad'])))
+            conn.commit()
+            st.success("¡Lista actualizada!")
+            st.rerun()
+            
+    with col_cancel:
+        if st.button("🗑️ Borrar toda la captura", use_container_width=True):
+            c.execute("DELETE FROM captura_actual")
+            conn.commit()
+            st.rerun()
 
-# ------------------ PASO 2: CORTE ------------------
+# ------------------ SECCIÓN 2: CORTE Y COMPARACIÓN (PASO 2) ------------------
 st.divider()
-st.header("🏁 Paso 2: Realizar Corte")
+st.header("🏁 Paso 2: Finalizar y Calcular Ventas")
 
-if st.button("REALIZAR CORTE Y LIMPIAR TODO", type="primary", use_container_width=True):
-    df_hoy_check = pd.read_sql("SELECT * FROM captura_actual", conn)
-    if df_hoy_check.empty:
-        st.warning("No hay datos para procesar.")
+if st.button("REALIZAR CORTE (CALCULAR VENDIDOS)", type="primary", use_container_width=True):
+    df_actualizado = pd.read_sql("SELECT * FROM captura_actual", conn)
+    
+    if df_actualizado.empty:
+        st.warning("No hay datos en la captura actual para comparar.")
     else:
-        df_ant = pd.read_sql("SELECT * FROM base_anterior", conn)
-        if not df_ant.empty:
+        df_anterior = pd.read_sql("SELECT * FROM base_anterior", conn)
+        if not df_anterior.empty:
+            ventas_detectadas = []
             ts_mx = ahora_mx.strftime("%Y-%m-%d %H:%M:%S")
-            for _, f_ant in df_ant.iterrows():
-                h = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", (f_ant['nombre'], f_ant['fecha_cad'])).fetchone()
-                cant_h = h[0] if h else 0
-                dif = f_ant['cantidad'] - cant_h
-                if dif > 0:
-                    c.execute("INSERT INTO historial_ventas VALUES (?, ?, ?, ?)", (f_ant['nombre'], f_ant['fecha_cad'], dif, ts_mx))
+            for _, fila_ant in df_anterior.iterrows():
+                res_hoy = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", 
+                                   (fila_ant['nombre'], fila_ant['fecha_cad'])).fetchone()
+                cant_hoy = res_hoy[0] if res_hoy else 0
+                diferencia = fila_ant['cantidad'] - cant_hoy
+                if diferencia > 0:
+                    ventas_detectadas.append({
+                        "Producto": fila_ant['nombre'],
+                        "Caducidad": fila_ant['fecha_cad'],
+                        "Había": fila_ant['cantidad'],
+                        "Quedan": cant_hoy,
+                        "VENDIDOS": diferencia
+                    })
+                    c.execute("INSERT INTO historial_ventas VALUES (?, ?, ?, ?)", 
+                             (fila_ant['nombre'], fila_ant['fecha_cad'], diferencia, ts_mx))
+            if ventas_detectadas:
+                st.session_state['ultimo_corte'] = pd.DataFrame(ventas_detectadas)
         
         c.execute("DELETE FROM base_anterior")
         c.execute("INSERT INTO base_anterior SELECT * FROM captura_actual")
         c.execute("DELETE FROM captura_actual")
         conn.commit()
-        reset_campos() # <--- Limpia todo después del corte
-        st.success("✅ Corte finalizado. Pantalla limpia.")
+        st.success("✅ Corte realizado. Los estantes actuales ahora son la nueva base.")
         st.rerun()
 
-# ------------------ ESTADO ACTUAL ------------------
+if 'ultimo_corte' in st.session_state:
+    st.balloons()
+    st.subheader("📊 Resumen de ventas detectadas:")
+    st.table(st.session_state['ultimo_corte'])
+    if st.button("Cerrar Resumen"):
+        del st.session_state['ultimo_corte']
+        st.rerun()
+
+# ------------------ SECCIÓN 3: ALERTAS Y ESTADO ACTUAL ------------------
 st.divider()
-c1, c2 = st.columns(2)
-with c1:
-    st.subheader("⚠️ Caducan Hoy")
-    cad = pd.read_sql("SELECT nombre, cantidad FROM base_anterior WHERE fecha_cad = ?", conn, params=(fecha_today_mx,))
-    if not cad.empty: st.error(f"Retirar {int(cad['cantidad'].sum())} piezas."); st.table(cad)
-    else: st.success("Sin caducidades.")
-with c2:
-    st.subheader("🏪 En Estantes")
-    inv = pd.read_sql("SELECT nombre, cantidad FROM base_anterior", conn)
-    if not inv.empty: st.metric("Total Panes", int(inv['cantidad'].sum())); st.dataframe(inv, hide_index=True)
+col_left, col_right = st.columns(2)
+
+with col_left:
+    st.header("⚠️ Alertas de Caducidad")
+    fecha_str = fecha_hoy_mx.strftime('%Y-%m-%d')
+    df_caducan_hoy = pd.read_sql("SELECT nombre as Producto, cantidad as Cantidad FROM base_anterior WHERE fecha_cad = ?", 
+                                 conn, params=(fecha_str,))
+    if not df_caducan_hoy.empty:
+        st.error(f"¡Atención! Retirar {int(df_caducan_hoy['Cantidad'].sum())} piezas.")
+        st.dataframe(df_caducan_hoy, use_container_width=True, hide_index=True)
+    else:
+        st.success("✅ Sin mermas por caducidad hoy.")
+
+with col_right:
+    st.header("🏪 En Estantes (Stock)")
+    df_estantes = pd.read_sql("SELECT nombre as Producto, fecha_cad as [Fecha Caducidad], cantidad as Cantidad FROM base_anterior", conn)
+    if not df_estantes.empty:
+        st.metric("Piezas totales", f"{int(df_estantes['Cantidad'].sum())}")
+        st.dataframe(df_estantes, use_container_width=True, hide_index=True)
+    else:
+        st.info("Sin inventario registrado.")
+
+with st.expander("📖 Historial General"):
+    df_hist = pd.read_sql("SELECT * FROM historial_ventas ORDER BY fecha_corte DESC", conn)
+    st.dataframe(df_hist, use_container_width=True)
+    if not df_hist.empty:
+        csv = df_hist.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Descargar CSV de Ventas", data=csv, file_name=f"ventas_{fecha_hoy_mx}.csv")
