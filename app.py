@@ -65,58 +65,72 @@ with st.container(border=True):
     
     col1, col2, col3 = st.columns([2, 1, 1])
 
-with col1:
+with st.container(border=True):
 
-    st.subheader("Producto")
+    col1, col2, col3 = st.columns([2,1,1])
 
-    # Obtener productos existentes
-    nombres_prev = [r[0] for r in c.execute(
-        "SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual"
-    ).fetchall()]
+    # ---------------- COLUMNA PRODUCTO ----------------
+    with col1:
 
-    nombres_prev = sorted(list(set(nombres_prev)))
+        st.subheader("Producto")
 
-    col_exist, col_new = st.columns(2)
+        nombres_prev = [r[0] for r in c.execute(
+            "SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual"
+        ).fetchall()]
 
-    # ---------------- PRODUCTOS EXISTENTES ----------------
-    with col_exist:
+        nombres_prev = sorted(list(set(nombres_prev)))
 
-        st.write("Seleccionar producto existente")
+        col_exist, col_new = st.columns(2)
 
-        buscar = st.text_input("Buscar", key="buscar_prod").upper()
+        # -------- PRODUCTOS EXISTENTES --------
+        with col_exist:
 
-        sugerencias = [p for p in nombres_prev if buscar in p.upper()]
+            st.write("🔎 Buscar producto existente")
 
-        if sugerencias:
-            nombre_existente = st.selectbox(
-                "Resultados",
-                sugerencias,
-                key="sel_prod"
-            )
+            buscar = st.text_input("Escribe para filtrar", key="buscar_prod")
+
+            if buscar:
+                lista_filtrada = [p for p in nombres_prev if buscar.upper() in p.upper()]
+            else:
+                lista_filtrada = nombres_prev
+
+            if lista_filtrada:
+                nombre_existente = st.selectbox(
+                    "Resultados",
+                    lista_filtrada,
+                    key="sel_prod"
+                )
+            else:
+                nombre_existente = None
+                st.warning("No hay coincidencias")
+
+        # -------- PRODUCTO NUEVO --------
+        with col_new:
+
+            st.write("➕ Agregar producto nuevo")
+
+            nombre_nuevo = st.text_input(
+                "Nombre nuevo",
+                key="nuevo_prod"
+            ).upper()
+
+        # -------- RESULTADO FINAL --------
+        if nombre_nuevo:
+            nombre_input = nombre_nuevo
         else:
-            nombre_existente = None
-            st.info("Sin coincidencias")
+            nombre_input = nombre_existente
 
-    # ---------------- PRODUCTO NUEVO ----------------
-    with col_new:
 
-        st.write("Agregar producto nuevo")
-
-        nombre_nuevo = st.text_input(
-            "Nombre nuevo producto",
-            key="nuevo_prod"
-        ).upper()
-
-    # ---------------- LÓGICA FINAL ----------------
-
-    if nombre_nuevo:
-        nombre_input = nombre_nuevo
-    else:
-        nombre_input = nombre_existente
-    
+    # ---------------- FECHA CADUCIDAD ----------------
     with col2:
-        f_cad = st.date_input("Fecha de Caducidad:", value=fecha_hoy_mx, min_value=fecha_hoy_mx, key="date_cad")
-    
+        f_cad = st.date_input(
+            "Fecha de Caducidad:",
+            value=fecha_hoy_mx,
+            min_value=fecha_hoy_mx,
+            key="date_cad"
+        )
+
+    # ---------------- CONTADOR ----------------
     with col3:
         st.write("Cantidad que ves")
 
@@ -418,6 +432,7 @@ with st.expander("📖 Historial General"):
             data=csv,
             file_name=f"ventas_{fecha_hoy_mx}.csv"
         )
+
 
 
 
