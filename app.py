@@ -167,7 +167,7 @@ if 'ultimo_corte' in st.session_state:
 
 mensaje = "📊 CORTE DE VENTAS\n\n"
 
-for _, row in df.iterrows():
+for _, row in df_estantes.iterrows():
     mensaje += (
         f"Producto: {row['Producto']}\n"
         f"Caducidad: {row['Caducidad']}\n"
@@ -275,4 +275,5 @@ with st.expander("📖 Historial General"):
             data=csv,
             file_name=f"ventas_{fecha_hoy_mx}.csv"
         )
+
 
