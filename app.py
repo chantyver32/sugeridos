@@ -75,11 +75,11 @@ with st.container(border=True):
         st.write("Cantidad que ves")
 
     # Inicializar contador
-if "conteo_temp" not in st.session_state:
-    st.session_state.conteo_temp = 0
+    if "conteo_temp" not in st.session_state:
+    st.session_state.conteo.temp = False
 
     # Funciones para modificar el contador
-def sumar(valor):
+  def sumar(valor):
     st.session_state.conteo_temp += valor
     sonido_click()
 
@@ -107,9 +107,6 @@ def resetear():
 
     cant = st.session_state.conteo_temp
 
-if "guardado_ok" not in st.session_state:
-    st.session_state.guardado_ok = False
-
 if st.button("➕ Registrar en el Conteo", use_container_width=True, type="primary"):
     if nombre_input and nombre_input.strip() != "":
         nombre_final = nombre_input.strip().upper()
@@ -130,11 +127,11 @@ if st.button("➕ Registrar en el Conteo", use_container_width=True, type="prima
                 (nombre_final, f_cad, int(cant))
             )
 
-conn.commit()
-st.session_state.guardado_ok = True
+        conn.commit()
+        st.session_state.guardado_ok = True
 sonido_click()
 st.balloons()
-st.rerun()
+        st.rerun()
 
 # --- TABLA DE CAPTURA ACTUAL (EDITABLE) ---
 df_hoy_captura = pd.read_sql("SELECT rowid, nombre, fecha_cad, cantidad FROM captura_actual", conn)
@@ -344,7 +341,6 @@ with st.expander("📖 Historial General"):
             data=csv,
             file_name=f"ventas_{fecha_hoy_mx}.csv"
         )
-
 
 
 
