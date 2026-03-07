@@ -22,22 +22,27 @@ c.execute('CREATE TABLE IF NOT EXISTS base_anterior (nombre TEXT, fecha_cad DATE
 c.execute('CREATE TABLE IF NOT EXISTS historial_ventas (nombre TEXT, fecha_cad DATE, vendidos INTEGER, fecha_corte DATETIME)')
 conn.commit()
 
-# ------------------ SECCIÓN 1: CAPTURA FÍSICA ------------------
+# ------------------ SECCIÓN 1: CAPTURA FÍSICA (PASO 1) ------------------
 st.header(f"📝 Paso 1: Conteo en Estantes ({fecha_hoy_mx.strftime('%d/%m/%Y')})")
 
 with st.container(border=True):
+    # Sugerencias dinámicas
     nombres_prev = [r[0] for r in c.execute("SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual").fetchall()]
     
     col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
-        opcion = st.selectbox("Producto:", ["-- Nuevo Producto --"] + nombres_prev)
-        nombre_input = st.text_input("Nombre del pan:").upper() if opcion == "-- Nuevo Producto --" else opcion
+        # Usamos una clave (key) para resetear el widget si es necesario
+        opcion = st.selectbox("Producto:", ["-- Nuevo Producto --"] + nombres_prev, key="sel_prod")
+        if opcion == "-- Nuevo Producto --":
+            nombre_input = st.text_input("Nombre del pan:", key="txt_prod").upper()
+        else:
+            nombre_input = opcion
     
     with col2:
-        f_cad = st.date_input("Fecha de Caducidad:", value=fecha_hoy_mx, min_value=fecha_hoy_mx)
+        f_cad = st.date_input("Fecha de Caducidad:", value=fecha_hoy_mx, min_value=fecha_hoy_mx, key="date_cad")
     
     with col3:
-        cant = st.number_input("Cantidad que ves AHORA:", min_value=1, value=1, step=1)
+        cant = st.number_input("Cantidad que ves AHORA:", min_value=1, value=1, step=1, key="num_cant")
 
     if st.button("➕ Registrar en el Conteo", use_container_width=True):
         if nombre_input and nombre_input.strip() != "":
@@ -48,95 +53,94 @@ with st.container(border=True):
             else:
                 c.execute("INSERT INTO captura_actual VALUES (?, ?, ?)", (nombre_final, f_cad, int(cant)))
             conn.commit()
-            st.rerun()
+            st.rerun() # Limpia el formulario tras agregar individualmente
 
-# --- Visualización de Captura Actual ---
+# --- Tabla de Captura Actual ---
 df_hoy_captura = pd.read_sql("SELECT * FROM captura_actual", conn)
 if not df_hoy_captura.empty:
     st.subheader("📋 Tu conteo de este momento:")
     st.dataframe(df_hoy_captura, use_container_width=True, hide_index=True)
-    if st.button("🗑️ Limpiar este conteo"):
+    if st.button("🗑️ Cancelar este conteo (Limpiar pantalla)"):
         c.execute("DELETE FROM captura_actual")
         conn.commit()
         st.rerun()
 
-# ------------------ SECCIÓN 2: CORTE Y COMPARACIÓN ------------------
+# ------------------ SECCIÓN 2: CORTE Y COMPARACIÓN (PASO 2) ------------------
 st.divider()
-st.header("🏁 Paso 2: Realizar Corte")
+st.header("🏁 Paso 2: Finalizar y Limpiar Todo")
 
-if st.button("CALCULAR VENTAS", type="primary", use_container_width=True):
-    df_anterior = pd.read_sql("SELECT * FROM base_anterior", conn)
-    
-    if df_anterior.empty:
-        c.execute("INSERT INTO base_anterior SELECT * FROM captura_actual")
-        c.execute("DELETE FROM captura_actual")
-        conn.commit()
-        st.success("✅ Base inicial establecida.")
-        st.rerun()
+if st.button("REALIZAR CORTE Y REINICIAR FORMULARIO", type="primary", use_container_width=True):
+    if df_hoy_captura.empty:
+        st.warning("No hay nada que comparar. La lista de captura está vacía.")
     else:
-        ventas_detectadas = []
-        ts_mx = ahora_mx.strftime("%Y-%m-%d %H:%M:%S")
+        df_anterior = pd.read_sql("SELECT * FROM base_anterior", conn)
         
-        for _, fila_ant in df_anterior.iterrows():
-            res_hoy = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", 
-                               (fila_ant['nombre'], fila_ant['fecha_cad'])).fetchone()
+        # Lógica de comparación
+        if not df_anterior.empty:
+            ventas_detectadas = []
+            ts_mx = ahora_mx.strftime("%Y-%m-%d %H:%M:%S")
             
-            # Si no se anotó hoy, es que hay 0 (se vendió todo lo que había)
-            cant_hoy = res_hoy[0] if res_hoy else 0
-            diferencia = fila_ant['cantidad'] - cant_hoy
+            for _, fila_ant in df_anterior.iterrows():
+                res_hoy = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", 
+                                   (fila_ant['nombre'], fila_ant['fecha_cad'])).fetchone()
+                
+                cant_hoy = res_hoy[0] if res_hoy else 0
+                diferencia = fila_ant['cantidad'] - cant_hoy
+                
+                if diferencia > 0:
+                    ventas_detectadas.append({
+                        "Producto": fila_ant['nombre'],
+                        "Caducidad": fila_ant['fecha_cad'],
+                        "Había": fila_ant['cantidad'],
+                        "Quedan": cant_hoy,
+                        "VENDIDOS": diferencia
+                    })
+                    c.execute("INSERT INTO historial_ventas VALUES (?, ?, ?, ?)", 
+                             (fila_ant['nombre'], fila_ant['fecha_cad'], diferencia, ts_mx))
             
-            if diferencia > 0:
-                ventas_detectadas.append({
-                    "Producto": fila_ant['nombre'],
-                    "Caducidad": fila_ant['fecha_cad'],
-                    "Había": fila_ant['cantidad'],
-                    "Hay Hoy": cant_hoy,
-                    "VENDIDOS": diferencia
-                })
-                c.execute("INSERT INTO historial_ventas VALUES (?, ?, ?, ?)", 
-                         (fila_ant['nombre'], fila_ant['fecha_cad'], diferencia, ts_mx))
-
+            # Guardamos los resultados en la sesión para mostrarlos tras el rerun
+            if ventas_detectadas:
+                st.session_state['ultimo_corte'] = pd.DataFrame(ventas_detectadas)
+        
+        # EL RELEVO: Lo de hoy es la nueva base
         c.execute("DELETE FROM base_anterior")
         c.execute("INSERT INTO base_anterior SELECT * FROM captura_actual")
         c.execute("DELETE FROM captura_actual")
         conn.commit()
+        
+        st.success("✅ Corte realizado. Los campos se han limpiado para la siguiente captura.")
+        st.rerun() # ESTA ES LA MAGIA: Limpia todos los inputs y tablas de captura
 
-        if ventas_detectadas:
-            st.balloons()
-            st.subheader("📊 Resumen de Ventas:")
-            st.table(pd.DataFrame(ventas_detectadas))
-        else:
-            st.info("No se detectaron ventas.")
+# Mostrar resultados del último corte si existen
+if 'ultimo_corte' in st.session_state:
+    st.balloons()
+    st.subheader("📊 Resultados del Último Corte Realizado:")
+    st.table(st.session_state['ultimo_corte'])
+    if st.button("Entendido (Cerrar tabla de resultados)"):
+        del st.session_state['ultimo_corte']
         st.rerun()
 
-# ------------------ SECCIÓN 3: ALERTAS DE CADUCIDAD ------------------
+# ------------------ SECCIÓN 3: ALERTAS Y ESTADO ACTUAL ------------------
 st.divider()
 st.header("⚠️ Alertas de Caducidad (HOY)")
-
-# Buscamos en la base_anterior (lo que hay en estantes) los que caducan hoy
-# Convertimos la fecha de hoy a string para la comparación en SQL
 fecha_str = fecha_hoy_mx.strftime('%Y-%m-%d')
 df_caducan_hoy = pd.read_sql("SELECT nombre as Producto, cantidad as Cantidad FROM base_anterior WHERE fecha_cad = ?", 
                              conn, params=(fecha_str,))
 
 if not df_caducan_hoy.empty:
-    st.error(f"¡Atención! Tienes {int(df_caducan_hoy['Cantidad'].sum())} piezas que caducan hoy {fecha_hoy_mx.strftime('%d/%m/%Y')}:")
+    st.error(f"¡Atención! Retirar {int(df_caducan_hoy['Cantidad'].sum())} piezas que caducan hoy.")
     st.dataframe(df_caducan_hoy, use_container_width=True, hide_index=True)
 else:
-    st.success("✅ No hay productos que caduquen el día de hoy.")
+    st.success("✅ No hay caducidades para hoy.")
 
-# ------------------ SECCIÓN 4: INVENTARIO TOTAL EN ESTANTES ------------------
-st.header("🏪 Inventario Total en Exhibición")
+st.header("🏪 Inventario Real en Estantes")
 df_estantes = pd.read_sql("SELECT nombre as Producto, fecha_cad as [Fecha Caducidad], cantidad as Cantidad FROM base_anterior", conn)
-
 if not df_estantes.empty:
-    st.metric("Total piezas en estantes", f"{int(df_estantes['Cantidad'].sum())} panes")
+    st.metric("Total piezas en exhibición", f"{int(df_estantes['Cantidad'].sum())} panes")
     st.dataframe(df_estantes, use_container_width=True, hide_index=True)
-else:
-    st.warning("No hay productos registrados en los estantes.")
 
-# ------------------ SECCIÓN 5: HISTORIAL ------------------
-with st.expander("📖 Ver Historial de Ventas"):
+# ------------------ HISTORIAL ------------------
+with st.expander("📖 Historial de Ventas"):
     st.dataframe(pd.read_sql("SELECT * FROM historial_ventas ORDER BY fecha_corte DESC", conn), use_container_width=True)
 
 if st.sidebar.button("⚠️ RESET TOTAL"):
