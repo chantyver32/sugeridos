@@ -148,8 +148,22 @@ if st.button("REALIZAR CORTE Y REINICIAR FORMULARIO", type="primary", use_contai
                     c.execute("INSERT INTO historial_ventas VALUES (?, ?, ?, ?)", 
                              (fila_ant['nombre'], fila_ant['fecha_cad'], diferencia, ts_mx))
             
-            if ventas_detectadas:
-                st.session_state['ultimo_corte'] = pd.DataFrame(ventas_detectadas)
+          if ventas_detectadas:
+
+    df_ventas = pd.DataFrame(ventas_detectadas)
+    st.session_state['ultimo_corte'] = df_ventas
+
+    mensaje = f"📊 Ventas Champlitte\n📅 {fecha_hoy_mx.strftime('%d/%m/%Y')}\n\n"
+
+    total = 0
+
+    for _, row in df_ventas.iterrows():
+        mensaje += f"{row['Producto']} : {row['VENDIDOS']}\n"
+        total += row['VENDIDOS']
+
+    mensaje += f"\nTotal vendidos: {total}"
+
+    st.session_state['mensaje_whatsapp'] = mensaje
         
         c.execute("DELETE FROM base_anterior")
         c.execute("INSERT INTO base_anterior SELECT * FROM captura_actual")
@@ -162,6 +176,14 @@ if 'ultimo_corte' in st.session_state:
     st.balloons()
     st.subheader("📊 Resumen de ventas detectadas:")
     st.table(st.session_state['ultimo_corte'])
+
+if 'mensaje_whatsapp' in st.session_state:
+
+    numero = "522283530069"
+
+    link = "https://wa.me/" + numero + "?text=" + urllib.parse.quote(st.session_state['mensaje_whatsapp'])
+
+    st.link_button("📲 Enviar ventas por WhatsApp", link)
     if st.button("Cerrar Resumen"):
         del st.session_state['ultimo_corte']
         st.rerun()
@@ -191,20 +213,18 @@ with col_right:
     else:
         st.info("Sin inventario.")
 
-import urllib.parse
-
 if not df_estantes.empty:
 
-    mensaje = "📦 Inventario Champlitte\n\n"
+    mensaje_inv = f"📦 Inventario Champlitte\n📅 {fecha_hoy_mx.strftime('%d/%m/%Y')}\n\n"
 
     for _, row in df_estantes.iterrows():
-        mensaje += f"{row['Producto']} - {row['Cantidad']}\n"
+        mensaje_inv += f"{row['Producto']} - {row['Cantidad']}\n"
 
     numero = "522283530069"
 
-    link = "https://wa.me/" + numero + "?text=" + urllib.parse.quote(mensaje)
+    link_inv = "https://wa.me/" + numero + "?text=" + urllib.parse.quote(mensaje_inv)
 
-    st.link_button("📲 Enviar inventario por WhatsApp", link)
+    st.link_button("📦 Enviar inventario por WhatsApp", link_inv)
 
 st.divider()
 with st.expander("📖 Historial General"):
@@ -213,4 +233,3 @@ with st.expander("📖 Historial General"):
     if not df_hist.empty:
         csv = df_hist.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Descargar CSV", data=csv, file_name=f"ventas_{fecha_hoy_mx}.csv")
-
