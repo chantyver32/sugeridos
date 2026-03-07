@@ -227,31 +227,32 @@ st.divider()
 st.header("🏁 Paso 2: Finalizar y Calcular Ventas")
 
 if st.button("REALIZAR CORTE Y REINICIAR FORMULARIO", type="primary", use_container_width=True):
+    # 1. Cargar datos actuales
     df_actualizado = pd.read_sql("SELECT * FROM captura_actual", conn)
 
-if df_actualizado.empty:
-
-    mensaje_global.warning("⚠️ No hay nada que comparar")
-    time.sleep(2)
-    mensaje_global.empty()
-
-    st.stop()
-          
-       
+    if df_actualizado.empty:
+        mensaje_global.warning("⚠️ No hay nada en el conteo para comparar.")
+        time.sleep(2)
+        mensaje_global.empty()
     else:
+        # 2. Cargar lo que había antes
         df_anterior = pd.read_sql("SELECT * FROM base_anterior", conn)
         
         if not df_anterior.empty:
             ventas_detectadas = []
-            ts_mx = ahora_mx.strftime("%Y-%m-%d %H:%M:%S")
+            ts_mx = datetime.now(zona_mx).strftime("%Y-%m-%d %H:%M:%S")
             
             for _, fila_ant in df_anterior.iterrows():
-                res_hoy = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", 
-                                   (fila_ant['nombre'], fila_ant['fecha_cad'])).fetchone()
+                # Buscar el mismo producto y fecha en el conteo nuevo
+                res_hoy = c.execute(
+                    "SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", 
+                    (fila_ant['nombre'], fila_ant['fecha_cad'])
+                ).fetchone()
                 
                 cant_hoy = res_hoy[0] if res_hoy else 0
                 diferencia = fila_ant['cantidad'] - cant_hoy
                 
+                # 3. Solo si hubo ventas (diferencia positiva), guardamos en historial
                 if diferencia > 0:
                     ventas_detectadas.append({
                         "Producto": fila_ant['nombre'],
@@ -260,43 +261,38 @@ if df_actualizado.empty:
                         "Quedan": cant_hoy,
                         "VENDIDOS": diferencia
                     })
+                    
+                    # GUARDAR EN HISTORIAL REAL
                     c.execute(
-    "INSERT INTO historial_ventas VALUES (?, ?, ?, ?, ?, ?)",
-    (
-        fila_ant['nombre'],
-        fila_ant['fecha_cad'],
-        fila_ant['cantidad'],   # habia
-        cant_hoy,               # quedan
-        diferencia,             # vendidos
-        ts_mx                   # fecha y hora
-    )
-)
+                        "INSERT INTO historial_ventas VALUES (?, ?, ?, ?, ?, ?)",
+                        (fila_ant['nombre'], fila_ant['fecha_cad'], int(fila_ant['cantidad']), int(cant_hoy), int(diferencia), ts_mx)
+                    )
             
             if ventas_detectadas:
                 st.session_state['ultimo_corte'] = pd.DataFrame(ventas_detectadas)
         
+        # 4. Actualizar tablas de inventario
         c.execute("DELETE FROM base_anterior")
         c.execute("INSERT INTO base_anterior SELECT * FROM captura_actual")
         c.execute("DELETE FROM captura_actual")
         
+        # 5. COMMIT CRÍTICO: Guardar cambios en el archivo .db
         conn.commit()
 
-mensaje_global.success("🏁 Corte realizado con éxito")
-time.sleep(2)
-mensaje_global.empty()
+        mensaje_global.success("🏁 Corte realizado y guardado en el historial con éxito")
+        time.sleep(2)
+        mensaje_global.empty()
+        st.rerun()
 
-st.rerun()
-      
-
+# --- MOSTRAR RESUMEN (FUERA DEL BOTÓN PARA QUE PERSISTA) ---
 if 'ultimo_corte' in st.session_state:
     st.balloons()
     st.subheader("📊 Resumen de ventas detectadas:")
     
-    # Recuperamos el DataFrame de la sesión
     df_ventas = st.session_state['ultimo_corte']
     st.table(df_ventas)
 
-    # --- CONSTRUCCIÓN DEL MENSAJE DE WHATSAPP ---
+    # Construcción del mensaje de WhatsApp
     mensaje = "📊 *CORTE DE VENTAS CHAMPLITTE*\n"
     mensaje += f"📅 Fecha: {fecha_hoy_mx.strftime('%d/%m/%Y')}\n"
     mensaje += "---------------------------------\n\n"
@@ -307,10 +303,9 @@ if 'ultimo_corte' in st.session_state:
             f"📅 Cad: {row['Caducidad']}\n"
             f"📥 Había: {row['Había']} | 📤 Quedan: {row['Quedan']}\n"
             f"💰 *VENDIDOS: {row['VENDIDOS']}*\n"
-            "---------------------------------\n"
+            f"---------------------------------\n"
         )
 
-    # Codificar el mensaje para URL
     link = f"https://wa.me/{numero_whatsapp}?text={urllib.parse.quote(mensaje)}"
 
     col_wa, col_close = st.columns(2)
@@ -504,4 +499,5 @@ with tab2:
         )
 
         st.bar_chart(top_productos)
+
 
