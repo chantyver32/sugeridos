@@ -172,7 +172,7 @@ if not df_hoy_captura.empty:
                              (fila['nombre'].strip().upper(), str(fila['fecha_cad']), int(fila['cantidad'])))
 
 conn.commit()
-msg = st.success("¡Conteo actualizado!")
+msg = st.toast("Conteo Actualizado", icon="✅")
 time.sleep(2)
 msg.empty()
 st.rerun()        
@@ -352,6 +352,7 @@ with st.expander("📖 Historial General"):
             data=csv,
             file_name=f"ventas_{fecha_hoy_mx}.csv"
         )
+
 
 
 
