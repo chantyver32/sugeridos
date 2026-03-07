@@ -229,10 +229,10 @@ with tab2:
  with cl:
     st.header("⚠️ Alertas de Caducidad")
     df_cad = pd.read_sql("SELECT nombre, cantidad FROM base_anterior WHERE fecha_cad = ?", conn, params=(fecha_hoy_mx.strftime('%Y-%m-%d'),))
-    if not df_cad.empty: 
-        st.error(f"Retirar {int(df_cad['cantidad'].sum())} piezas.")
-        st.dataframe(df_cad, use_container_width=True)
-        enviar_whatsapp("⚠️ Productos por Caducar Hoy", df_cad) # <-- NUEVO BOTÓN
+    if not df_cad.empty:
+    st.error(f"Retirar {int(df_cad['cantidad'].sum())} piezas.")
+    st.dataframe(df_cad, use_container_width=True)
+    enviar_whatsapp("⚠️ Productos por Caducar Hoy", df_cad) # <-- NUEVO BOTÓN
     else: 
         st.success("✅ Sin caducidades hoy.")
         
@@ -267,4 +267,5 @@ with tab3:
         if not top.empty:
             col_m1.metric("Producto Estrella", top.index[0], f"{int(top.iloc[0])} vendidos")
             col_m2.metric("Total Vendido (Histórico)", f"{int(df_hist['Vendidos'].sum())} piezas")
+
 
