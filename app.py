@@ -191,56 +191,88 @@ col_left, col_right = st.columns(2)
 
 with col_left:
     st.header("⚠️ Alertas de Caducidad")
+
     fecha_str = fecha_hoy_mx.strftime('%Y-%m-%d')
-    df_caducan_hoy = pd.read_sql("SELECT nombre as Producto, cantidad as Cantidad FROM base_anterior WHERE fecha_cad = ?", 
-                                 conn, params=(fecha_str,))
 
-    if not df_caducan_hoy.empty:
-        st.error(f"¡Atención! Retirar {int(df_caducan_hoy['Cantidad'].sum())} piezas.")
-        st.dataframe(df_caducan_hoy, use_container_width=True, hide_index=True)
-        mensaje_alerta = "⚠️ PRODUCTOS QUE CADUCAN HOY\n\n"
-
-for _, row in df_caducan_hoy.iterrows():
-    mensaje_alerta += (
-        f"Producto: {row['Producto']}\n"
-        f"Cantidad: {row['Cantidad']}\n"
-        "-----------------\n"
+    df_caducan_hoy = pd.read_sql(
+        "SELECT nombre as Producto, cantidad as Cantidad FROM base_anterior WHERE fecha_cad = ?",
+        conn,
+        params=(fecha_str,)
     )
 
-link_alerta = "https://wa.me/" + numero_whatsapp + "?text=" + urllib.parse.quote(mensaje_alerta)
+    if not df_caducan_hoy.empty:
 
-st.link_button("⚠️ Enviar tabla de caducidad por WhatsApp", link_alerta)
+        st.error(f"¡Atención! Retirar {int(df_caducan_hoy['Cantidad'].sum())} piezas.")
+
+        st.dataframe(df_caducan_hoy, use_container_width=True, hide_index=True)
+
+        mensaje_alerta = "⚠️ PRODUCTOS QUE CADUCAN HOY\n\n"
+
+        for _, row in df_caducan_hoy.iterrows():
+            mensaje_alerta += (
+                f"Producto: {row['Producto']}\n"
+                f"Cantidad: {row['Cantidad']}\n"
+                "-----------------\n"
+            )
+
+        link_alerta = "https://wa.me/" + numero_whatsapp + "?text=" + urllib.parse.quote(mensaje_alerta)
+
+        st.link_button("⚠️ Enviar tabla de caducidad por WhatsApp", link_alerta)
+
     else:
         st.success("✅ Todo bien hoy.")
 
+
 with col_right:
     st.header("🏪 Inventario Actual")
-    df_estantes = pd.read_sql("SELECT nombre as Producto, fecha_cad as [Fecha Caducidad], cantidad as Cantidad FROM base_anterior", conn)
-    if not df_estantes.empty:
-        st.metric("Piezas totales", f"{int(df_estantes['Cantidad'].sum())}")
-        st.dataframe(df_estantes, use_container_width=True, hide_index=True)
-        mensaje_inv = "📦 INVENTARIO ACTUAL\n\n"
 
-for _, row in df_estantes.iterrows():
-    mensaje_inv += (
-        f"Producto: {row['Producto']}\n"
-        f"Caducidad: {row['Fecha Caducidad']}\n"
-        f"Cantidad: {row['Cantidad']}\n"
-        "-----------------\n"
+    df_estantes = pd.read_sql(
+        "SELECT nombre as Producto, fecha_cad as [Fecha Caducidad], cantidad as Cantidad FROM base_anterior",
+        conn
     )
 
-link_inv = "https://wa.me/" + numero_whatsapp + "?text=" + urllib.parse.quote(mensaje_inv)
+    if not df_estantes.empty:
 
-st.link_button("📦 Enviar tabla de inventario por WhatsApp", link_inv)
+        st.metric("Piezas totales", f"{int(df_estantes['Cantidad'].sum())}")
+
+        st.dataframe(df_estantes, use_container_width=True, hide_index=True)
+
+        mensaje_inv = "📦 INVENTARIO ACTUAL\n\n"
+
+        for _, row in df_estantes.iterrows():
+            mensaje_inv += (
+                f"Producto: {row['Producto']}\n"
+                f"Caducidad: {row['Fecha Caducidad']}\n"
+                f"Cantidad: {row['Cantidad']}\n"
+                "-----------------\n"
+            )
+
+        link_inv = "https://wa.me/" + numero_whatsapp + "?text=" + urllib.parse.quote(mensaje_inv)
+
+        st.link_button("📦 Enviar tabla de inventario por WhatsApp", link_inv)
+
     else:
         st.info("Sin inventario.")
 
-st.divider()
-with st.expander("📖 Historial General"):
-    df_hist = pd.read_sql("SELECT * FROM historial_ventas ORDER BY fecha_corte DESC", conn)
-    st.dataframe(df_hist, use_container_width=True)
-    if not df_hist.empty:
-        csv = df_hist.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Descargar CSV", data=csv, file_name=f"ventas_{fecha_hoy_mx}.csv")
 
+st.divider()
+
+with st.expander("📖 Historial General"):
+
+    df_hist = pd.read_sql(
+        "SELECT * FROM historial_ventas ORDER BY fecha_corte DESC",
+        conn
+    )
+
+    st.dataframe(df_hist, use_container_width=True)
+
+    if not df_hist.empty:
+
+        csv = df_hist.to_csv(index=False).encode('utf-8')
+
+        st.download_button(
+            "📥 Descargar CSV",
+            data=csv,
+            file_name=f"ventas_{fecha_hoy_mx}.csv"
+        )
 
