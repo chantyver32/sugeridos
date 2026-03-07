@@ -40,17 +40,14 @@ with st.sidebar.expander("🚨 Zona de Peligro"):
         else:
             st.sidebar.error("Primero debes marcar la casilla de confirmación.")
 
-# ------------------ SECCIÓN 1: CAPTURA FÍSICA ------------------
+# ------------------ SECCIÓN 1: CAPTURA FÍSICA (PASO 1) ------------------
 st.header(f"📝 Paso 1: Conteo en Estantes ({fecha_hoy_mx.strftime('%d/%m/%Y')})")
 
 with st.container(border=True):
-
-    nombres_prev = [r[0] for r in c.execute(
-        "SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual"
-    ).fetchall()]
+    # Sugerencias dinámicas
+    nombres_prev = [r[0] for r in c.execute("SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual").fetchall()]
     
-    col1, col2, col3 = st.columns([2,1,1])
-
+    col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
         opcion = st.selectbox("Producto:", ["-- Nuevo Producto --"] + nombres_prev, key="sel_prod")
         if opcion == "-- Nuevo Producto --":
@@ -64,58 +61,26 @@ with st.container(border=True):
     with col3:
         cant = st.number_input("Cantidad que ves AHORA:", min_value=1, value=1, step=1, key="num_cant")
 
-    col_add, col_clear = st.columns(2)
-
-    with col_add:
-        if st.button("➕ Registrar en el Conteo", use_container_width=True):
-
-            if nombre_input and nombre_input.strip() != "":
-
-                nombre_final = nombre_input.strip().upper()
-
-                existe = c.execute(
-                    "SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?",
-                    (nombre_final, f_cad)
-                ).fetchone()
-
-                if existe:
-                    c.execute(
-                        "UPDATE captura_actual SET cantidad = cantidad + ? WHERE nombre=? AND fecha_cad=?",
-                        (int(cant), nombre_final, f_cad)
-                    )
-                else:
-                    c.execute(
-                        "INSERT INTO captura_actual VALUES (?, ?, ?)",
-                        (nombre_final, f_cad, int(cant))
-                    )
-
-                conn.commit()
-
-                # limpiar formulario
-                st.session_state.pop("sel_prod", None)
-                st.session_state.pop("txt_prod", None)
-                st.session_state.pop("num_cant", None)
-
-                st.rerun()
-
-    with col_clear:
-        if st.button("🧹 Limpiar formulario", use_container_width=True):
-
-            st.session_state.pop("sel_prod", None)
-            st.session_state.pop("txt_prod", None)
-            st.session_state.pop("num_cant", None)
-
+    if st.button("➕ Registrar en el Conteo", use_container_width=True):
+        if nombre_input and nombre_input.strip() != "":
+            nombre_final = nombre_input.strip().upper()
+            existe = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", (nombre_final, f_cad)).fetchone()
+            if existe:
+                c.execute("UPDATE captura_actual SET cantidad = cantidad + ? WHERE nombre=? AND fecha_cad=?", (int(cant), nombre_final, f_cad))
+            else:
+                c.execute("INSERT INTO captura_actual VALUES (?, ?, ?)", (nombre_final, f_cad, int(cant)))
+            conn.commit()
             st.rerun()
 
-# ------------------ TABLA CAPTURA ACTUAL ------------------
+# --- TABLA DE CAPTURA ACTUAL (EDITABLE) ---
 df_hoy_captura = pd.read_sql("SELECT rowid, nombre, fecha_cad, cantidad FROM captura_actual", conn)
 
 if not df_hoy_captura.empty:
-
+    # Corrección de tipo para el editor
     df_hoy_captura['fecha_cad'] = pd.to_datetime(df_hoy_captura['fecha_cad']).dt.date
-
-    st.subheader("📋 Revisión del conteo")
-
+    
+    st.subheader("📋 Revisión del conteo (Edita o elimina filas aquí):")
+    
     df_editado = st.data_editor(
         df_hoy_captura,
         column_config={
@@ -126,23 +91,18 @@ if not df_hoy_captura.empty:
         },
         num_rows="dynamic",
         use_container_width=True,
-        hide_index=True
+        hide_index=True,
+        key="editor_conteo"
     )
 
     col_save, col_cancel = st.columns(2)
-
     with col_save:
         if st.button("💾 Guardar cambios realizados arriba", use_container_width=True):
-
             c.execute("DELETE FROM captura_actual")
-
             for _, fila in df_editado.iterrows():
                 if fila['nombre']:
-                    c.execute(
-                        "INSERT INTO captura_actual (nombre, fecha_cad, cantidad) VALUES (?, ?, ?)",
-                        (fila['nombre'].strip().upper(), str(fila['fecha_cad']), int(fila['cantidad']))
-                    )
-
+                    c.execute("INSERT INTO captura_actual (nombre, fecha_cad, cantidad) VALUES (?, ?, ?)", 
+                             (fila['nombre'].strip().upper(), str(fila['fecha_cad']), int(fila['cantidad'])))
             conn.commit()
             st.success("¡Conteo actualizado!")
             st.rerun()
@@ -153,38 +113,30 @@ if not df_hoy_captura.empty:
             conn.commit()
             st.rerun()
 
-# ------------------ CORTE DE VENTAS ------------------
+# ------------------ SECCIÓN 2: CORTE Y COMPARACIÓN (PASO 2) ------------------
 st.divider()
 st.header("🏁 Paso 2: Finalizar y Calcular Ventas")
 
 if st.button("REALIZAR CORTE Y REINICIAR FORMULARIO", type="primary", use_container_width=True):
-
     df_actualizado = pd.read_sql("SELECT * FROM captura_actual", conn)
     
     if df_actualizado.empty:
-        st.warning("No hay nada que comparar.")
-
+        st.warning("No hay nada que comparar. La lista de captura está vacía.")
     else:
-
         df_anterior = pd.read_sql("SELECT * FROM base_anterior", conn)
-
+        
         if not df_anterior.empty:
-
             ventas_detectadas = []
             ts_mx = ahora_mx.strftime("%Y-%m-%d %H:%M:%S")
-
+            
             for _, fila_ant in df_anterior.iterrows():
-
-                res_hoy = c.execute(
-                    "SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?",
-                    (fila_ant['nombre'], fila_ant['fecha_cad'])
-                ).fetchone()
-
+                res_hoy = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", 
+                                   (fila_ant['nombre'], fila_ant['fecha_cad'])).fetchone()
+                
                 cant_hoy = res_hoy[0] if res_hoy else 0
                 diferencia = fila_ant['cantidad'] - cant_hoy
-
+                
                 if diferencia > 0:
-
                     ventas_detectadas.append({
                         "Producto": fila_ant['nombre'],
                         "Caducidad": fila_ant['fecha_cad'],
@@ -192,50 +144,36 @@ if st.button("REALIZAR CORTE Y REINICIAR FORMULARIO", type="primary", use_contai
                         "Quedan": cant_hoy,
                         "VENDIDOS": diferencia
                     })
-
-                    c.execute(
-                        "INSERT INTO historial_ventas VALUES (?, ?, ?, ?)",
-                        (fila_ant['nombre'], fila_ant['fecha_cad'], diferencia, ts_mx)
-                    )
-
+                    c.execute("INSERT INTO historial_ventas VALUES (?, ?, ?, ?)", 
+                             (fila_ant['nombre'], fila_ant['fecha_cad'], diferencia, ts_mx))
+            
             if ventas_detectadas:
                 st.session_state['ultimo_corte'] = pd.DataFrame(ventas_detectadas)
-
+        
         c.execute("DELETE FROM base_anterior")
         c.execute("INSERT INTO base_anterior SELECT * FROM captura_actual")
         c.execute("DELETE FROM captura_actual")
-
         conn.commit()
-
-        st.success("✅ Corte realizado")
+        st.success("✅ Corte realizado con éxito.")
         st.rerun()
 
 if 'ultimo_corte' in st.session_state:
-
     st.balloons()
-    st.subheader("📊 Resumen de ventas detectadas")
+    st.subheader("📊 Resumen de ventas detectadas:")
     st.table(st.session_state['ultimo_corte'])
-
     if st.button("Cerrar Resumen"):
         del st.session_state['ultimo_corte']
         st.rerun()
 
-# ------------------ ALERTAS ------------------
+# ------------------ SECCIÓN 3: ALERTAS Y ESTADO ACTUAL ------------------
 st.divider()
-
 col_left, col_right = st.columns(2)
 
 with col_left:
-
     st.header("⚠️ Alertas de Caducidad")
-
     fecha_str = fecha_hoy_mx.strftime('%Y-%m-%d')
-
-    df_caducan_hoy = pd.read_sql(
-        "SELECT nombre as Producto, cantidad as Cantidad FROM base_anterior WHERE fecha_cad = ?",
-        conn,
-        params=(fecha_str,)
-    )
+    df_caducan_hoy = pd.read_sql("SELECT nombre as Producto, cantidad as Cantidad FROM base_anterior WHERE fecha_cad = ?", 
+                                 conn, params=(fecha_str,))
 
     if not df_caducan_hoy.empty:
         st.error(f"¡Atención! Retirar {int(df_caducan_hoy['Cantidad'].sum())} piezas.")
@@ -244,38 +182,18 @@ with col_left:
         st.success("✅ Todo bien hoy.")
 
 with col_right:
-
     st.header("🏪 Inventario Actual")
-
-    df_estantes = pd.read_sql(
-        "SELECT nombre as Producto, fecha_cad as [Fecha Caducidad], cantidad as Cantidad FROM base_anterior",
-        conn
-    )
-
+    df_estantes = pd.read_sql("SELECT nombre as Producto, fecha_cad as [Fecha Caducidad], cantidad as Cantidad FROM base_anterior", conn)
     if not df_estantes.empty:
         st.metric("Piezas totales", f"{int(df_estantes['Cantidad'].sum())}")
         st.dataframe(df_estantes, use_container_width=True, hide_index=True)
     else:
         st.info("Sin inventario.")
 
-# ------------------ HISTORIAL ------------------
 st.divider()
-
 with st.expander("📖 Historial General"):
-
-    df_hist = pd.read_sql(
-        "SELECT * FROM historial_ventas ORDER BY fecha_corte DESC",
-        conn
-    )
-
+    df_hist = pd.read_sql("SELECT * FROM historial_ventas ORDER BY fecha_corte DESC", conn)
     st.dataframe(df_hist, use_container_width=True)
-
     if not df_hist.empty:
-
         csv = df_hist.to_csv(index=False).encode('utf-8')
-
-        st.download_button(
-            "📥 Descargar CSV",
-            data=csv,
-            file_name=f"ventas_{fecha_hoy_mx}.csv"
-        )
+        st.download_button("📥 Descargar CSV", data=csv, file_name=f"ventas_{fecha_hoy_mx}.csv")
