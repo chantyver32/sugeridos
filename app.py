@@ -34,73 +34,6 @@ c.execute('''CREATE TABLE IF NOT EXISTS historial_ventas (
 conn.commit()
 
 # ------------------ FUNCIONES ------------------
-
-# ------------------ FUNCIONES PARA WHATSAPP ------------------
-def enviar_whatsapp(texto):
-    """Genera un enlace de WhatsApp con el mensaje dado y lo abre en el navegador"""
-    import webbrowser
-    mensaje = urllib.parse.quote(texto)
-    url = f"https://api.whatsapp.com/send?phone={numero_whatsapp}&text={mensaje}"
-    webbrowser.open(url)
-
-def reporte_conteo_para_whatsapp():
-    """Genera un mensaje amigable del conteo actual"""
-    df = pd.read_sql("SELECT nombre, fecha_cad, cantidad FROM captura_actual", conn)
-    if df.empty:
-        return "⚠️ No hay productos registrados en el conteo actual."
-    
-    mensaje = "📝 *Reporte de Conteo Actual* 🥐\n\n"
-    for _, fila in df.iterrows():
-        mensaje += f"- {fila['nombre']} | Cad: {fila['fecha_cad']} | Cantidad: {fila['cantidad']}\n"
-    mensaje += f"\nFecha: {fecha_hoy_mx.strftime('%d/%m/%Y')}"
-    return mensaje
-
-def reporte_corte_para_whatsapp():
-    """Genera un mensaje amigable del último corte realizado"""
-    if not st.session_state.get('ultimo_corte'):
-        return "⚠️ No se ha realizado ningún corte."
-    
-    df = st.session_state['ultimo_corte']
-    mensaje = "🏁 *Reporte de Corte de Ventas* 🥐\n\n"
-    for _, fila in df.iterrows():
-        mensaje += f"- {fila['Producto']} | Cad: {fila['Caducidad']} | Había: {fila['Había']} | Quedan: {fila['Quedan']} | Vendidos: {fila['VENDIDOS']}\n"
-    mensaje += f"\nFecha Corte: {datetime.now(zona_mx).strftime('%d/%m/%Y %H:%M')}"
-    return mensaje
-
-def reporte_historial_para_whatsapp():
-    """Genera un mensaje amigable del historial completo"""
-    df = pd.read_sql("SELECT nombre as Producto, fecha_cad as Caducidad, habia as Habia, quedan as Quedan, vendidos as Vendidos, fecha_corte as Fecha_Hora FROM historial_ventas", conn)
-    if df.empty:
-        return "⚠️ No hay historial de ventas todavía."
-    
-    mensaje = "📊 *Historial de Ventas* 🥐\n\n"
-    resumen = df.groupby("Producto")["Vendidos"].sum().sort_values(ascending=False)
-    for producto, vendidos in resumen.items():
-        mensaje += f"- {producto}: {int(vendidos)} vendidos\n"
-    mensaje += f"\nTotal histórico: {int(df['Vendidos'].sum())} piezas"
-    return mensaje
-
-def enviar_whatsapp(titulo, df):
-    """Genera un enlace de WhatsApp con el contenido del DataFrame"""
-    if df.empty:
-        return
-    
-    texto = f"📊 *{titulo}* 🥐\n\n"
-    for _, fila in df.iterrows():
-        detalles = " | ".join([f"{k}: {v}" for k, v in fila.to_dict().items()])
-        texto += f"• {detalles}\n"
-    
-    texto_encoded = urllib.parse.quote(texto)
-    url = f"https://wa.me/{numero_whatsapp}?text={texto_encoded}"
-    
-    st.markdown(f'''
-        <a href="{url}" target="_blank">
-            <button style="width:100%; background-color:#25D366; color:white; border:none; padding:10px; border-radius:5px; cursor:pointer; font-weight:bold;">
-                Ver en WhatsApp ✅
-            </button>
-        </a>
-    ''', unsafe_allow_html=True)
-    
 def sonido_click():
     st.markdown(
         """<audio autoplay><source src="https://www.soundjay.com/buttons/sounds/button-16.mp3" type="audio/mpeg"></audio>""",
@@ -120,6 +53,63 @@ def mostrar_exito(mensaje, duracion=2):
     time.sleep(duracion)
     mensaje_global.empty()
 
+# ------------------ FUNCIONES WHATSAPP ------------------
+def enviar_whatsapp_texto(texto):
+    """Enviar un mensaje de texto simple por WhatsApp"""
+    import webbrowser
+    mensaje = urllib.parse.quote(texto)
+    url = f"https://api.whatsapp.com/send?phone={numero_whatsapp}&text={mensaje}"
+    webbrowser.open(url)
+
+def enviar_whatsapp_df(titulo, df):
+    """Enviar un DataFrame como mensaje de WhatsApp con botón"""
+    if df.empty:
+        return
+    texto = f"📊 *{titulo}* 🥐\n\n"
+    for _, fila in df.iterrows():
+        detalles = " | ".join([f"{k}: {v}" for k, v in fila.to_dict().items()])
+        texto += f"• {detalles}\n"
+    texto_encoded = urllib.parse.quote(texto)
+    url = f"https://wa.me/{numero_whatsapp}?text={texto_encoded}"
+    st.markdown(f'''
+        <a href="{url}" target="_blank">
+            <button style="width:100%; background-color:#25D366; color:white; border:none; padding:10px; border-radius:5px; cursor:pointer; font-weight:bold;">
+                Ver en WhatsApp ✅
+            </button>
+        </a>
+    ''', unsafe_allow_html=True)
+
+def reporte_conteo_para_whatsapp():
+    df = pd.read_sql("SELECT nombre, fecha_cad, cantidad FROM captura_actual", conn)
+    if df.empty:
+        return "⚠️ No hay productos registrados en el conteo actual."
+    mensaje = "📝 *Reporte de Conteo Actual* 🥐\n\n"
+    for _, fila in df.iterrows():
+        mensaje += f"- {fila['nombre']} | Cad: {fila['fecha_cad']} | Cantidad: {fila['cantidad']}\n"
+    mensaje += f"\nFecha: {fecha_hoy_mx.strftime('%d/%m/%Y')}"
+    return mensaje
+
+def reporte_corte_para_whatsapp():
+    if not st.session_state.get('ultimo_corte'):
+        return "⚠️ No se ha realizado ningún corte."
+    df = st.session_state['ultimo_corte']
+    mensaje = "🏁 *Reporte de Corte de Ventas* 🥐\n\n"
+    for _, fila in df.iterrows():
+        mensaje += f"- {fila['Producto']} | VENDIDOS: {fila['VENDIDOS']}\n"
+    mensaje += f"\nFecha Corte: {datetime.now(zona_mx).strftime('%d/%m/%Y %H:%M')}"
+    return mensaje
+
+def reporte_historial_para_whatsapp():
+    df = pd.read_sql("SELECT nombre as Producto, fecha_cad as Caducidad, habia as Habia, quedan as Quedan, vendidos as Vendidos, fecha_corte as Fecha_Hora FROM historial_ventas", conn)
+    if df.empty:
+        return "⚠️ No hay historial de ventas todavía."
+    mensaje = "📊 *Historial de Ventas* 🥐\n\n"
+    resumen = df.groupby("Producto")["Vendidos"].sum().sort_values(ascending=False)
+    for producto, vendidos in resumen.items():
+        mensaje += f"- {producto}: {int(vendidos)} vendidos\n"
+    mensaje += f"\nTotal histórico: {int(df['Vendidos'].sum())} piezas"
+    return mensaje
+
 # ------------------ SIDEBAR ------------------
 st.sidebar.header("⚙️ Configuración")
 with st.sidebar.expander("🚨 Zona de Peligro"):
@@ -138,30 +128,23 @@ tab1, tab2, tab3 = st.tabs(["📝 Añadir productos", "📦 Inventario", "📊 A
 
 with tab1:
     st.header(f"📝 Paso 1: Conteo en Estantes ({fecha_hoy_mx.strftime('%d/%m/%Y')})")
-
     if "conteo_temp" not in st.session_state:
         st.session_state.conteo_temp = 0
-    
-    # Buscador
-    buscar = st.text_input("🔎 Buscar o escribir producto", key="buscar_prod_input").upper()
 
+    buscar = st.text_input("🔎 Buscar o escribir producto", key="buscar_prod_input").upper()
     nombres_prev = [r[0] for r in c.execute(
         "SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual"
     ).fetchall()]
-
     sugerencias = [p for p in nombres_prev if buscar in p] if buscar else nombres_prev
 
-    col1, col2, col3 = st.columns([2, 1, 1])
+    col1, col2, col3 = st.columns([2,1,1])
     with col1:
         nombre_input = st.selectbox("Sugerencias:", sugerencias) if sugerencias else buscar
-
     with col2:
         f_cad = st.date_input("Fecha de Caducidad:", value=fecha_hoy_mx, min_value=fecha_hoy_mx)
-
     with col3:
         st.metric("Total contado", st.session_state.conteo_temp)
 
-    # Botones de suma
     c1, c2, c3, c4 = st.columns(4)
     with c1: st.button("+1", use_container_width=True, on_click=sumar, args=(1,))
     with c2: st.button("+5", use_container_width=True, on_click=sumar, args=(5,))
@@ -178,12 +161,10 @@ with tab1:
             mostrar_exito("✅ Producto agregado")
             st.rerun()
 
-    # Tabla editable
     df_hoy_captura = pd.read_sql("SELECT rowid, nombre, fecha_cad, cantidad FROM captura_actual", conn)
     if not df_hoy_captura.empty:
         st.write("---")
         df_editado = st.data_editor(df_hoy_captura, column_config={"rowid": None}, use_container_width=True, hide_index=True)
-        
         if st.button("💾 Guardar cambios en tabla"):
             c.execute("DELETE FROM captura_actual")
             for _, fila in df_editado.iterrows():
@@ -193,7 +174,7 @@ with tab1:
 
     if st.button("📤 Enviar reporte de conteo por WhatsApp"):
         texto = reporte_conteo_para_whatsapp()
-        enviar_whatsapp(texto)
+        enviar_whatsapp_texto(texto)
 
 with tab2:
     st.header("🏁 Paso 2: Finalizar y Calcular Ventas")
@@ -205,8 +186,6 @@ with tab2:
             df_anterior = pd.read_sql("SELECT * FROM base_anterior", conn)
             ventas_detectadas = []
             ts_mx = datetime.now(zona_mx).strftime("%Y-%m-%d %H:%M:%S")
-            
-            # Comparar anterior con actual para sacar ventas
             for _, fila_ant in df_anterior.iterrows():
                 res_hoy = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", 
                                   (fila_ant['nombre'], fila_ant['fecha_cad'])).fetchone()
@@ -216,12 +195,10 @@ with tab2:
                     ventas_detectadas.append({"Producto": fila_ant['nombre'], "VENDIDOS": vendidos})
                     c.execute("INSERT INTO historial_ventas VALUES (?, ?, ?, ?, ?, ?)", 
                              (fila_ant['nombre'], fila_ant['fecha_cad'], fila_ant['cantidad'], cant_hoy, vendidos, ts_mx))
-            
             c.execute("DELETE FROM base_anterior")
             c.execute("INSERT INTO base_anterior SELECT * FROM captura_actual")
             c.execute("DELETE FROM captura_actual")
             conn.commit()
-            
             if ventas_detectadas:
                 st.session_state['ultimo_corte'] = pd.DataFrame(ventas_detectadas)
                 st.session_state['mostrar_resumen'] = True
@@ -231,49 +208,27 @@ with tab2:
         st.balloons()
         st.subheader("Resumen de Ventas Recientes")
         st.table(st.session_state['ultimo_corte'])
-        enviar_whatsapp("Resumen de Corte", st.session_state['ultimo_corte'])
+        enviar_whatsapp_df("Resumen de Corte", st.session_state['ultimo_corte'])
         if st.button("Cerrar Resumen"):
             st.session_state['mostrar_resumen'] = False
             st.rerun()
 
-    st.divider()
-    col_l, col_r = st.columns(2)
-    with col_l:
-        st.header("⚠️ Caducidades")
-        df_cad = pd.read_sql("SELECT nombre, cantidad FROM base_anterior WHERE fecha_cad = ?", conn, params=(str(fecha_hoy_mx),))
-        if not df_cad.empty:
-            st.error(f"Retirar {int(df_cad['cantidad'].sum())} piezas hoy.")
-            st.dataframe(df_cad, use_container_width=True)
-            enviar_whatsapp("⚠️ Caducan Hoy", df_cad)
-        else:
-            st.success("✅ Todo fresco por hoy.")
-    
-    with col_r:
-        st.header("🏪 Stock")
-        df_inv = pd.read_sql("SELECT nombre, cantidad FROM base_anterior", conn)
-        st.dataframe(df_inv, use_container_width=True)
-
-    if st.session_state.get('mostrar_resumen'):
-        if st.button("📤 Enviar corte por WhatsApp"):
-            texto = reporte_corte_para_whatsapp()
-            enviar_whatsapp(texto)
-
 with tab3:
     st.header("📊 Análisis de Ventas")
     df_hist = pd.read_sql("SELECT nombre as Producto, fecha_cad as Caducidad, vendidos as Vendidos, fecha_corte as Fecha FROM historial_ventas", conn)
-    
     if df_hist.empty:
         st.info("No hay datos históricos.")
     else:
         bus_h = st.text_input("Filtrar producto en historial:").upper()
         df_f = df_hist[df_hist["Producto"].str.contains(bus_h)] if bus_h else df_hist
         st.dataframe(df_f, use_container_width=True)
-        enviar_whatsapp("Historial de Ventas", df_f)
-        
+        enviar_whatsapp_df("Historial de Ventas", df_f)
+
         st.subheader("📈 Top Ventas")
         top = df_hist.groupby("Producto")["Vendidos"].sum().sort_values(ascending=False).head(10)
         st.bar_chart(top)
 
-   if st.button("📤 Enviar historial por WhatsApp"):
-        texto = reporte_historial_para_whatsapp()
-        enviar_whatsapp(texto)
+        # Botón de envío de historial
+        if st.button("📤 Enviar historial por WhatsApp"):
+            texto = reporte_historial_para_whatsapp()
+            enviar_whatsapp_texto(texto)
