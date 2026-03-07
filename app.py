@@ -199,6 +199,7 @@ with tab1:
 
             if ventas_detectadas:
                 st.session_state['ultimo_corte'] = pd.DataFrame(ventas_detectadas)
+                st.session_state['mostrar_resumen'] = True  # Mostrar resumen automáticamente
 
             c.execute("DELETE FROM base_anterior")
             c.execute("INSERT INTO base_anterior SELECT * FROM captura_actual")
@@ -206,35 +207,41 @@ with tab1:
             conn.commit()
             mostrar_exito("🏁 Corte realizado y guardado en el historial con éxito")
 
-    # ------------------ MOSTRAR RESUMEN ------------------
-    if 'ultimo_corte' in st.session_state:
-        # Mostrar globos automáticamente al abrir el resumen
-        st.balloons()
-        
-        st.subheader("📊 Resumen de ventas detectadas:")
-        df_ventas = st.session_state['ultimo_corte']
-        st.table(df_ventas)
+    # ------------------ RESUMEN DE VENTAS CON UN CLIC ------------------
+    if 'mostrar_resumen' not in st.session_state:
+        st.session_state['mostrar_resumen'] = False
 
-        mensaje = "📊 *CORTE DE VENTAS CHAMPLITTE*\n"
-        mensaje += f"📅 Fecha: {fecha_hoy_mx.strftime('%d/%m/%Y')}\n"
-        mensaje += "---------------------------------\n\n"
+    resumen_container = st.container()
+    with resumen_container:
+        if st.session_state.get('ultimo_corte') is not None and st.session_state['mostrar_resumen']:
+            if 'globos_mostrados' not in st.session_state:
+                st.balloons()
+                st.session_state['globos_mostrados'] = True
 
-        for _, row in df_ventas.iterrows():
-            mensaje += (
-                f"🍞 *{row['Producto']}*\n"
-                f"📅 Cad: {row['Caducidad']}\n"
-                f"📥 Había: {row['Había']} | 📤 Quedan: {row['Quedan']}\n"
-                f"💰 *VENDIDOS: {row['VENDIDOS']}*\n"
-                "---------------------------------\n"
-            )
+            st.subheader("📊 Resumen de ventas detectadas:")
+            df_ventas = st.session_state['ultimo_corte']
+            st.table(df_ventas)
 
-        link = f"https://wa.me/{numero_whatsapp}?text={urllib.parse.quote(mensaje)}"
-        col_wa, col_close = st.columns(2)
-        with col_wa:
-            st.link_button("📲 Enviar reporte por WhatsApp", link, use_container_width=True)
-        with col_close:
-            if st.button("Cerrar Resumen", use_container_width=True):
-                del st.session_state['ultimo_corte']
+            mensaje = "📊 *CORTE DE VENTAS CHAMPLITTE*\n"
+            mensaje += f"📅 Fecha: {fecha_hoy_mx.strftime('%d/%m/%Y')}\n"
+            mensaje += "---------------------------------\n\n"
+
+            for _, row in df_ventas.iterrows():
+                mensaje += (
+                    f"🍞 *{row['Producto']}*\n"
+                    f"📅 Cad: {row['Caducidad']}\n"
+                    f"📥 Había: {row['Había']} | 📤 Quedan: {row['Quedan']}\n"
+                    f"💰 *VENDIDOS: {row['VENDIDOS']}*\n"
+                    "---------------------------------\n"
+                )
+
+            link = f"https://wa.me/{numero_whatsapp}?text={urllib.parse.quote(mensaje)}"
+            col_wa, col_close = st.columns(2)
+            with col_wa:
+                st.link_button("📲 Enviar reporte por WhatsApp", link, use_container_width=True)
+            with col_close:
+                if st.button("Cerrar Resumen", key="cerrar_resumen", use_container_width=True):
+                    st.session_state['mostrar_resumen'] = False  # Cierra con un solo clic
 
     # ------------------ ALERTAS Y ESTADO ------------------
     st.divider()
