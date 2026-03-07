@@ -204,6 +204,18 @@ with col_left:
     else:
         st.success("✅ Todo bien hoy.")
 
+if not df_caducan_hoy.empty:
+
+    mensaje_alerta = f"⚠️ Productos que caducan hoy\n📅 {fecha_hoy_mx.strftime('%d/%m/%Y')}\n\n"
+
+    for _, row in df_caducan_hoy.iterrows():
+        mensaje_alerta += f"{row['Producto']} - {row['Cantidad']}\n"
+
+    numero = "522283530069"
+
+    link_alerta = "https://wa.me/" + numero + "?text=" + urllib.parse.quote(mensaje_alerta)
+
+    st.link_button("⚠️ Enviar alerta por WhatsApp", link_alerta)
 with col_right:
     st.header("🏪 Inventario Actual")
     df_estantes = pd.read_sql("SELECT nombre as Producto, fecha_cad as [Fecha Caducidad], cantidad as Cantidad FROM base_anterior", conn)
@@ -231,5 +243,10 @@ with st.expander("📖 Historial General"):
     df_hist = pd.read_sql("SELECT * FROM historial_ventas ORDER BY fecha_corte DESC", conn)
     st.dataframe(df_hist, use_container_width=True)
     if not df_hist.empty:
-        csv = df_hist.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Descargar CSV", data=csv, file_name=f"ventas_{fecha_hoy_mx}.csv")
+
+    st.subheader("📊 Productos más vendidos")
+
+    ventas_producto = df_hist.groupby("nombre")["vendidos"].sum().reset_index()
+
+    st.bar_chart(ventas_producto.set_index("nombre"))
+
