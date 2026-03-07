@@ -72,52 +72,61 @@ with st.sidebar.expander("🚨 Zona de Peligro"):
             st.sidebar.error("Primero debes marcar la casilla de confirmación.")
 
 # ... (Tu código previo de configuración y base de datos se mantiene igual)
-
 # ------------------ TABS ------------------
 tab1, tab2 = st.tabs(["📦 Inventario", "📊 Análisis de Ventas"])
 
 with tab1:
-    # ------------------ PASO 1: CAPTURA FÍSICA ------------------
-    st.header(f"📝 Paso 1: Conteo en Estantes ({fecha_hoy_mx.strftime('%d/%m/%Y')})")
+# ------------------ PASO 1: CAPTURA FÍSICA ------------------
+st.header(f"📝 Paso 1: Conteo en Estantes ({fecha_hoy_mx.strftime('%d/%m/%Y')})")
 
-    # 1. Inicializar estados
-    if "conteo_temp" not in st.session_state:
-        st.session_state.conteo_temp = 0
-    if "buscar_prod" not in st.session_state:
-        st.session_state.buscar_prod = ""
+# 1. Inicializar el estado de la búsqueda si no existe
+if "buscar_prod" not in st.session_state:
+    st.session_state.buscar_prod = ""
 
-    # 2. Función para limpiar el buscador
-    def limpiar_buscador():
-        st.session_state.buscar_prod = ""
+# 2. Función para limpiar el texto y resetear la selección
+def limpiar_buscador():
+    st.session_state.buscar_prod = ""
+    if "sel_prod" in st.session_state:
+        del st.session_state["sel_prod"]
 
-    # 3. Buscador con botón de limpiar
-    col_busq, col_btn = st.columns([3, 1])
-    with col_busq:
-        buscar = st.text_input("🔎 Buscar o escribir producto", key="buscar_prod").upper()
-    
-    with col_btn:
-        st.write("##") # Espaciador para alinear con el input
-        st.button("🧹 Limpiar", on_click=limpiar_buscador, use_container_width=True)
+# 3. Obtener lista de productos de la base de datos
+nombres_prev = [r[0] for r in c.execute(
+    "SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual"
+).fetchall()]
 
-    # 4. Lógica de sugerencias y selección
-    nombres_prev = [r[0] for r in c.execute(
-        "SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual").fetchall()]
-    
-    sugerencias = [p for p in nombres_prev if buscar in p.upper()] if buscar else []
+# --- DISEÑO DE BÚSQUEDA ---
+col_busq, col_limpiar = st.columns([3, 1])
 
-    col1, col2, col3 = st.columns([2, 1, 1])
-    with col1:
-        if sugerencias:
-            nombre_input = st.selectbox("Sugerencias", sugerencias, key="sel_prod")
-        else:
-            nombre_input = buscar
+with col_busq:
+    # El valor del input se sincroniza con session_state
+    buscar = st.text_input("🔎 Buscar producto existente o escribir nuevo:", key="buscar_prod").upper()
 
-    with col2:
-        f_cad = st.date_input("Fecha de Caducidad:", value=fecha_hoy_mx, min_value=fecha_hoy_mx, key="date_cad")
+with col_limpiar:
+    st.write("##") # Alineación
+    st.button("🧹 Limpiar", on_click=limpiar_buscador, use_container_width=True)
 
-    with col3:
-        st.write("Cantidad que ves")
+# 4. FILTRADO DINÁMICO
+# Si hay texto, filtramos la lista. Si no, mostramos todo o vacío.
+sugerencias = [p for p in nombres_prev if buscar in p] if buscar else nombres_prev
 
+col1, col2, col3 = st.columns([2, 1, 1])
+
+with col1:
+    if sugerencias:
+        # Si hay coincidencias, permitimos elegir de la lista
+        nombre_seleccionado = st.selectbox("Selecciona de la lista:", sugerencias, key="sel_prod")
+        nombre_final = nombre_seleccionado
+    else:
+        # Si es un producto nuevo que no está en la base de datos
+        st.info("✨ Producto nuevo detectado")
+        nombre_final = buscar
+
+with col2:
+    f_cad = st.date_input("Fecha de Caducidad:", value=fecha_hoy_mx, min_value=fecha_hoy_mx, key="date_cad")
+
+with col3:
+    st.write("Cantidad que ves")
+    # Aquí iría el st.metric o el espacio para el conteo
     # ... (Sigue el resto de tu código de botones +1, +5, etc.)
     
     # Botones de suma
@@ -368,4 +377,5 @@ with tab2:
         cantidad_top = int(top_productos.iloc[0])
         st.metric(label="Producto más vendido", value=producto_top, delta=f"{cantidad_top} vendidos")
         st.bar_chart(top_productos)
+
 
