@@ -9,6 +9,7 @@ import time
 # ------------------ CONFIGURACIÓN GENERAL ------------------
 st.set_page_config(page_title="Inventario Champlitte MX", page_icon="🥐", layout="wide")
 
+# Estilo para ocultar headers innecesarios
 st.markdown("""
     <style>
     [data-testid="stHeader"] {display:none;}
@@ -32,12 +33,8 @@ c.execute('''CREATE TABLE IF NOT EXISTS historial_ventas (
 conn.commit()
 
 # ------------------ FUNCIONES ------------------
-def sonido_click():
-    st.markdown("""<audio autoplay><source src="https://www.soundjay.com/buttons/sounds/button-16.mp3" type="audio/mpeg"></audio>""", unsafe_allow_html=True)
-
 def sumar(valor):
     st.session_state.conteo_temp += valor
-    sonido_click()
 
 # ------------------ TABS ------------------
 tab1, tab2, tab3 = st.tabs(["📝 AÑADIR PRODUCTOS", "📦 INVENTARIO Y CORTE", "📊 ANÁLISIS"])
@@ -47,10 +44,11 @@ with tab1:
     
     col_busq, col_limpiar = st.columns([4, 1])
     with col_busq:
-        buscar = st.text_input("Buscador", placeholder="🔎 BUSCAR O ESCRIBIR PRODUCTO...", key="buscar_prod", label_visibility="collapsed").upper()
+        # El valor del input se vincula al estado para poder limpiarlo
+        buscar = st.text_input("Buscador", placeholder="🔎 BUSCAR O ESCRIBIR PRODUCTO...", key="busqueda_input").upper()
     with col_limpiar:
         if st.button("🧹 Limpiar", use_container_width=True):
-            st.session_state.buscar_prod = ""
+            st.session_state.busqueda_input = "" # Limpia el widget directamente
             st.rerun()
 
     nombres_prev = [r[0] for r in c.execute("SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual").fetchall()]
@@ -76,17 +74,19 @@ with tab1:
         if nombre_input and str(nombre_input).strip() != "":
             nombre_final = str(nombre_input).strip().upper()
             cant = st.session_state.conteo_temp
+            
             # Lógica acumulativa (Ilimitada)
             existe = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", (nombre_final, str(f_cad))).fetchone()
             if existe:
                 c.execute("UPDATE captura_actual SET cantidad = cantidad + ? WHERE nombre=? AND fecha_cad=?", (int(cant), nombre_final, str(f_cad)))
             else:
                 c.execute("INSERT INTO captura_actual VALUES (?, ?, ?)", (nombre_final, str(f_cad), int(cant)))
+            
             conn.commit()
             st.session_state.conteo_temp = 0
             st.rerun()
 
-    st.write("---")
+    st.divider()
     df_hoy_captura = pd.read_sql("SELECT rowid, nombre as Producto, fecha_cad as [Fecha Cad], cantidad as Cantidad FROM captura_actual", conn)
     
     if not df_hoy_captura.empty:
@@ -95,7 +95,7 @@ with tab1:
         
         col_s, col_v = st.columns(2)
         with col_s:
-            if st.button("💾 Guardar Cambios", use_container_width=True):
+            if st.button("💾 Guardar Cambios en Lista", use_container_width=True):
                 c.execute("DELETE FROM captura_actual")
                 for _, fila in df_editado.iterrows():
                     if fila['Producto']:
@@ -103,7 +103,7 @@ with tab1:
                 conn.commit()
                 st.rerun()
         with col_v:
-            if st.button("🗑️ Vaciar Lista", use_container_width=True):
+            if st.button("🗑️ Vaciar Lista de Captura", use_container_width=True):
                 c.execute("DELETE FROM captura_actual")
                 conn.commit()
                 st.rerun()
@@ -111,10 +111,26 @@ with tab1:
 with tab2:
     st.subheader(f"Corte: {fecha_hoy_mx.strftime('%d/%m/%Y')}")
     
-    if st.button("🚀 REALIZAR CORTE FINAL Y CALCULAR VENTAS", type="primary", use_container_width=True):
+    # --- ZONA DE PELIGRO (Mantenimiento de DB) ---
+    with st.expander("🚨 Mantenimiento y Borrado de Base de Datos"):
+        st.warning("Desde aquí puedes reiniciar todo el sistema.")
+        confirmar_total = st.checkbox("Confirmo que deseo BORRAR TODA la base de datos (Historial e Inventario)")
+        if st.button("⚠️ EJECUTAR BORRADO TOTAL", type="secondary"):
+            if confirmar_total:
+                c.execute("DELETE FROM captura_actual"); c.execute("DELETE FROM base_anterior"); c.execute("DELETE FROM historial_ventas")
+                conn.commit()
+                st.success("Base de datos reiniciada.")
+                time.sleep(1)
+                st.rerun()
+            else:
+                st.error("Debes marcar la casilla de confirmación.")
+
+    st.divider()
+
+    if st.button("🚀 FINALIZAR CAPTURA Y REALIZAR CORTE", type="primary", use_container_width=True):
         df_actualizado = pd.read_sql("SELECT * FROM captura_actual", conn)
         if df_actualizado.empty:
-            st.warning("⚠️ No hay productos en la lista para comparar.")
+            st.warning("⚠️ No hay productos capturados para comparar.")
         else:
             df_anterior = pd.read_sql("SELECT * FROM base_anterior", conn)
             ts_mx = datetime.now(zona_mx).strftime("%Y-%m-%d %H:%M:%S")
@@ -140,7 +156,7 @@ with tab2:
             st.rerun()
 
     if 'resumen_corte' in st.session_state:
-        st.success("✅ Corte realizado con éxito")
+        st.success("✅ ¡Corte finalizado!")
         st.table(st.session_state['resumen_corte'])
         if st.button("Cerrar Resumen"):
             del st.session_state['resumen_corte']
@@ -152,20 +168,20 @@ with tab2:
         st.write("#### ⚠️ Caducan Hoy")
         df_cad = pd.read_sql("SELECT nombre as Producto, cantidad as Cantidad FROM base_anterior WHERE fecha_cad = ?", conn, params=(str(fecha_hoy_mx),))
         if not df_cad.empty:
-            st.error(f"Retirar {int(df_cad['Cantidad'].sum())} piezas")
+            st.error(f"⚠️ Retirar {int(df_cad['Cantidad'].sum())} piezas")
             st.dataframe(df_cad, use_container_width=True, hide_index=True)
         else:
-            st.success("✅ Nada caduca hoy")
+            st.success("✅ Todo al día.")
 
     with col_b:
-        st.write("#### 📦 Inventario en Estantes")
+        st.write("#### 📦 Stock en Estantes")
         df_inv = pd.read_sql("SELECT nombre as Producto, fecha_cad as [Fecha Cad], cantidad as Cantidad FROM base_anterior", conn)
         st.dataframe(df_inv, use_container_width=True, hide_index=True)
 
 with tab3:
+    st.subheader("📊 Análisis de Historial")
     df_hist = pd.read_sql("SELECT * FROM historial_ventas ORDER BY fecha_corte DESC", conn)
     if not df_hist.empty:
-        st.subheader("📈 Histórico")
         st.dataframe(df_hist, use_container_width=True, hide_index=True)
     else:
-        st.info("Sin datos.")
+        st.info("No hay datos registrados todavía.")
