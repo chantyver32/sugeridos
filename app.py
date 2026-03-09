@@ -9,19 +9,23 @@ import time
 # ------------------ CONFIGURACIÓN GENERAL ------------------
 st.set_page_config(page_title="Inventario Champlitte MX", page_icon="🥐", layout="wide")
 
-# Estilo para reducir espacios superiores ya que no hay título
+# Estilo para eliminar espacios superiores y mejorar la estética de los tabs
 st.markdown("""
     <style>
         .block-container {padding-top: 1rem;}
-        [data-testid="stMetricValue"] {font-size: 1.8rem;}
+        .stTabs [data-baseweb="tab-list"] {gap: 8px;}
+        .stTabs [data-baseweb="tab"] {
+            background-color: #f0f2f6;
+            border-radius: 4px 4px 0px 0px;
+            padding: 10px 20px;
+        }
+        .stTabs [aria-selected="true"] {background-color: #e1e4e8 !important;}
     </style>
 """, unsafe_allow_html=True)
 
 zona_mx = pytz.timezone('America/Mexico_City')
 fecha_hoy_mx = datetime.now(zona_mx).date()
 numero_whatsapp = "522283530069"
-
-mensaje_global = st.empty()
 
 # ------------------ BASE DE DATOS ------------------
 conn = sqlite3.connect('inventario_pan.db', check_same_thread=False)
@@ -34,7 +38,7 @@ c.execute('''CREATE TABLE IF NOT EXISTS historial_ventas (
 )''')
 conn.commit()
 
-# ------------------ FUNCIONES ------------------
+# ------------------ FUNCIONES AUXILIARES ------------------
 def sonido_click():
     st.markdown('<audio autoplay><source src="https://www.soundjay.com/buttons/sounds/button-16.mp3" type="audio/mpeg"></audio>', unsafe_allow_html=True)
 
@@ -46,161 +50,165 @@ def resetear():
     st.session_state.conteo_temp = 0
     sonido_click()
 
-def mostrar_exito(mensaje, duracion=2):
-    mensaje_global.success(mensaje)
-    time.sleep(duracion)
-    mensaje_global.empty()
-
 # ------------------ SIDEBAR ------------------
-st.sidebar.header("⚙️ Configuración")
+st.sidebar.header("⚙️ Panel de Control")
 with st.sidebar.expander("🚨 Zona de Peligro"):
-    confirmar_reset = st.checkbox("Confirmar borrar todo el historial")
-    if st.button("⚠️ RESET TOTAL", type="secondary", use_container_width=True):
+    confirmar_reset = st.checkbox("Confirmar borrado total")
+    if st.button("⚠️ EJECUTAR RESET TOTAL", use_container_width=True):
         if confirmar_reset:
             c.execute("DELETE FROM captura_actual"); c.execute("DELETE FROM base_anterior"); c.execute("DELETE FROM historial_ventas")
             conn.commit()
-            st.sidebar.success("Sistema reiniciado.")
-        else:
-            st.sidebar.error("Confirma primero.")
+            st.rerun()
 
-# ------------------ TABS (SIN TÍTULOS EXTERNOS) ------------------
-tab1, tab2, tab3 = st.tabs(["📝 REGISTRO DE PRODUCTOS", "📦 CORTE E INVENTARIO", "📊 ANÁLISIS"])
+# ------------------ TABS PRINCIPALES ------------------
+tab1, tab2, tab3 = st.tabs(["📝 REGISTRO DE PRODUCTOS", "📦 CORTE E INVENTARIO", "📊 ANÁLISIS DE VENTAS"])
 
+# --- TAB 1: REGISTRO (CAPTURA ILIMITADA) ---
 with tab1:
-    # Lógica de estados
     if "conteo_temp" not in st.session_state: st.session_state.conteo_temp = 0
-    if "buscar_prod" not in st.session_state: st.session_state.buscar_prod = ""
-
-    def limpiar_buscador():
-        st.session_state.buscar_prod = ""
-        if "sel_prod" in st.session_state: del st.session_state["sel_prod"]
-
-    # Buscador optimizado
+    
     col_busq, col_limpiar = st.columns([4, 1])
     with col_busq:
-        buscar = st.text_input("Buscador", placeholder="🔎 ESCRIBE EL NOMBRE DEL PRODUCTO...", key="buscar_prod", label_visibility="collapsed").upper()
+        buscar = st.text_input("Buscar", placeholder="🔎 ESCRIBE EL NOMBRE DEL PAN...", key="buscar_prod", label_visibility="collapsed").upper()
     with col_limpiar:
-        st.button("🧹 Limpiar", on_click=limpiar_buscador, use_container_width=True)
+        if st.button("🧹 Limpiar", use_container_width=True):
+            st.session_state.buscar_prod = ""
+            st.rerun()
 
     nombres_prev = [r[0] for r in c.execute("SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual").fetchall()]
     sugerencias = [p for p in nombres_prev if buscar in p] if buscar else nombres_prev
 
-    col1, col2, col3 = st.columns([2, 1, 1])
-    with col1:
-        nombre_input = st.selectbox("Sugerencias:", sugerencias, key="sel_prod") if sugerencias else buscar
-        if not sugerencias and buscar: st.info("✨ Producto nuevo detectado")
-
-    with col2:
+    c1, c2, c3 = st.columns([2, 1, 1])
+    with c1:
+        nombre_input = st.selectbox("Producto:", sugerencias, key="sel_prod") if sugerencias else buscar
+    with c2:
         f_cad = st.date_input("Caducidad:", value=fecha_hoy_mx, min_value=fecha_hoy_mx)
+    with c3:
+        st.metric("A registrar:", st.session_state.conteo_temp)
 
-    with col3:
-        st.metric("A sumar:", st.session_state.conteo_temp)
+    # Botones de conteo rápido
+    b1, b2, b3, b4 = st.columns(4)
+    with b1: st.button("+1", use_container_width=True, on_click=sumar, args=(1,))
+    with b2: st.button("+5", use_container_width=True, on_click=sumar, args=(5,))
+    with b3: st.button("+10", use_container_width=True, on_click=sumar, args=(10,))
+    with b4: st.button("Borrar", use_container_width=True, on_click=resetear)
 
-    # Botonera de conteo
-    c1, c2, c3, c4 = st.columns(4)
-    with c1: st.button("+1", use_container_width=True, on_click=sumar, args=(1,))
-    with c2: st.button("+5", use_container_width=True, on_click=sumar, args=(5,))
-    with c3: st.button("+10", use_container_width=True, on_click=sumar, args=(10,))
-    with c4: st.button("0", use_container_width=True, on_click=resetear)
-
-    if st.button("➕ REGISTRAR EN LISTA (ILIMITADO)", use_container_width=True, type="primary"):
-        if nombre_input and str(nombre_input).strip() != "":
-            nombre_final = str(nombre_input).strip().upper()
-            cant = st.session_state.conteo_temp
-            # Guardar en DB inmediatamente
-            existe = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", (nombre_final, str(f_cad))).fetchone()
+    if st.button("➕ GUARDAR EN LISTA TEMPORAL", use_container_width=True, type="primary"):
+        if nombre_input:
+            nombre_f = str(nombre_input).strip().upper()
+            existe = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", (nombre_f, str(f_cad))).fetchone()
             if existe:
-                c.execute("UPDATE captura_actual SET cantidad = cantidad + ? WHERE nombre=? AND fecha_cad=?", (int(cant), nombre_final, str(f_cad)))
+                c.execute("UPDATE captura_actual SET cantidad = cantidad + ? WHERE nombre=? AND fecha_cad=?", (int(st.session_state.conteo_temp), nombre_f, str(f_cad)))
             else:
-                c.execute("INSERT INTO captura_actual VALUES (?, ?, ?)", (nombre_final, str(f_cad), int(cant)))
+                c.execute("INSERT INTO captura_actual VALUES (?, ?, ?)", (nombre_f, str(f_cad), int(st.session_state.conteo_temp)))
             conn.commit()
             st.session_state.conteo_temp = 0
-            st.toast(f"✅ {nombre_final} guardado")
+            st.toast(f"✅ {nombre_f} añadido a la lista")
             st.rerun()
 
-    # Tabla de captura actual
-    df_hoy_captura = pd.read_sql("SELECT rowid, nombre as Producto, fecha_cad as [Fecha Cad], cantidad as Cantidad FROM captura_actual", conn)
-    if not df_hoy_captura.empty:
-        st.write("---")
-        st.subheader("📋 Lista Actual (Sin procesar)")
-        df_editado = st.data_editor(df_hoy_captura, column_config={"rowid": None}, num_rows="dynamic", use_container_width=True, hide_index=True)
+    # Mostrar lo que se lleva capturado
+    df_captura = pd.read_sql("SELECT rowid, nombre as Producto, fecha_cad as [Fecha Cad], cantidad as Cantidad FROM captura_actual", conn)
+    if not df_captura.empty:
+        st.divider()
+        st.subheader("📋 Productos listos para el corte")
+        df_editado = st.data_editor(df_captura, column_config={"rowid": None}, num_rows="dynamic", use_container_width=True, hide_index=True)
         
-        col_save, col_clear = st.columns(2)
-        with col_save:
-            if st.button("💾 Actualizar Cambios Manuales", use_container_width=True):
+        ca, cb = st.columns(2)
+        with ca:
+            if st.button("💾 Guardar cambios en lista", use_container_width=True):
                 c.execute("DELETE FROM captura_actual")
-                for _, fila in df_editado.iterrows():
-                    if fila['Producto']:
-                        c.execute("INSERT INTO captura_actual VALUES (?, ?, ?)", (fila['Producto'].strip().upper(), str(fila['Fecha Cad']), int(fila['Cantidad'])))
+                for _, f in df_editado.iterrows():
+                    if f['Producto']: c.execute("INSERT INTO captura_actual VALUES (?, ?, ?)", (f['Producto'].upper(), str(f['Fecha Cad']), int(f['Cantidad'])))
                 conn.commit()
                 st.rerun()
-        with col_clear:
-            if st.button("🗑️ Vaciar Lista Visual (Borrar captura)", use_container_width=True):
-                c.execute("DELETE FROM captura_actual")
-                conn.commit()
-                st.rerun()
+        with cb:
+            if st.button("🗑️ Vaciar toda la lista", use_container_width=True):
+                c.execute("DELETE FROM captura_actual"); conn.commit(); st.rerun()
 
+# --- TAB 2: CORTE, WHATSAPP E INVENTARIO ---
 with tab2:
-    st.subheader("🏁 Finalizar Jornada")
-    if st.button("🚀 REALIZAR CORTE FINAL Y COMPARAR VENTAS", type="primary", use_container_width=True):
-        df_actualizado = pd.read_sql("SELECT * FROM captura_actual", conn)
-        if df_actualizado.empty:
-            st.warning("⚠️ La lista de registro está vacía.")
+    st.subheader("🏁 Procesar Corte de Ventas")
+    if st.button("🚀 FINALIZAR Y CALCULAR VENTAS DEL DÍA", type="primary", use_container_width=True):
+        df_act = pd.read_sql("SELECT * FROM captura_actual", conn)
+        if df_act.empty:
+            st.warning("⚠️ No hay productos en la lista del Tab 1 para comparar.")
         else:
-            df_anterior = pd.read_sql("SELECT * FROM base_anterior", conn)
-            ts_mx = datetime.now(zona_mx).strftime("%Y-%m-%d %H:%M:%S")
-            ventas_list = []
+            df_ant = pd.read_sql("SELECT * FROM base_anterior", conn)
+            ts = datetime.now(zona_mx).strftime("%Y-%m-%d %H:%M:%S")
+            ventas_hoy = []
             
-            if not df_anterior.empty:
-                for _, ant in df_anterior.iterrows():
-                    res_hoy = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", (ant['nombre'], ant['fecha_cad'])).fetchone()
-                    cant_hoy = res_hoy[0] if res_hoy else 0
-                    diff = ant['cantidad'] - cant_hoy
-                    if diff > 0:
-                        ventas_list.append({"Producto": ant['nombre'], "Caducidad": ant['fecha_cad'], "Había": ant['cantidad'], "Quedan": cant_hoy, "VENDIDOS": diff})
-                    c.execute("INSERT INTO historial_ventas VALUES (?, ?, ?, ?, ?, ?)", (ant['nombre'], ant['fecha_cad'], ant['cantidad'], cant_hoy, (diff if diff > 0 else 0), ts_mx))
-
-            st.session_state['ultimo_corte'] = pd.DataFrame(ventas_list)
-            c.execute("DELETE FROM base_anterior")
-            c.execute("INSERT INTO base_anterior SELECT * FROM captura_actual")
-            c.execute("DELETE FROM captura_actual")
+            for _, ant in df_ant.iterrows():
+                res = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", (ant['nombre'], ant['fecha_cad'])).fetchone()
+                quedan = res[0] if res else 0
+                vendidos = ant['cantidad'] - quedan
+                if vendidos > 0:
+                    ventas_hoy.append({"Producto": ant['nombre'], "Caducidad": ant['fecha_cad'], "Había": ant['cantidad'], "Quedan": quedan, "VENDIDOS": vendidos})
+                c.execute("INSERT INTO historial_ventas VALUES (?, ?, ?, ?, ?, ?)", (ant['nombre'], ant['fecha_cad'], ant['cantidad'], quedan, (vendidos if vendidos > 0 else 0), ts))
+            
+            st.session_state['resumen_corte'] = pd.DataFrame(ventas_hoy)
+            c.execute("DELETE FROM base_anterior"); c.execute("INSERT INTO base_anterior SELECT * FROM captura_actual"); c.execute("DELETE FROM captura_actual")
             conn.commit()
             st.balloons()
             st.rerun()
 
-    if 'ultimo_corte' in st.session_state:
+    # Resumen de ventas y Botón WhatsApp
+    if 'resumen_corte' in st.session_state:
         with st.container(border=True):
-            st.subheader("📊 Ventas Detectadas en este Corte")
-            df_v = st.session_state['ultimo_corte']
+            st.subheader("📊 Resumen del Corte")
+            df_v = st.session_state['resumen_corte']
             st.table(df_v)
-            if st.button("Cerrar Resumen", use_container_width=True):
-                del st.session_state['ultimo_corte']
-                st.rerun()
+            
+            msg = f"📊 *CORTE CHAMPLITTE* - {fecha_hoy_mx}\n"
+            for _, r in df_v.iterrows():
+                msg += f"🍞 {r['Producto']} | V: *{r['VENDIDOS']}*\n"
+            
+            st.link_button("📲 Enviar reporte por WhatsApp", f"https://wa.me/{numero_whatsapp}?text={urllib.parse.quote(msg)}", use_container_width=True)
+            if st.button("Cerrar Resumen"): del st.session_state['resumen_corte']; st.rerun()
 
-    # Alertas y Estado
-    c_alert, c_inv = st.columns(2)
-    with c_alert:
+    st.divider()
+    
+    # Alertas y Estado Actual
+    col_a, col_b = st.columns(2)
+    with col_a:
         st.subheader("⚠️ Caducan Hoy")
-        df_cad = pd.read_sql("SELECT nombre, cantidad FROM base_anterior WHERE fecha_cad = ?", conn, params=(str(fecha_hoy_mx),))
+        df_cad = pd.read_sql("SELECT nombre as Producto, cantidad as Cantidad FROM base_anterior WHERE fecha_cad = ?", conn, params=(str(fecha_hoy_mx),))
         if not df_cad.empty:
-            st.error(f"Retirar {int(df_cad['cantidad'].sum())} piezas")
+            st.error(f"Retirar {int(df_cad['Cantidad'].sum())} piezas")
             st.dataframe(df_cad, use_container_width=True, hide_index=True)
+            msg_cad = "⚠️ *CADUCIDADES HOY*\n" + "\n".join([f"- {r['Producto']}: {r['Cantidad']}" for _, r in df_cad.iterrows()])
+            st.link_button("📲 Avisar Caducidad", f"https://wa.me/{numero_whatsapp}?text={urllib.parse.quote(msg_cad)}", use_container_width=True)
         else:
-            st.success("Sin caducidades")
+            st.success("✅ Sin productos por caducar hoy")
 
-    with c_inv:
-        st.subheader("🏪 Inventario Real")
-        df_inv = pd.read_sql("SELECT nombre, fecha_cad, cantidad FROM base_anterior", conn)
+    with col_b:
+        st.subheader("🏪 Inventario en Tienda")
+        df_inv = pd.read_sql("SELECT nombre as Producto, fecha_cad as [Cad], cantidad as Cantidad FROM base_anterior", conn)
         if not df_inv.empty:
-            st.metric("Total en tienda", int(df_inv['cantidad'].sum()))
+            st.metric("Piezas en estante", int(df_inv['Cantidad'].sum()))
             st.dataframe(df_inv, use_container_width=True, hide_index=True)
+        else:
+            st.info("Inventario vacío.")
 
+# --- TAB 3: ANÁLISIS ---
 with tab3:
-    st.subheader("📈 Análisis Histórico")
-    df_hist = pd.read_sql("SELECT * FROM historial_ventas", conn)
-    if not df_hist.empty:
-        df_hist['fecha_corte'] = pd.to_datetime(df_hist['fecha_corte'])
-        st.line_chart(df_hist.groupby(df_hist['fecha_corte'].dt.date)['vendidos'].sum())
-        st.dataframe(df_hist.sort_values('fecha_corte', ascending=False), use_container_width=True)
+    st.subheader("📈 Historial y Rendimiento")
+    df_h = pd.read_sql("SELECT * FROM historial_ventas ORDER BY fecha_corte DESC", conn)
+    
+    if not df_h.empty:
+        # Gráfica de Ventas
+        df_h['fecha_corte'] = pd.to_datetime(df_h['fecha_corte'])
+        ventas_diarias = df_h.groupby(df_h['fecha_corte'].dt.date)['vendidos'].sum()
+        st.line_chart(ventas_diarias)
+        
+        # Top Productos
+        st.subheader("🥐 Productos más vendidos")
+        top = df_h.groupby("nombre")["vendidos"].sum().sort_values(ascending=False).head(10)
+        st.bar_chart(top)
+        
+        # Buscador en historial
+        st.subheader("🔍 Historial Completo")
+        busc_h = st.text_input("Filtrar historial por nombre:").upper()
+        df_f = df_h[df_h['nombre'].str.contains(busc_h)] if busc_h else df_h
+        st.dataframe(df_f, use_container_width=True, hide_index=True)
     else:
-        st.info("Sin datos suficientes.")
+        st.info("Aún no hay datos históricos para mostrar.")
