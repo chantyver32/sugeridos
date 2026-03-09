@@ -29,11 +29,10 @@ c.execute('CREATE TABLE IF NOT EXISTS base_anterior (nombre TEXT, fecha_cad DATE
 c.execute('''CREATE TABLE IF NOT EXISTS historial_ventas (
     nombre TEXT, fecha_cad DATE, habia INTEGER, quedan INTEGER, vendidos INTEGER, fecha_corte DATETIME
 )''')
-# Nueva tabla para registrar movimientos (Logs)
 c.execute('CREATE TABLE IF NOT EXISTS registro_actividad (evento TEXT, detalle TEXT, fecha_hora DATETIME)')
 conn.commit()
 
-# ------------------ FUNCIONES CALLBACK (UN SOLO CLIC) ------------------
+# ------------------ FUNCIONES CALLBACK ------------------
 def registrar_log(evento, detalle):
     ahora = datetime.now(zona_mx).strftime("%Y-%m-%d %H:%M:%S")
     c.execute("INSERT INTO registro_actividad VALUES (?, ?, ?)", (evento, detalle, ahora))
@@ -94,7 +93,7 @@ with tab1:
     st.divider()
     df_hoy_captura = pd.read_sql("SELECT rowid, nombre as Producto, fecha_cad as [Fecha Cad], cantidad as Cantidad FROM captura_actual", conn)
     if not df_hoy_captura.empty:
-        df_editado = st.data_editor(df_hoy_captura, column_config={"rowid": None}, num_rows="dynamic", use_container_width=True, hide_index=True)
+        df_editado = st.data_editor(df_hoy_captura, column_config={"rowid": None}, num_rows="dynamic", use_container_width=True, hide_index=True, key="editor_lista")
         col_s, col_v = st.columns(2)
         with col_s:
             if st.button("💾 Guardar cambios en lista", use_container_width=True):
@@ -104,14 +103,14 @@ with tab1:
                         c.execute("INSERT INTO captura_actual VALUES (?, ?, ?)", (fila['Producto'].strip().upper(), str(fila['Fecha Cad']), int(fila['Cantidad'])))
                 registrar_log("ACTUALIZACIÓN", "Se modificó manualmente la lista temporal")
                 conn.commit()
-                st.success("💾 Cambios guardados correctamente.")
+                st.success("💾 Cambios guardados.")
                 st.rerun()
         with col_v:
             if st.button("🗑️ Vaciar lista", use_container_width=True):
                 c.execute("DELETE FROM captura_actual")
-                registrar_log("BORRADO", "Se vació la lista temporal de captura")
+                registrar_log("BORRADO", "Se vació la lista temporal")
                 conn.commit()
-                st.success("🗑️ Lista temporal vaciada.")
+                st.success("🗑️ Lista vaciada.")
                 st.rerun()
 
 with tab2:
@@ -125,33 +124,51 @@ with tab2:
                 st.success("💥 Base de datos eliminada.")
                 st.rerun()
 
+    # Lógica de Corte corregida para que el RERUN no rompa la visualización
     if st.button("🚀 REALIZAR CORTE FINAL", type="primary", use_container_width=True):
-        df_actualizado = pd.read_sql("SELECT * FROM captura_actual", conn)
-        if not df_actualizado.empty:
+        df_captura = pd.read_sql("SELECT * FROM captura_actual", conn)
+        if df_captura.empty:
+            st.warning("⚠️ No hay productos en la lista para comparar.")
+        else:
             df_anterior = pd.read_sql("SELECT * FROM base_anterior", conn)
             ts_mx = datetime.now(zona_mx).strftime("%Y-%m-%d %H:%M:%S")
             ventas_detectadas = []
-            for _, fila_ant in df_anterior.iterrows():
-                res_hoy = c.execute("SELECT SUM(cantidad) FROM captura_actual WHERE nombre=? AND fecha_cad=?", (fila_ant['nombre'], fila_ant['fecha_cad'])).fetchone()
-                cant_hoy = res_hoy[0] if res_hoy[0] else 0
-                diferencia = fila_ant['cantidad'] - cant_hoy
-                if diferencia > 0:
-                    ventas_detectadas.append({"Producto": fila_ant['nombre'], "Había": fila_ant['cantidad'], "Quedan": cant_hoy, "VENDIDOS": diferencia})
-                c.execute("INSERT INTO historial_ventas VALUES (?, ?, ?, ?, ?, ?)", (fila_ant['nombre'], fila_ant['fecha_cad'], int(fila_ant['cantidad']), int(cant_hoy), int(max(0, diferencia)), ts_mx))
             
+            for _, fila_ant in df_anterior.iterrows():
+                # Obtenemos lo que hay hoy en captura para ese producto y fecha
+                res_hoy = c.execute("SELECT SUM(cantidad) FROM captura_actual WHERE nombre=? AND fecha_cad=?", 
+                                   (fila_ant['nombre'], fila_ant['fecha_cad'])).fetchone()
+                cant_hoy = res_hoy[0] if res_hoy[0] is not None else 0
+                
+                diferencia = fila_ant['cantidad'] - cant_hoy
+                v_real = max(0, diferencia)
+                
+                if v_real > 0:
+                    ventas_detectadas.append({
+                        "Producto": fila_ant['nombre'], 
+                        "Había": fila_ant['cantidad'], 
+                        "Quedan": cant_hoy, 
+                        "VENDIDOS": v_real
+                    })
+                
+                c.execute("INSERT INTO historial_ventas VALUES (?, ?, ?, ?, ?, ?)", 
+                         (fila_ant['nombre'], fila_ant['fecha_cad'], int(fila_ant['cantidad']), int(cant_hoy), int(v_real), ts_mx))
+            
+            # Guardamos resultados y rotamos bases
             st.session_state['resumen_ventas'] = pd.DataFrame(ventas_detectadas)
-            c.execute("DELETE FROM base_anterior"); c.execute("INSERT INTO base_anterior SELECT * FROM captura_actual"); c.execute("DELETE FROM captura_actual")
-            registrar_log("CORTE", f"Corte de caja realizado por el usuario")
+            c.execute("DELETE FROM base_anterior")
+            c.execute("INSERT INTO base_anterior SELECT * FROM captura_actual")
+            c.execute("DELETE FROM captura_actual")
+            registrar_log("CORTE", "Corte de caja realizado")
             conn.commit()
             st.balloons()
-            st.rerun()
 
+    # Mostrar resumen si existe en el estado
     if 'resumen_ventas' in st.session_state:
         st.success("📊 Resumen de Ventas Generado")
         df_res = st.session_state['resumen_ventas']
         st.table(df_res)
         
-        # --- ENVÍO WHATSAPP ---
         msg = f"🥐 *REPORTE DE VENTAS CHAMPLITTE*\n📅 {fecha_hoy_mx}\n\n"
         for _, r in df_res.iterrows():
             msg += f"🍞 *{r['Producto']}*\nHabía: {r['Había']} | Quedan: {r['Quedan']}\n💰 *VENDIDOS: {r['VENDIDOS']}*\n---\n"
