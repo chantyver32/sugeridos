@@ -165,12 +165,13 @@ with tab1:
             st.rerun()
 
     st.divider()
+    st.subheader("🛒 Captura de hoy (sin procesar)")
     df_hoy_captura = pd.read_sql("SELECT rowid, nombre, fecha_cad, cantidad FROM captura_actual", conn)
     df_editado = st.data_editor(
         df_hoy_captura,
         column_config={"rowid": None},
         num_rows="dynamic",
-        height=400,
+        height=300,
         use_container_width=True,
         hide_index=True,
         key="editor_conteo"
@@ -186,16 +187,45 @@ with tab1:
         mostrar_exito("Conteo actualizado")
 
 # ------------------------------------------------------------
-# TAB 2: INVENTARIO Y CORTE (CON FILTRADO POR CADUCIDAD)
+# TAB 2: INVENTARIO Y CORTE
 # ------------------------------------------------------------
 
 with tab2:
-    st.subheader("Corte de Ventas")
-    if st.button("🚀 REALIZAR CORTE (Comparar vs Anterior)", type="primary", use_container_width=True):
+    # --- PARTE A: EL STOCK ACTUAL (LO QUE HAY EN ESTANTE) ---
+    st.header("📦 Stock Actual en Estantes")
+    df_stock = pd.read_sql("SELECT nombre as Producto, fecha_cad as Caducidad, cantidad as Existencia FROM base_anterior", conn)
+    
+    if df_stock.empty:
+        st.info("No hay stock registrado en la base anterior. Realiza un corte para cargar inventario.")
+    else:
+        # Filtros de stock
+        fechas_stock = sorted(df_stock['Caducidad'].unique())
+        col_st1, col_st2 = st.columns([2,1])
+        with col_st1:
+            filtro_st_fecha = st.multiselect("Filtrar stock por Caducidad:", fechas_stock, default=fechas_stock)
+        
+        df_stock_filt = df_stock[df_stock['Caducidad'].isin(filtro_st_fecha)]
+        st.dataframe(df_stock_filt, use_container_width=True, hide_index=True)
+        
+        # Botón para mandar lo que hay en stock por WhatsApp
+        if st.button("📲 Mandar Stock actual a WhatsApp"):
+            msg_stock = "🍞 *INVENTARIO DISPONIBLE - CHAMPLITTE*\n\n"
+            for _, r in df_stock_filt.iterrows():
+                msg_stock += f"• {r['Producto']} ({r['Caducidad']}): *{r['Existencia']} pza*\n"
+            link_st = f"https://wa.me/{numero_whatsapp}?text={urllib.parse.quote(msg_stock)}"
+            st.link_button("Abrir WhatsApp", link_st)
+
+    st.divider()
+
+    # --- PARTE B: EL CORTE ---
+    st.header("🚀 Realizar Corte de Ventas")
+    st.write("Compara el **Conteo de hoy** contra el **Stock actual** para calcular ventas.")
+    
+    if st.button("PROCESAR CORTE AHORA", type="primary", use_container_width=True):
         df_actualizado = pd.read_sql("SELECT * FROM captura_actual", conn)
         
         if df_actualizado.empty:
-            st.warning("⚠️ No hay datos nuevos en el conteo para realizar un corte.")
+            st.warning("⚠️ No hay datos en la pestaña de CONTEO. Captura algo primero.")
         else:
             df_anterior = pd.read_sql("SELECT * FROM base_anterior", conn)
             ts_mx = datetime.now(zona_mx).strftime("%Y-%m-%d %H:%M:%S")
@@ -217,65 +247,42 @@ with tab2:
                              int(cant_hoy), int(diferencia), ts_mx)
                         )
 
-                # Generar el resumen para la sesión actual
                 df_resumen = pd.read_sql(f"SELECT nombre as Producto, fecha_cad as Caducidad, habia as Había, quedan as Quedan, vendidos as VENDIDOS FROM historial_ventas WHERE fecha_corte = '{ts_mx}'", conn)
                 st.session_state['ultimo_corte'] = df_resumen
 
-            # Rotación de inventario
+            # Rotación de inventario: Lo que conté hoy es mi nueva base.
             c.execute("DELETE FROM base_anterior")
             c.execute("INSERT INTO base_anterior SELECT * FROM captura_actual")
             c.execute("DELETE FROM captura_actual")
             conn.commit()
-            st.success("✅ Corte finalizado. Los productos restantes son ahora tu nueva base.")
+            st.success("✅ Corte exitoso. El conteo de hoy pasó a ser el Stock Actual.")
             st.rerun()
 
-    # --- SECCIÓN DE ENVÍO POR WHATSAPP CON FILTROS ---
+    # --- SECCIÓN DE ENVÍO DE CORTE (WHATSAPP) ---
     if 'ultimo_corte' in st.session_state:
         st.divider()
-        st.balloons()
-        st.subheader("📦 Resultado del último corte")
-
+        st.subheader("📊 Resumen del Corte Realizado")
         df_v = st.session_state['ultimo_corte']
-
-        # FILTROS
-        fechas_disponibles = sorted(df_v['Caducidad'].unique())
-        col_f1, col_f2 = st.columns([2,1])
         
-        with col_f1:
-            filtro_fechas = st.multiselect(
-                "📅 Filtrar por Fecha de Caducidad:",
-                options=fechas_disponibles,
-                default=fechas_disponibles
-            )
+        fechas_corte = sorted(df_v['Caducidad'].unique())
+        filtro_corte = st.multiselect("Filtrar ventas por Caducidad:", fechas_corte, default=fechas_corte, key="f_corte")
         
-        df_filtrado = df_v[df_v['Caducidad'].isin(filtro_fechas)]
+        df_c_filt = df_v[df_v['Caducidad'].isin(filtro_corte)]
+        st.dataframe(df_c_filt, use_container_width=True, hide_index=True)
 
-        st.dataframe(df_filtrado, use_container_width=True, hide_index=True)
-
-        if not df_filtrado.empty:
-            # Construcción del mensaje de WhatsApp
-            txt_whatsapp = f"🥐 *CHAMPLITTE - REPORTE DE VENTAS*\n"
-            txt_whatsapp += f"📅 _Filtro Caducidad: {', '.join(map(str, filtro_fechas))}_\n\n"
+        if not df_c_filt.empty:
+            txt_wa = f"🥐 *REPORTE DE VENTAS - CHAMPLITTE*\n\n"
+            for _, r in df_c_filt.iterrows():
+                txt_wa += f"▫️ *{r['Producto']}*\n   Vendidos: *{r['VENDIDOS']}* | Quedan: {r['Quedan']}\n   Cad: {r['Caducidad']}\n   ---\n"
             
-            for _, r in df_filtrado.iterrows():
-                txt_whatsapp += (
-                    f"▫️ *{r['Producto']}*\n"
-                    f"   Cad: {r['Caducidad']}\n"
-                    f"   Venta: *{r['VENDIDOS']}* pza (Stock: {r['Quedan']})\n"
-                    f"   --------------------------\n"
-                )
-
-            link = f"https://wa.me/{numero_whatsapp}?text={urllib.parse.quote(txt_whatsapp)}"
-
-            c_wa, c_cl = st.columns(2)
-            with c_wa:
-                st.link_button("📲 Enviar Filtrados a WhatsApp", link, use_container_width=True, type="primary")
-            with c_cl:
+            link_corte = f"https://wa.me/{numero_whatsapp}?text={urllib.parse.quote(txt_wa)}"
+            col1, col2 = st.columns(2)
+            with col1:
+                st.link_button("📲 Enviar Ventas a WhatsApp", link_corte, use_container_width=True, type="primary")
+            with col2:
                 if st.button("Cerrar Resumen", use_container_width=True):
                     del st.session_state['ultimo_corte']
                     st.rerun()
-        else:
-            st.info("Selecciona al menos una fecha para generar el reporte.")
 
 # ------------------------------------------------------------
 # TAB 3: ANÁLISIS
@@ -288,15 +295,14 @@ with tab3:
     )
 
     if df_hist.empty:
-        st.info("Aún no hay historial de ventas registrado.")
+        st.info("Aún no hay historial de ventas.")
     else:
         df_hist['Fecha'] = pd.to_datetime(df_hist['Fecha']).dt.date
-        
         col_a, col_b = st.columns(2)
         with col_a:
-            buscar_h = st.text_input("Filtrar historial por nombre").upper()
+            buscar_h = st.text_input("Buscar producto en historial").upper()
         with col_b:
-            fecha_filtro = st.date_input("Filtrar por fecha de corte", value=None)
+            fecha_filtro = st.date_input("Filtrar por día de corte", value=None)
 
         if buscar_h:
             df_hist = df_hist[df_hist["Producto"].str.contains(buscar_h, na=False)]
