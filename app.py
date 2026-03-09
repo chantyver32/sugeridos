@@ -4,154 +4,178 @@ import sqlite3
 from datetime import datetime
 import pytz
 import urllib.parse
+import time
 
-# ------------------ CONFIGURACIÓN Y ESTILO ------------------
-st.set_page_config(page_title="Inventario Champlitte MX", page_icon="🥐", layout="wide")
+# ------------------ CONFIGURACIÓN GENERAL ------------------
+st.set_page_config(page_title="Champlitte Pro", page_icon="🥐", layout="wide")
 
-st.markdown("""
-    <style>
-    [data-testid="stHeader"] {display:none;}
-    .stMetric { background-color: #f0f2f6; padding: 10px; border-radius: 10px; }
-    </style>
-    """, unsafe_allow_html=True)
-
+# Configuración de zona horaria y datos de contacto
 zona_mx = pytz.timezone('America/Mexico_City')
 fecha_hoy_mx = datetime.now(zona_mx).date()
 numero_whatsapp = "522283530069"
 
-# ------------------ BASE DE DATOS ------------------
+# Estilo personalizado para mejorar la visibilidad en móviles
+st.markdown("""
+    <style>
+    .main { background-color: #f5f5f5; }
+    .stButton>button { width: 100%; border-radius: 10px; height: 3em; font-weight: bold; }
+    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    </style>
+    """, unsafe_allow_html=True)
+
+# ------------------ BASE DE DATOS (PERSISTENTE) ------------------
+# El archivo 'inventario_pan.db' se crea en la carpeta del proyecto y sobrevive a cierres de app.
 conn = sqlite3.connect('inventario_pan.db', check_same_thread=False)
 c = conn.cursor()
 
-# Tabla de Inventario Real (Lo que hay en estante)
-c.execute('''CREATE TABLE IF NOT EXISTS inventario 
-             (nombre TEXT, fecha_cad DATE, cantidad INTEGER, PRIMARY KEY(nombre, fecha_cad))''')
-
-# Historial para reportes
-c.execute('''CREATE TABLE IF NOT EXISTS historial_ventas 
-             (nombre TEXT, fecha_cad DATE, inicial INTEGER, final INTEGER, vendidos INTEGER, fecha_corte DATETIME)''')
-
+c.execute('CREATE TABLE IF NOT EXISTS captura_actual (nombre TEXT, fecha_cad DATE, cantidad INTEGER)')
+c.execute('CREATE TABLE IF NOT EXISTS base_anterior (nombre TEXT, fecha_cad DATE, cantidad INTEGER)')
+c.execute('''CREATE TABLE IF NOT EXISTS historial_ventas (
+    nombre TEXT, fecha_cad DATE, habia INTEGER, quedan INTEGER, vendidos INTEGER, fecha_corte DATETIME
+)''')
 conn.commit()
 
-# ------------------ LÓGICA DE NEGOCIO ------------------
-def registrar_en_inventario(nombre, fecha, cant):
+# ------------------ FUNCIONES DE AYUDA ------------------
+def registrar_en_db(nombre, fecha, cant):
     nombre = nombre.strip().upper()
-    # Si ya existe el producto con esa fecha, sumamos. Si no, lo creamos.
-    c.execute('''INSERT INTO inventario (nombre, fecha_cad, cantidad) 
-                 VALUES (?, ?, ?) 
-                 ON CONFLICT(nombre, fecha_cad) 
-                 DO UPDATE SET cantidad = cantidad + excluded.cantidad''', (nombre, str(fecha), cant))
+    existe = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", (nombre, str(fecha))).fetchone()
+    if existe:
+        c.execute("UPDATE captura_actual SET cantidad = cantidad + ? WHERE nombre=? AND fecha_cad=?", (int(cant), nombre, str(fecha)))
+    else:
+        c.execute("INSERT INTO captura_actual VALUES (?, ?, ?)", (nombre, str(fecha), int(cant)))
     conn.commit()
 
-# ------------------ INTERFAZ (TABS) ------------------
-tab1, tab2, tab3 = st.tabs(["📥 ENTRADA DE PAN", "⚖️ CORTE DE CAJA", "📊 HISTORIAL"])
+# ------------------ INTERFAZ PRINCIPAL ------------------
+st.title("Champlitte: Control de Inventario Infinito 🥐")
 
-# --- TAB 1: ENTRADA DE MERCANCÍA ---
+tab1, tab2, tab3 = st.tabs(["📝 Registro", "📦 Inventario y Corte", "📊 Historial"])
+
+# --- TAB 1: REGISTRO DE PRODUCTOS ---
 with tab1:
-    st.subheader("Registrar Entrada de Pan")
+    st.subheader("Añadir productos al estante")
     
-    if "conteo" not in st.session_state: st.session_state.conteo = 0
-
-    col_busq, col_date, col_n = st.columns([2, 1, 1])
+    if "conteo_temp" not in st.session_state: st.session_state.conteo_temp = 0
     
-    # Obtener lista de productos previos para sugerencias
-    productos_previos = [r[0] for r in c.execute("SELECT DISTINCT nombre FROM inventario").fetchall()]
+    # Buscador con memoria de productos anteriores
+    nombres_sugeridos = [r[0] for r in c.execute("SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual").fetchall()]
     
-    with col_busq:
-        nombre_prod = st.selectbox("Selecciona o escribe Producto", [""] + productos_previos, index=0)
-        nuevo_prod = st.text_input("O escribe uno nuevo:").upper()
-        nombre_final = nuevo_prod if nuevo_prod else nombre_prod
+    col_nom, col_f = st.columns([2, 1])
+    with col_nom:
+        nombre_sel = st.selectbox("Producto (Selecciona o escribe)", [""] + nombres_sugeridos, index=0)
+        nombre_nuevo = st.text_input("O escribe producto nuevo:").upper()
+        nombre_final = nombre_nuevo if nombre_nuevo else nombre_sel
 
-    with col_date:
-        f_cad = st.date_input("Fecha de Caducidad", value=fecha_hoy_mx)
+    with col_f:
+        f_cad = st.date_input("Caducidad:", value=fecha_hoy_mx)
 
-    with col_n:
-        st.metric("Añadiendo", st.session_state.conteo)
-
-    # Botones de conteo rápido
+    # Teclado numérico rápido
+    st.write(f"### Cantidad a sumar: **{st.session_state.conteo_temp}**")
     c1, c2, c3, c4 = st.columns(4)
-    if c1.button("+1"): st.session_state.conteo += 1; st.rerun()
-    if c2.button("+5"): st.session_state.conteo += 5; st.rerun()
-    if c3.button("+10"): st.session_state.conteo += 10; st.rerun()
-    if c4.button("Reset"): st.session_state.conteo = 0; st.rerun()
+    if c1.button("+1"): st.session_state.conteo_temp += 1
+    if c2.button("+5"): st.session_state.conteo_temp += 5
+    if c3.button("+10"): st.session_state.conteo_temp += 10
+    if c4.button("Reset", type="secondary"): st.session_state.conteo_temp = 0
 
-    if st.button("✅ GUARDAR EN INVENTARIO", use_container_width=True, type="primary"):
-        if nombre_final and st.session_state.conteo > 0:
-            registrar_en_inventario(nombre_final, f_cad, st.session_state.conteo)
-            st.success(f"Agregado: {st.session_state.conteo} pzas de {nombre_final}")
-            st.session_state.conteo = 0
+    if st.button("📥 GUARDAR PRODUCTO", type="primary"):
+        if nombre_final and st.session_state.conteo_temp > 0:
+            registrar_en_db(nombre_final, f_cad, st.session_state.conteo_temp)
+            st.success(f"Guardado: {nombre_final} ({st.session_state.conteo_temp} pzs)")
+            st.session_state.conteo_temp = 0
+            time.sleep(1)
             st.rerun()
         else:
             st.error("Falta nombre o cantidad")
 
-# --- TAB 2: CORTE DE CAJA (COMPARACIÓN) ---
+# --- TAB 2: INVENTARIO Y CORTE ---
 with tab2:
-    st.subheader("Corte de Caja / Auditoría Física")
-    st.info("Instrucciones: Escribe en la columna 'Cantidad Real' cuánto pan queda realmente en la charola.")
-
-    df_inv = pd.read_sql("SELECT * FROM inventario WHERE cantidad > 0", conn)
+    col_inv, col_alerta = st.columns(2)
     
-    if not df_inv.empty:
-        # Añadimos columna para que el usuario capture lo que ve
-        df_inv['Cantidad Real'] = df_inv['cantidad'] 
+    with col_inv:
+        st.header("📦 En Estante (Ahora)")
+        df_inv = pd.read_sql("SELECT * FROM base_anterior", conn)
+        if not df_inv.empty:
+            st.dataframe(df_inv, use_container_width=True, hide_index=True)
+            # Botón WhatsApp Inventario
+            msg_inv = "📦 *CHAMPLITTE: INVENTARIO ACTUAL*\n" + "\n".join([f"- {r['nombre']}: {r['cantidad']} (Cad: {r['fecha_cad']})" for _, r in df_inv.iterrows()])
+            st.link_button("📲 Enviar Inventario a WA", f"https://wa.me/{numero_whatsapp}?text={urllib.parse.quote(msg_inv)}")
+        else:
+            st.info("No hay inventario registrado.")
+
+    with col_alerta:
+        st.header("⚠️ Caducan Hoy")
+        df_cad = pd.read_sql("SELECT * FROM base_anterior WHERE fecha_cad <= ?", conn, params=(str(fecha_hoy_mx),))
+        if not df_cad.empty:
+            st.warning(f"Hay {len(df_cad)} productos por vencer.")
+            st.table(df_cad)
+        else:
+            st.success("Nada caduca hoy.")
+
+    st.divider()
+    st.header("🏁 Finalizar Turno / Hacer Corte")
+    st.write("Al hacer el corte, compararemos lo que 'Había' contra lo que acabas de contar en 'Registro'.")
+    
+    if st.button("🚀 EJECUTAR CORTE DE VENTAS", type="primary"):
+        df_hoy = pd.read_sql("SELECT * FROM captura_actual", conn)
+        df_ant = pd.read_sql("SELECT * FROM base_anterior", conn)
         
-        df_editado = st.data_editor(
-            df_inv, 
-            column_config={
-                "nombre": "Producto",
-                "fecha_cad": "Caducidad",
-                "cantidad": "Sistema (Había)",
-                "Cantidad Real": st.column_config.NumberColumn("Cantidad Real (Contada)", min_value=0)
-            },
-            disabled=["nombre", "fecha_cad", "cantidad"],
-            use_container_width=True,
-            hide_index=True
-        )
-
-        if st.button("🚀 REALIZAR CORTE Y GENERAR REPORTE", type="primary", use_container_width=True):
-            reporte_msg = f"🥐 *CORTE CHAMPLITTE*\n📅 {fecha_hoy_mx}\n\n"
-            ahora = datetime.now(zona_mx).strftime("%Y-%m-%d %H:%M:%S")
-            ventas_totales = []
-
-            for _, fila in df_editado.iterrows():
-                vendidos = fila['cantidad'] - fila['Cantidad Real']
+        if df_hoy.empty:
+            st.error("Primero debes capturar el conteo actual en la pestaña 'Registro'.")
+        else:
+            # Lógica de cálculo de ventas
+            ts = datetime.now(zona_mx).strftime("%Y-%m-%d %H:%M:%S")
+            reporte_wa = f"📊 *CORTE CHAMPLITTE* ({ts})\n"
+            
+            for _, ant in df_ant.iterrows():
+                # Buscar si el producto que había sigue estando en el nuevo conteo
+                hoy = df_hoy[(df_hoy['nombre'] == ant['nombre']) & (df_hoy['fecha_cad'] == ant['fecha_cad'])]
+                quedan = hoy['cantidad'].values[0] if not hoy.empty else 0
+                vendidos = ant['cantidad'] - quedan
                 
-                if vendidos >= 0:
-                    # Registrar en historial
-                    c.execute("INSERT INTO historial_ventas VALUES (?, ?, ?, ?, ?, ?)",
-                              (fila['nombre'], fila['fecha_cad'], fila['cantidad'], fila['Cantidad Real'], vendidos, ahora))
-                    
-                    # Actualizar inventario con lo que quedó
-                    if fila['Cantidad Real'] > 0:
-                        c.execute("UPDATE inventario SET cantidad = ? WHERE nombre = ? AND fecha_cad = ?",
-                                  (fila['Cantidad Real'], fila['nombre'], fila['fecha_cad']))
-                    else:
-                        c.execute("DELETE FROM inventario WHERE nombre = ? AND fecha_cad = ?", 
-                                  (fila['nombre'], fila['fecha_cad']))
-                    
-                    if vendidos > 0:
-                        reporte_msg += f"• *{fila['nombre']}*: {vendidos} vendid@s\n"
-                        ventas_totales.append(fila)
+                if vendidos > 0:
+                    c.execute("INSERT INTO historial_ventas VALUES (?,?,?,?,?,?)", 
+                              (ant['nombre'], ant['fecha_cad'], ant['cantidad'], quedan, vendidos, ts))
+                    reporte_wa += f"✅ {ant['nombre']}: *Vendido {vendidos}*\n"
 
+            # Actualizar base: Lo que contamos hoy pasa a ser la "base anterior" para mañana
+            c.execute("DELETE FROM base_anterior")
+            c.execute("INSERT INTO base_anterior SELECT * FROM captura_actual")
+            c.execute("DELETE FROM captura_actual")
             conn.commit()
             
-            # Generar Link de WhatsApp
-            link_wa = f"https://wa.me/{numero_whatsapp}?text={urllib.parse.quote(reporte_msg)}"
-            st.success("Corte realizado con éxito.")
-            st.link_button("📲 Enviar Reporte a WhatsApp", link_wa, use_container_width=True)
             st.balloons()
-            
-    else:
-        st.warning("No hay productos en el inventario. Registra entradas primero.")
+            st.success("Corte completado y guardado permanentemente.")
+            st.link_button("📲 Enviar Reporte de Ventas", f"https://wa.me/{numero_whatsapp}?text={urllib.parse.quote(reporte_wa)}")
+            time.sleep(2)
+            st.rerun()
 
-# --- TAB 3: ANÁLISIS ---
+# --- TAB 3: ANÁLISIS E HISTORIAL ---
 with tab3:
-    st.subheader("Historial de Movimientos")
+    st.header("📊 Historial Acumulado")
     df_hist = pd.read_sql("SELECT * FROM historial_ventas ORDER BY fecha_corte DESC", conn)
-    st.dataframe(df_hist, use_container_width=True)
     
-    if st.button("⚠️ Vaciar Todo el Sistema"):
-        c.execute("DELETE FROM inventario")
-        c.execute("DELETE FROM historial_ventas")
+    if not df_hist.empty:
+        # Filtro de búsqueda
+        busqueda = st.text_input("Filtrar historial por nombre:").upper()
+        if busqueda:
+            df_hist = df_hist[df_hist['nombre'].str.contains(busqueda)]
+            
+        st.dataframe(df_hist, use_container_width=True)
+        
+        # Resumen total
+        total_v = df_hist['vendidos'].sum()
+        st.metric("Total de piezas vendidas (Histórico)", f"{total_v} pzs")
+        
+        if st.button("🗑️ Limpiar Historial (Cuidado)"):
+            c.execute("DELETE FROM historial_ventas")
+            conn.commit()
+            st.rerun()
+    else:
+        st.info("Aún no hay ventas registradas en el historial.")
+
+# --- SIDEBAR (ZONA DE PELIGRO) ---
+with st.sidebar:
+    st.title("Opciones")
+    if st.button("🧹 Borrar Conteo Actual (Paso 1)"):
+        c.execute("DELETE FROM captura_actual")
         conn.commit()
         st.rerun()
