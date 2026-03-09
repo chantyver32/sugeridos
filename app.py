@@ -7,6 +7,7 @@ import urllib.parse
 import time
 
 # ------------------ CONFIGURACIÓN GENERAL ------------------
+
 with st.spinner('Iniciando sistema Champlitte... 🥐'):
     zona_mx = pytz.timezone('America/Mexico_City')
     fecha_hoy_mx = datetime.now(zona_mx).date()
@@ -17,11 +18,13 @@ st.set_page_config(page_title="Inventario Champlitte MX", page_icon="🥐", layo
 mensaje_global = st.empty()
 
 # ------------------ BASE DE DATOS ------------------
+
 conn = sqlite3.connect('inventario_pan.db', check_same_thread=False)
 c = conn.cursor()
 
 c.execute('CREATE TABLE IF NOT EXISTS captura_actual (nombre TEXT, fecha_cad DATE, cantidad INTEGER)')
 c.execute('CREATE TABLE IF NOT EXISTS base_anterior (nombre TEXT, fecha_cad DATE, cantidad INTEGER)')
+
 c.execute('''CREATE TABLE IF NOT EXISTS historial_ventas (
     nombre TEXT,
     fecha_cad DATE,
@@ -30,9 +33,15 @@ c.execute('''CREATE TABLE IF NOT EXISTS historial_ventas (
     vendidos INTEGER,
     fecha_corte DATETIME
 )''')
+
+# índices para acelerar búsquedas
+c.execute("CREATE INDEX IF NOT EXISTS idx_nombre1 ON captura_actual(nombre)")
+c.execute("CREATE INDEX IF NOT EXISTS idx_nombre2 ON base_anterior(nombre)")
+
 conn.commit()
 
 # ------------------ FUNCIONES ------------------
+
 def sonido_click():
     st.markdown(
         """
@@ -57,22 +66,27 @@ def mostrar_exito(mensaje, duracion=2):
     mensaje_global.empty()
 
 # ------------------ SIDEBAR RESET ------------------
+
 st.sidebar.header("⚙️ Configuración")
 
 with st.sidebar.expander("🚨 Zona de Peligro"):
+
     confirmar_reset = st.checkbox("Confirmar que deseo borrar todo", key="check_reset")
 
     if st.button("⚠️ EJECUTAR RESET TOTAL", use_container_width=True):
 
         if confirmar_reset:
+
             c.execute("DELETE FROM captura_actual")
             c.execute("DELETE FROM base_anterior")
             c.execute("DELETE FROM historial_ventas")
+
             conn.commit()
 
             st.sidebar.success("Base de datos limpiada")
 
         else:
+
             st.sidebar.error("Debes confirmar primero")
 
 # ------------------ TABS ------------------
@@ -80,7 +94,7 @@ with st.sidebar.expander("🚨 Zona de Peligro"):
 tab1, tab2, tab3 = st.tabs(["📝 Conteo", "📦 Inventario", "📊 Análisis"])
 
 # ------------------------------------------------------------
-# TAB 1
+# TAB 1  CONTEO
 # ------------------------------------------------------------
 
 with tab1:
@@ -159,7 +173,6 @@ with tab1:
                     "UPDATE captura_actual SET cantidad=cantidad+? WHERE nombre=? AND fecha_cad=?",
                     (int(cant),nombre_final,f_cad)
                 )
-
             else:
                 c.execute(
                     "INSERT INTO captura_actual VALUES (?,?,?)",
@@ -174,59 +187,62 @@ with tab1:
 
             st.rerun()
 
+    # -------- TABLA EDITABLE --------
+
     df_hoy_captura = pd.read_sql("SELECT rowid,nombre,fecha_cad,cantidad FROM captura_actual",conn)
 
-    if not df_hoy_captura.empty:
+    df_hoy_captura['fecha_cad'] = pd.to_datetime(df_hoy_captura['fecha_cad'], errors="coerce").dt.date
 
-        df_hoy_captura['fecha_cad'] = pd.to_datetime(df_hoy_captura['fecha_cad']).dt.date
+    df_editado = st.data_editor(
+        df_hoy_captura,
+        column_config={"rowid":None},
+        num_rows="dynamic",
+        height=500,
+        use_container_width=True,
+        hide_index=True,
+        key="editor_conteo"
+    )
 
-        df_editado = st.data_editor(
-            df_hoy_captura,
-            column_config={"rowid":None},
-            num_rows="dynamic",
-            height=500,
-            use_container_width=True,
-            hide_index=True,
-            key="editor_conteo"
-        )
+    col_s,col_c = st.columns(2)
 
-        col_s,col_c = st.columns(2)
+    with col_s:
 
-        with col_s:
+        if st.button("💾 Guardar cambios",use_container_width=True):
 
-            if st.button("💾 Guardar cambios",use_container_width=True):
+            c.execute("DELETE FROM captura_actual")
 
-                c.execute("DELETE FROM captura_actual")
+            for _,fila in df_editado.iterrows():
 
-                for _,fila in df_editado.iterrows():
+                nombre = str(fila["nombre"]).strip().upper()
 
-                    if fila['nombre']:
+                if nombre != "" and pd.notna(fila["cantidad"]):
 
-                        c.execute(
-                            "INSERT INTO captura_actual VALUES (?,?,?)",
-                            (
-                                fila['nombre'].strip().upper(),
-                                str(fila['fecha_cad']),
-                                int(fila['cantidad'])
-                            )
-                        )
+                    cantidad = int(fila["cantidad"])
+                    fecha = str(fila["fecha_cad"])
 
-                conn.commit()
+                    c.execute(
+                        "INSERT INTO captura_actual VALUES (?,?,?)",
+                        (nombre,fecha,cantidad)
+                    )
 
-                mostrar_exito("Conteo actualizado")
+            conn.commit()
 
-        with col_c:
+            mostrar_exito("Conteo actualizado")
 
-            if st.button("🧹 Limpiar tabla visual",use_container_width=True):
+    with col_c:
 
-                st.session_state["editor_conteo"] = pd.DataFrame(
-                    columns=["rowid","nombre","fecha_cad","cantidad"]
-                )
+        if st.button("🧹 Limpiar tabla visual",use_container_width=True):
 
-                st.rerun()
+            st.session_state.editor_conteo = pd.DataFrame(
+                columns=["rowid","nombre","fecha_cad","cantidad"]
+            )
+
+            st.toast("Tabla limpiada visualmente")
+
+            st.rerun()
 
 # ------------------------------------------------------------
-# TAB 2
+# TAB 2 INVENTARIO Y CORTE
 # ------------------------------------------------------------
 
 with tab2:
@@ -260,7 +276,7 @@ with tab2:
 
                     diferencia = fila_ant['cantidad'] - cant_hoy
 
-                    if diferencia>0:
+                    if diferencia > 0:
 
                         ventas_detectadas.append({
                             "Producto":fila_ant['nombre'],
@@ -320,15 +336,12 @@ with tab2:
             st.link_button("Enviar WhatsApp",link,use_container_width=True)
 
         with col2:
-
             if st.button("Cerrar",use_container_width=True):
-
                 del st.session_state['ultimo_corte']
-
                 st.rerun()
 
 # ------------------------------------------------------------
-# TAB 3
+# TAB 3 ANÁLISIS
 # ------------------------------------------------------------
 
 with tab3:
@@ -347,11 +360,17 @@ with tab3:
     buscar_h = st.text_input("Buscar producto")
 
     if buscar_h:
-        df_hist = df_hist[df_hist["Producto"].str.contains(buscar_h.upper())]
+        df_hist = df_hist[df_hist["Producto"].str.contains(buscar_h.upper(), na=False)]
 
     st.dataframe(df_hist,use_container_width=True)
 
-    st.line_chart(df_hist.groupby("Fecha")["Vendidos"].sum())
+    ventas_dia = df_hist.groupby("Fecha")["Vendidos"].sum().reset_index()
+
+    st.line_chart(
+        ventas_dia,
+        x="Fecha",
+        y="Vendidos"
+    )
 
     top = df_hist.groupby("Producto")["Vendidos"].sum().sort_values(ascending=False)
 
