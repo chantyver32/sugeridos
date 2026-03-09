@@ -59,6 +59,11 @@ def resetear():
     st.session_state.conteo_temp = 0
     sonido_click()
 
+def limpiar_producto():
+    st.session_state.conteo_temp = 0
+    st.session_state.buscar_producto = ""
+    sonido_click()
+
 def mostrar_exito(mensaje, duracion=2):
     mensaje_global.success(mensaje)
     time.sleep(duracion)
@@ -101,7 +106,10 @@ with tab1:
     if "conteo_temp" not in st.session_state:
         st.session_state.conteo_temp = 0
 
-    buscar = st.text_input("Buscar producto").upper()
+    if "buscar_producto" not in st.session_state:
+        st.session_state.buscar_producto = ""
+
+    buscar = st.text_input("Buscar producto", key="buscar_producto").upper()
 
     nombres_prev = [r[0] for r in c.execute(
         "SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual"
@@ -132,43 +140,49 @@ with tab1:
 
     st.metric("Total",st.session_state.conteo_temp)
 
-    if st.button("Registrar",use_container_width=True):
+    colA,colB = st.columns(2)
 
-        if nombre_input:
+    with colA:
+        if st.button("Registrar",use_container_width=True):
 
-            nombre_final = nombre_input.strip().upper()
-            cant = st.session_state.conteo_temp
+            if nombre_input:
 
-            existe = c.execute(
-                "SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?",
-                (nombre_final,f_cad)
-            ).fetchone()
+                nombre_final = nombre_input.strip().upper()
+                cant = st.session_state.conteo_temp
 
-            if existe:
+                existe = c.execute(
+                    "SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?",
+                    (nombre_final,f_cad)
+                ).fetchone()
 
-                c.execute(
-                    "UPDATE captura_actual SET cantidad=cantidad+? WHERE nombre=? AND fecha_cad=?",
-                    (cant,nombre_final,f_cad)
-                )
+                if existe:
 
-            else:
+                    c.execute(
+                        "UPDATE captura_actual SET cantidad=cantidad+? WHERE nombre=? AND fecha_cad=?",
+                        (cant,nombre_final,f_cad)
+                    )
 
-                c.execute(
-                    "INSERT INTO captura_actual VALUES (?,?,?)",
-                    (nombre_final,f_cad,cant)
-                )
+                else:
 
-            conn.commit()
+                    c.execute(
+                        "INSERT INTO captura_actual VALUES (?,?,?)",
+                        (nombre_final,f_cad,cant)
+                    )
 
-            st.session_state.conteo_temp = 0
+                conn.commit()
 
-            st.toast(f"{nombre_final} añadido")
+                st.session_state.conteo_temp = 0
 
-            st.rerun()
+                st.toast(f"{nombre_final} añadido")
+
+                st.rerun()
+
+    with colB:
+        st.button("Nuevo producto / limpiar conteo",on_click=limpiar_producto,use_container_width=True)
 
     df = pd.read_sql("SELECT rowid,nombre,fecha_cad,cantidad FROM captura_actual",conn)
 
-    df_editado = st.data_editor(
+    st.data_editor(
         df,
         column_config={"rowid":None},
         num_rows="dynamic",
@@ -186,10 +200,7 @@ with tab2:
     if st.button("REALIZAR CORTE",use_container_width=True):
 
         df_actual = pd.read_sql("SELECT * FROM captura_actual",conn)
-
         df_anterior = pd.read_sql("SELECT * FROM base_anterior",conn)
-
-        ventas_detectadas = []
 
         ts_mx = datetime.now(zona_mx).strftime("%Y-%m-%d %H:%M:%S")
 
@@ -201,16 +212,7 @@ with tab2:
             ).fetchone()
 
             cant_hoy = res_hoy[0] if res_hoy else 0
-
             diferencia = fila_ant['cantidad'] - cant_hoy
-
-            if diferencia > 0:
-
-                ventas_detectadas.append({
-                    "Producto":fila_ant['nombre'],
-                    "Caducidad":fila_ant['fecha_cad'],
-                    "Vendidos":diferencia
-                })
 
             c.execute(
                 "INSERT INTO historial_ventas VALUES (?,?,?,?,?,?)",
@@ -232,16 +234,12 @@ with tab2:
 
         st.success("Corte realizado")
 
-    # INVENTARIO
-
     df_inventario = pd.read_sql(
         "SELECT nombre as Producto, fecha_cad as Caducidad, cantidad as Cantidad FROM base_anterior",
         conn
     )
 
     st.dataframe(df_inventario,use_container_width=True)
-
-    # FILTRO CADUCIDAD
 
     st.divider()
 
