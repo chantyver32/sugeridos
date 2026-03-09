@@ -89,6 +89,7 @@ tab1, tab2, tab3 = st.tabs(["📝 Conteo", "📦 Inventario y Corte", "📊 Aná
 # ------------------------------------------------------------
 
 with tab1:
+
     if "conteo_temp" not in st.session_state:
         st.session_state.conteo_temp = 0
 
@@ -101,6 +102,7 @@ with tab1:
             del st.session_state["sel_prod"]
 
     col_busq, col_limpiar = st.columns([4,1])
+
     with col_busq:
         buscar = st.text_input(
             "Buscar",
@@ -119,6 +121,7 @@ with tab1:
     sugerencias = [p for p in nombres_prev if buscar in p] if buscar else nombres_prev
 
     col1, col2, col3 = st.columns([2,1,1])
+
     with col1:
         if sugerencias:
             nombre_input = st.selectbox("Seleccionar producto", sugerencias, key="sel_prod")
@@ -132,6 +135,7 @@ with tab1:
         st.write("")
 
     c1, c2, c3, c4 = st.columns(4)
+
     with c1: st.button("+1", use_container_width=True, on_click=sumar, args=(1,))
     with c2: st.button("+5", use_container_width=True, on_click=sumar, args=(5,))
     with c3: st.button("+10", use_container_width=True, on_click=sumar, args=(10,))
@@ -140,10 +144,12 @@ with tab1:
     st.metric("Total a registrar", st.session_state.conteo_temp)
 
     if st.button("➕ Registrar en Inventario", use_container_width=True, type="primary"):
+
         if nombre_input and nombre_input.strip() != "":
+
             nombre_final = nombre_input.strip().upper()
             cant = st.session_state.conteo_temp
-            
+
             existe = c.execute(
                 "SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?",
                 (nombre_final, str(f_cad))
@@ -159,14 +165,18 @@ with tab1:
                     "INSERT INTO captura_actual VALUES (?,?,?)",
                     (nombre_final, str(f_cad), int(cant))
                 )
+
             conn.commit()
             st.session_state.conteo_temp = 0
             st.toast(f"{nombre_final} añadido")
             st.rerun()
 
     st.divider()
+
     st.subheader("🛒 Captura de hoy (sin procesar)")
+
     df_hoy_captura = pd.read_sql("SELECT rowid, nombre, fecha_cad, cantidad FROM captura_actual", conn)
+
     df_editado = st.data_editor(
         df_hoy_captura,
         column_config={"rowid": None},
@@ -178,12 +188,20 @@ with tab1:
     )
 
     if st.button("💾 Guardar Cambios en Tabla", use_container_width=True):
+
         c.execute("DELETE FROM captura_actual")
+
         for _, fila in df_editado.iterrows():
+
             if pd.notna(fila["nombre"]) and str(fila["nombre"]).strip() != "":
-                c.execute("INSERT INTO captura_actual VALUES (?,?,?)", 
-                         (str(fila["nombre"]).upper(), str(fila["fecha_cad"]), int(fila["cantidad"])))
+
+                c.execute(
+                    "INSERT INTO captura_actual VALUES (?,?,?)",
+                    (str(fila["nombre"]).upper(), str(fila["fecha_cad"]), int(fila["cantidad"]))
+                )
+
         conn.commit()
+
         mostrar_exito("Conteo actualizado")
 
 # ------------------------------------------------------------
@@ -191,132 +209,168 @@ with tab1:
 # ------------------------------------------------------------
 
 with tab2:
-    # --- PARTE A: EL STOCK ACTUAL (LO QUE HAY EN ESTANTE) ---
+
     st.header("📦 Stock Actual en Estantes")
-    df_stock = pd.read_sql("SELECT nombre as Producto, fecha_cad as Caducidad, cantidad as Existencia FROM base_anterior", conn)
-    
+
+    df_stock = pd.read_sql(
+        "SELECT nombre as Producto, fecha_cad as Caducidad, cantidad as Existencia FROM base_anterior",
+        conn
+    )
+
     if df_stock.empty:
+
         st.info("No hay stock registrado en la base anterior. Realiza un corte para cargar inventario.")
+
     else:
-        # Filtros de stock
+
         fechas_stock = sorted(df_stock['Caducidad'].unique())
+
         col_st1, col_st2 = st.columns([2,1])
+
         with col_st1:
-            filtro_st_fecha = st.multiselect("Filtrar stock por Caducidad:", fechas_stock, default=fechas_stock)
-        
+            filtro_st_fecha = st.multiselect(
+                "Filtrar stock por Caducidad:",
+                fechas_stock,
+                default=fechas_stock
+            )
+
         df_stock_filt = df_stock[df_stock['Caducidad'].isin(filtro_st_fecha)]
+
         st.dataframe(df_stock_filt, use_container_width=True, hide_index=True)
-        
-        # Botón para mandar lo que hay en stock por WhatsApp
-        if st.button("📲 Mandar Stock actual a WhatsApp"):
-            msg_stock = "🍞 *INVENTARIO DISPONIBLE - CHAMPLITTE*\n\n"
-            for _, r in df_stock_filt.iterrows():
-                msg_stock += f"• {r['Producto']} ({r['Caducidad']}): *{r['Existencia']} pza*\n"
-            link_st = f"https://wa.me/{numero_whatsapp}?text={urllib.parse.quote(msg_stock)}"
-            st.link_button("Abrir WhatsApp", link_st)
+
+        # ---------------- BOTON WHATSAPP STOCK ----------------
+
+        msg_stock = "🍞 *INVENTARIO DISPONIBLE - CHAMPLITTE*\n\n"
+
+        for _, r in df_stock_filt.iterrows():
+
+            msg_stock += (
+                f"▫️ *{r['Producto']}*\n"
+                f"   Cad: {r['Caducidad']} | Stock: *{r['Existencia']} pza*\n\n"
+            )
+
+        link_st = f"https://wa.me/{numero_whatsapp}?text={urllib.parse.quote(msg_stock)}"
+
+        st.link_button(
+            "📲 Enviar Stock Actual a WhatsApp",
+            link_st,
+            use_container_width=True,
+            type="primary"
+        )
 
     st.divider()
 
-    # --- PARTE B: EL CORTE ---
+    # ---------------- CORTE ----------------
+
     st.header("🚀 Realizar Corte de Ventas")
+
     st.write("Compara el **Conteo de hoy** contra el **Stock actual** para calcular ventas.")
-    
+
     if st.button("PROCESAR CORTE AHORA", type="primary", use_container_width=True):
+
         df_actualizado = pd.read_sql("SELECT * FROM captura_actual", conn)
-        
+
         if df_actualizado.empty:
+
             st.warning("⚠️ No hay datos en la pestaña de CONTEO. Captura algo primero.")
+
         else:
+
             df_anterior = pd.read_sql("SELECT * FROM base_anterior", conn)
+
             ts_mx = datetime.now(zona_mx).strftime("%Y-%m-%d %H:%M:%S")
 
             if not df_anterior.empty:
+
                 for _, fila_ant in df_anterior.iterrows():
+
                     res_hoy = c.execute(
                         "SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?",
                         (fila_ant['nombre'], fila_ant['fecha_cad'])
                     ).fetchone()
 
                     cant_hoy = res_hoy[0] if res_hoy else 0
+
                     diferencia = fila_ant['cantidad'] - cant_hoy
 
                     if diferencia > 0:
+
                         c.execute(
                             "INSERT INTO historial_ventas VALUES (?,?,?,?,?,?)",
-                            (fila_ant['nombre'], fila_ant['fecha_cad'], int(fila_ant['cantidad']), 
-                             int(cant_hoy), int(diferencia), ts_mx)
+                            (
+                                fila_ant['nombre'],
+                                fila_ant['fecha_cad'],
+                                int(fila_ant['cantidad']),
+                                int(cant_hoy),
+                                int(diferencia),
+                                ts_mx
+                            )
                         )
 
-                df_resumen = pd.read_sql(f"SELECT nombre as Producto, fecha_cad as Caducidad, habia as Había, quedan as Quedan, vendidos as VENDIDOS FROM historial_ventas WHERE fecha_corte = '{ts_mx}'", conn)
+                df_resumen = pd.read_sql(
+                    f"SELECT nombre as Producto, fecha_cad as Caducidad, habia as Había, quedan as Quedan, vendidos as VENDIDOS FROM historial_ventas WHERE fecha_corte = '{ts_mx}'",
+                    conn
+                )
+
                 st.session_state['ultimo_corte'] = df_resumen
 
-            # Rotación de inventario: Lo que conté hoy es mi nueva base.
             c.execute("DELETE FROM base_anterior")
             c.execute("INSERT INTO base_anterior SELECT * FROM captura_actual")
             c.execute("DELETE FROM captura_actual")
+
             conn.commit()
+
             st.success("✅ Corte exitoso. El conteo de hoy pasó a ser el Stock Actual.")
+
             st.rerun()
-
-    # --- SECCIÓN DE ENVÍO DE CORTE (WHATSAPP) ---
-    if 'ultimo_corte' in st.session_state:
-        st.divider()
-        st.subheader("📊 Resumen del Corte Realizado")
-        df_v = st.session_state['ultimo_corte']
-        
-        fechas_corte = sorted(df_v['Caducidad'].unique())
-        filtro_corte = st.multiselect("Filtrar ventas por Caducidad:", fechas_corte, default=fechas_corte, key="f_corte")
-        
-        df_c_filt = df_v[df_v['Caducidad'].isin(filtro_corte)]
-        st.dataframe(df_c_filt, use_container_width=True, hide_index=True)
-
-        if not df_c_filt.empty:
-            txt_wa = f"🥐 *REPORTE DE VENTAS - CHAMPLITTE*\n\n"
-            for _, r in df_c_filt.iterrows():
-                txt_wa += f"▫️ *{r['Producto']}*\n   Vendidos: *{r['VENDIDOS']}* | Quedan: {r['Quedan']}\n   Cad: {r['Caducidad']}\n   ---\n"
-            
-            link_corte = f"https://wa.me/{numero_whatsapp}?text={urllib.parse.quote(txt_wa)}"
-            col1, col2 = st.columns(2)
-            with col1:
-                st.link_button("📲 Enviar Ventas a WhatsApp", link_corte, use_container_width=True, type="primary")
-            with col2:
-                if st.button("Cerrar Resumen", use_container_width=True):
-                    del st.session_state['ultimo_corte']
-                    st.rerun()
 
 # ------------------------------------------------------------
 # TAB 3: ANÁLISIS
 # ------------------------------------------------------------
 
 with tab3:
+
     df_hist = pd.read_sql(
         "SELECT nombre as Producto, vendidos as Vendidos, fecha_corte as Fecha, fecha_cad as Caducidad FROM historial_ventas",
         conn
     )
 
     if df_hist.empty:
+
         st.info("Aún no hay historial de ventas.")
+
     else:
+
         df_hist['Fecha'] = pd.to_datetime(df_hist['Fecha']).dt.date
+
         col_a, col_b = st.columns(2)
+
         with col_a:
             buscar_h = st.text_input("Buscar producto en historial").upper()
+
         with col_b:
             fecha_filtro = st.date_input("Filtrar por día de corte", value=None)
 
         if buscar_h:
             df_hist = df_hist[df_hist["Producto"].str.contains(buscar_h, na=False)]
+
         if fecha_filtro:
             df_hist = df_hist[df_hist["Fecha"] == fecha_filtro]
 
         st.dataframe(df_hist, use_container_width=True, hide_index=True)
 
         st.divider()
+
         ventas_dia = df_hist.groupby("Fecha")["Vendidos"].sum().reset_index()
+
         st.line_chart(ventas_dia, x="Fecha", y="Vendidos")
 
         top = df_hist.groupby("Producto")["Vendidos"].sum().sort_values(ascending=False)
+
         if not top.empty:
+
             st.subheader("🏆 Producto Estrella")
+
             st.metric(top.index[0], f"{int(top.iloc[0])} vendidos")
+
             st.bar_chart(top)
