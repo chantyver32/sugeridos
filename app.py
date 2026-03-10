@@ -53,18 +53,18 @@ def resetear():
 
 def generar_excel_formato(df, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V."):
     """
-    Genera un Excel replicando exactamente el formato de la imagen proporcionada.
+    Genera un Excel replicando exactamente el formato visual y filtros de la imagen.
     """
     output = io.BytesIO()
     writer = pd.ExcelWriter(output, engine='xlsxwriter')
     workbook = writer.book
     sheet = workbook.add_worksheet('SUGERIDOS')
 
-    # Ocultar cuadrícula para dar aspecto de formato de impresión
+    # Ocultar líneas de cuadrícula para aspecto de reporte limpio
     sheet.hide_gridlines(2)
 
     # --- FORMATOS ---
-    color_guinda = '#8C0000' # Color institucional
+    color_guinda = '#8C0000'
     
     fmt_titulo = workbook.add_format({
         'bold': True, 'font_color': 'white', 'bg_color': color_guinda,
@@ -73,53 +73,53 @@ def generar_excel_formato(df, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V."):
     fmt_subtitulo = workbook.add_format({
         'bold': True, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 11
     })
-    fmt_etiquetas = workbook.add_format({
+    fmt_etiqueta = workbook.add_format({
         'bold': True, 'align': 'left', 'valign': 'vcenter', 'border': 1, 'font_size': 10
     })
-    fmt_datos_gen = workbook.add_format({
+    fmt_valor = workbook.add_format({
         'align': 'left', 'valign': 'vcenter', 'border': 1, 'font_size': 10
     })
-    fmt_encabezado_tabla = workbook.add_format({
+    fmt_header_tabla = workbook.add_format({
         'bold': True, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10
     })
-    fmt_celda_centro = workbook.add_format({
-        'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10
-    })
-    fmt_celda_izq = workbook.add_format({
+    fmt_datos_izq = workbook.add_format({
         'align': 'left', 'valign': 'vcenter', 'border': 1, 'font_size': 10
+    })
+    fmt_datos_centro = workbook.add_format({
+        'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10
     })
 
     # --- ANCHOS DE COLUMNA ---
-    sheet.set_column('A:A', 15)  # Columna A (Etiquetas SUCURSAL, FECHA...)
-    sheet.set_column('B:C', 15)  # Columnas B y C combinadas para completar DESCRIPCIÓN
-    sheet.set_column('D:D', 12)  # Columna D: CANTIDAD
-    sheet.set_column('E:E', 22)  # Columna E: FECHA DE CADUCIDAD
-    sheet.set_column('F:F', 20)  # Columna F: VENDEDOR
+    sheet.set_column('A:A', 15)  # Etiquetas (SUCURSAL, FECHA, ELABORA) y celda vacía abajo
+    sheet.set_column('B:B', 35)  # DESCRIPCIÓN
+    sheet.set_column('C:C', 12)  # CANTIDAD
+    sheet.set_column('D:D', 22)  # FECHA DE CADUCIDAD
+    sheet.set_column('E:E', 20)  # VENDEDOR
 
     # --- ENCABEZADOS PRINCIPALES ---
     sheet.set_row(0, 30)
-    sheet.merge_range('A1:F1', titulo, fmt_titulo)
-    sheet.merge_range('A2:F2', 'SUGERIDOS DEL DÍA', fmt_subtitulo)
+    sheet.merge_range('A1:E1', titulo, fmt_titulo)
+    sheet.merge_range('A2:E2', 'SUGERIDOS DEL DÍA', fmt_subtitulo)
 
-    # --- BLOQUE DE INFORMACIÓN ---
-    sheet.write('A3', ' SUCURSAL', fmt_etiquetas)
-    sheet.merge_range('B3:F3', ' COSTA VERDE', fmt_datos_gen)
+    # --- BLOQUE DE INFORMACIÓN GENERAL ---
+    sheet.write('A3', ' SUCURSAL', fmt_etiqueta)
+    sheet.merge_range('B3:E3', ' COSTA VERDE', fmt_valor)
     
-    sheet.write('A4', ' FECHA', fmt_etiquetas)
+    sheet.write('A4', ' FECHA', fmt_etiqueta)
     fecha_str = datetime.now(pytz.timezone('America/Mexico_City')).strftime("%d/%m/%Y")
-    sheet.merge_range('B4:F4', f' {fecha_str}', fmt_datos_gen)
+    sheet.merge_range('B4:E4', f' {fecha_str}', fmt_valor)
     
-    sheet.write('A5', ' ELABORA', fmt_etiquetas)
-    sheet.merge_range('B5:F5', ' PEDRO GARCÍA', fmt_datos_gen)
+    sheet.write('A5', ' ELABORA', fmt_etiqueta)
+    sheet.merge_range('B5:E5', ' PEDRO GARCÍA', fmt_valor)
 
-    # --- ENCABEZADOS DE TABLA ---
-    # En la imagen "DESCRIPCIÓN" abarca varias celdas para darle anchura
-    sheet.merge_range('A6:C6', 'DESCRIPCIÓN', fmt_encabezado_tabla)
-    sheet.write('D6', 'CANTIDAD', fmt_encabezado_tabla)
-    sheet.write('E6', 'FECHA DE CADUCIDAD', fmt_encabezado_tabla)
-    sheet.write('F6', 'VENDEDOR', fmt_encabezado_tabla)
+    # --- ENCABEZADOS DE TABLA (FILA 6) ---
+    sheet.write('A6', '', fmt_valor) # Celda debajo de "ELABORA" (vacía con borde)
+    sheet.write('B6', 'DESCRIPCIÓN', fmt_header_tabla)
+    sheet.write('C6', 'CANTIDAD', fmt_header_tabla)
+    sheet.write('D6', 'FECHA DE CADUCIDAD', fmt_header_tabla)
+    sheet.write('E6', 'VENDEDOR', fmt_header_tabla)
 
-    # --- LLENADO DE DATOS DESDE BASE DE DATOS ---
+    # --- LLENADO DE DATOS DESDE LA BASE DE DATOS ---
     row = 6
     if not df.empty:
         col_nombre = 'Producto' if 'Producto' in df.columns else 'nombre'
@@ -127,22 +127,17 @@ def generar_excel_formato(df, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V."):
         col_fecha = 'Caducidad' if 'Caducidad' in df.columns else 'fecha_cad'
 
         for _, fila in df.iterrows():
-            # DESCRIPCIÓN combinando A, B y C
-            sheet.merge_range(row, 0, row, 2, f" {str(fila[col_nombre])}", fmt_celda_izq)
-            # CANTIDAD
-            sheet.write(row, 3, fila[col_cant], fmt_celda_centro)
-            # FECHA DE CADUCIDAD
-            sheet.write(row, 4, str(fila[col_fecha]), fmt_celda_centro)
-            # VENDEDOR siempre Pedro García
-            sheet.write(row, 5, 'PEDRO GARCÍA', fmt_celda_centro)
+            sheet.write(row, 0, '', fmt_valor) # Columna A vacía para mantener la cuadrícula
+            sheet.write(row, 1, f" {str(fila[col_nombre])}", fmt_datos_izq)
+            sheet.write(row, 2, fila[col_cant], fmt_datos_centro)
+            sheet.write(row, 3, str(fila[col_fecha]), fmt_datos_centro)
+            sheet.write(row, 4, 'PEDRO GARCÍA', fmt_datos_centro) # Vendedor fijo
             row += 1
 
-    # Rellenar filas en blanco para que el formato se vea completo (hasta la fila 25 aprox)
-    for r in range(row, 27):
-        sheet.merge_range(r, 0, r, 2, '', fmt_celda_izq)
-        sheet.write(r, 3, '', fmt_celda_centro)
-        sheet.write(r, 4, '', fmt_celda_centro)
-        sheet.write(r, 5, '', fmt_celda_centro)
+    # --- AGREGAR FILTROS (AUTOFILTER) ---
+    # Aplica filtro desde la fila 6 (índice 5), Columna B (índice 1) hasta Columna E (índice 4)
+    last_row = row - 1 if row > 6 else 6
+    sheet.autofilter(5, 1, last_row, 4)
 
     writer.close()
     return output.getvalue()
@@ -306,7 +301,7 @@ with tab2:
         with col_w2:
             st.download_button("📊 Descargar formato CSV", data=csv_stock, file_name=f"inventario_{fecha_hoy_mx}.csv", mime="text/csv", use_container_width=True)
         with col_w3:
-            st.download_button("📗 Descargar Excel (Formato Visual)", data=excel_stock, file_name=f"CostaVerde_{fecha_hoy_mx}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+            st.download_button("📗 Descargar Excel Sugeridos", data=excel_stock, file_name=f"Sugeridos_{fecha_hoy_mx}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
 
     st.divider()
     st.header("🚀 Realizar Corte de Ventas")
