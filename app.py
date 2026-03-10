@@ -5,36 +5,33 @@ from datetime import datetime
 import pytz
 import urllib.parse
 import time
+import os
+
 from openpyxl import Workbook
-from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
-from io import BytesIO
+from openpyxl.styles import Font, Alignment, PatternFill
+from openpyxl.utils import get_column_letter
+
 
 # ------------------ CONFIGURACIÓN GENERAL ------------------
+
+st.set_page_config(page_title="Inventario Champlitte MX", page_icon="🥐", layout="wide")
 
 with st.spinner('Iniciando sistema Champlitte... 🥐'):
     zona_mx = pytz.timezone('America/Mexico_City')
     fecha_hoy_mx = datetime.now(zona_mx).date()
 
-st.set_page_config(page_title="Inventario Champlitte MX", page_icon="🥐", layout="wide")
+# ------------------ WHATSAPP DESTINOS ------------------
 
-# ------------------ WHATSAPP ------------------
+st.sidebar.subheader("📲 Envío de Reportes WhatsApp")
 
 contactos_whatsapp = {
-    "Administrador": "522283530069",
-    "Sucursal": "522299359597"
+    "Sucursal Costa Verde": "522299359597",
+    "Producción": "522281342454",
+    "Gerencia": "522283530069"
 }
 
-contacto_seleccionado = st.sidebar.selectbox(
-    "📲 Enviar reportes a:",
-    list(contactos_whatsapp.keys())
-)
-
-numero_whatsapp = contactos_whatsapp[contacto_seleccionado]
-
-# Contenedores para mensajes
-msg_conteo = st.empty()
-msg_tabla = st.empty()
-msg_corte = st.empty()
+destino = st.sidebar.selectbox("Enviar reportes a:", list(contactos_whatsapp.keys()))
+numero_whatsapp = contactos_whatsapp[destino]
 
 # ------------------ BASE DE DATOS ------------------
 
@@ -44,105 +41,48 @@ c = conn.cursor()
 c.execute('CREATE TABLE IF NOT EXISTS captura_actual (nombre TEXT, fecha_cad DATE, cantidad INTEGER)')
 c.execute('CREATE TABLE IF NOT EXISTS base_anterior (nombre TEXT, fecha_cad DATE, cantidad INTEGER)')
 
-c.execute('''CREATE TABLE IF NOT EXISTS historial_ventas (
-    nombre TEXT,
-    fecha_cad DATE,
-    habia INTEGER,
-    quedan INTEGER,
-    vendidos INTEGER,
-    fecha_corte DATETIME
-)''')
+c.execute('''
+CREATE TABLE IF NOT EXISTS historial_ventas (
+nombre TEXT,
+fecha_cad DATE,
+habia INTEGER,
+quedan INTEGER,
+vendidos INTEGER,
+fecha_corte DATETIME
+)
+''')
 
 conn.commit()
 
-# ------------------ FUNCIONES ------------------
+# ------------------ FUNCION GENERAR EXCEL COSTA VERDE ------------------
 
-def sonido_click():
-    st.markdown(
-        """
-        <audio autoplay>
-        <source src="https://www.soundjay.com/buttons/sounds/button-16.mp3">
-        </audio>
-        """,
-        unsafe_allow_html=True
-    )
-
-def sumar(valor):
-    st.session_state.conteo_temp += valor
-    sonido_click()
-
-def resetear():
-    st.session_state.conteo_temp = 0
-    sonido_click()
-
-def generar_csv(df):
-    return df.to_csv(index=False).encode('utf-8')
-
-def generar_excel_costa_verde(conn):
-
-    df = pd.read_sql("SELECT nombre, fecha_cad, cantidad FROM base_anterior", conn)
+def generar_excel_costa_verde(df):
 
     wb = Workbook()
     ws = wb.active
-    ws.title = "COSTA VERDE"
 
-    verde = PatternFill(start_color="A9D08E", end_color="A9D08E", fill_type="solid")
+    ws.merge_cells('A1:F1')
+    ws['A1'] = "COSTA VERDE"
+    ws['A1'].font = Font(size=20, bold=True)
+    ws['A1'].alignment = Alignment(horizontal="center")
 
-    ws.merge_cells("A1:I1")
-    ws["A1"] = "COSTA VERDE"
-    ws["A1"].font = Font(size=24, bold=True)
-    ws["A1"].alignment = Alignment(horizontal="center")
+    ws.append(["PRODUCTO","CANTIDAD","FECHA"])
 
-    fila = 3
+    for _, row in df.iterrows():
+        ws.append([row["nombre"],row["cantidad"],row["fecha_cad"]])
 
-    ws["A3"] = "PRODUCTO"
-    ws["B3"] = "CANTIDAD"
-    ws["C3"] = "CADUCIDAD"
+    for col in range(1,4):
+        ws.column_dimensions[get_column_letter(col)].width = 25
 
-    for cell in ws["3:3"]:
-        cell.font = Font(bold=True)
-        cell.fill = verde
+    archivo = f"reporte_{fecha_hoy_mx}.xlsx"
+    wb.save(archivo)
 
-    for _, r in df.iterrows():
-
-        ws.cell(row=fila+1, column=1, value=r["nombre"])
-        ws.cell(row=fila+1, column=2, value=r["cantidad"])
-        ws.cell(row=fila+1, column=3, value=r["fecha_cad"])
-
-        fila += 1
-
-    buffer = BytesIO()
-    wb.save(buffer)
-    buffer.seek(0)
-
-    return buffer
-
-# ------------------ SIDEBAR RESET ------------------
-
-st.sidebar.header("⚙️ Configuración")
-
-with st.sidebar.expander("🚨 Zona de Peligro"):
-    confirmar_reset = st.checkbox("Confirmar que deseo borrar todo")
-
-    if st.button("⚠️ EJECUTAR RESET TOTAL"):
-
-        if confirmar_reset:
-
-            c.execute("DELETE FROM captura_actual")
-            c.execute("DELETE FROM base_anterior")
-            c.execute("DELETE FROM historial_ventas")
-            conn.commit()
-
-            st.sidebar.success("Base limpiada")
-            time.sleep(1)
-            st.rerun()
-
-        else:
-            st.sidebar.error("Debes confirmar")
+    return archivo
 
 # ------------------ TABS ------------------
 
-tab1, tab2, tab3 = st.tabs(["📝 Conteo", "📦 Inventario y Corte", "📊 Análisis"])
+tab1, tab2, tab3 = st.tabs(["📝 Conteo","📦 Inventario y Corte","📊 Análisis"])
+
 
 # ------------------------------------------------------------
 # TAB 1
@@ -153,43 +93,52 @@ with tab1:
     if "conteo_temp" not in st.session_state:
         st.session_state.conteo_temp = 0
 
-    buscar = st.text_input("Buscar producto").upper()
-
     nombres_prev = [r[0] for r in c.execute(
-        "SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual"
+    "SELECT DISTINCT nombre FROM captura_actual"
     ).fetchall()]
 
-    sugerencias = [p for p in nombres_prev if buscar in p] if buscar else nombres_prev
+    nombre_input = st.selectbox("Producto", nombres_prev if nombres_prev else [""])
 
-    nombre_input = st.selectbox("Producto", sugerencias)
+    f_cad = st.date_input("Caducidad",value=fecha_hoy_mx)
 
-    f_cad = st.date_input("Caducidad", value=fecha_hoy_mx)
+    col1,col2,col3,col4 = st.columns(4)
 
-    c1, c2, c3, c4 = st.columns(4)
+    if col1.button("+1"):
+        st.session_state.conteo_temp += 1
 
-    with c1: st.button("+1", on_click=sumar, args=(1,))
-    with c2: st.button("+5", on_click=sumar, args=(5,))
-    with c3: st.button("+10", on_click=sumar, args=(10,))
-    with c4: st.button("Borrar", on_click=resetear)
+    if col2.button("+5"):
+        st.session_state.conteo_temp += 5
 
-    st.metric("Total", st.session_state.conteo_temp)
+    if col3.button("+10"):
+        st.session_state.conteo_temp += 10
 
-    if st.button("➕ Registrar"):
+    if col4.button("Borrar"):
+        st.session_state.conteo_temp = 0
 
-        nombre_final = nombre_input.upper()
+    st.metric("Total a registrar",st.session_state.conteo_temp)
+
+    if st.button("➕ Registrar en Inventario"):
+
         cant = st.session_state.conteo_temp
 
-        c.execute(
-            "INSERT INTO captura_actual VALUES (?,?,?)",
-            (nombre_final, str(f_cad), int(cant))
-        )
+        if nombre_input:
 
-        conn.commit()
+            c.execute("INSERT INTO captura_actual VALUES (?,?,?)",
+            (nombre_input,str(f_cad),cant))
 
-        st.success("Registrado")
-        st.session_state.conteo_temp = 0
-        time.sleep(1)
-        st.rerun()
+            conn.commit()
+
+            st.session_state.conteo_temp = 0
+
+            st.success("Producto registrado")
+
+            time.sleep(1)
+
+            st.rerun()
+
+    df = pd.read_sql("SELECT * FROM captura_actual",conn)
+
+    st.dataframe(df,use_container_width=True)
 
 # ------------------------------------------------------------
 # TAB 2
@@ -197,75 +146,95 @@ with tab1:
 
 with tab2:
 
-    st.header("Stock")
+    st.header("Inventario actual")
 
-    df_stock = pd.read_sql("SELECT nombre as Producto, fecha_cad as Caducidad, cantidad as Existencia FROM base_anterior", conn)
+    df_stock = pd.read_sql("SELECT * FROM base_anterior",conn)
 
-    if df_stock.empty:
-
-        st.info("No hay inventario")
-
-    else:
-
-        st.dataframe(df_stock, use_container_width=True)
-
-        msg_stock = "🍞 INVENTARIO CHAMPLITTE\n\n"
-
-        for _, r in df_stock.iterrows():
-
-            msg_stock += f"{r['Producto']} | {r['Existencia']} pza | {r['Caducidad']}\n"
-
-        link_st = f"https://wa.me/{numero_whatsapp}?text={urllib.parse.quote(msg_stock)}"
-
-        st.link_button("Enviar a WhatsApp", link_st)
-
-    st.divider()
-
-    st.subheader("Exportar")
-
-    df_export = pd.read_sql("SELECT * FROM base_anterior", conn)
-
-    if not df_export.empty:
-
-        csv_file = generar_csv(df_export)
-
-        st.download_button(
-            "Descargar CSV",
-            csv_file,
-            "inventario.csv",
-            "text/csv"
-        )
-
-        excel_file = generar_excel_costa_verde(conn)
-
-        st.download_button(
-            "Descargar Excel COSTA VERDE",
-            excel_file,
-            "produccion.xlsx"
-        )
-
-    st.divider()
-
-    st.header("Procesar Corte")
+    st.dataframe(df_stock,use_container_width=True)
 
     if st.button("PROCESAR CORTE"):
 
-        df_actualizado = pd.read_sql("SELECT * FROM captura_actual", conn)
+        df_actual = pd.read_sql("SELECT * FROM captura_actual",conn)
 
-        if df_actualizado.empty:
+        if df_actual.empty:
 
             st.warning("No hay conteo")
 
         else:
 
+            ts = datetime.now(zona_mx).strftime("%Y-%m-%d %H:%M:%S")
+
+            df_anterior = pd.read_sql("SELECT * FROM base_anterior",conn)
+
+            for _,fila in df_anterior.iterrows():
+
+                res = c.execute(
+                "SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?",
+                (fila["nombre"],fila["fecha_cad"])
+                ).fetchone()
+
+                cant_hoy = res[0] if res else 0
+
+                vendidos = fila["cantidad"] - cant_hoy
+
+                if vendidos>0:
+
+                    c.execute("INSERT INTO historial_ventas VALUES (?,?,?,?,?,?)",
+                    (fila["nombre"],fila["fecha_cad"],fila["cantidad"],cant_hoy,vendidos,ts))
+
             c.execute("DELETE FROM base_anterior")
+
             c.execute("INSERT INTO base_anterior SELECT * FROM captura_actual")
+
             c.execute("DELETE FROM captura_actual")
 
             conn.commit()
 
-            st.success("Corte procesado")
-            st.balloons()
+            st.success("Corte realizado")
+
+            time.sleep(1)
+
+            st.rerun()
+
+    st.divider()
+
+    st.header("Exportar Reportes")
+
+    df_hist = pd.read_sql("SELECT * FROM historial_ventas",conn)
+
+    if not df_hist.empty:
+
+        csv = df_hist.to_csv(index=False).encode("utf-8")
+
+        st.download_button(
+        "⬇ Descargar CSV",
+        csv,
+        file_name="reporte_ventas.csv",
+        mime="text/csv"
+        )
+
+        if st.button("📊 Generar Excel Costa Verde"):
+
+            archivo = generar_excel_costa_verde(df_hist)
+
+            with open(archivo,"rb") as f:
+
+                st.download_button(
+                "⬇ Descargar Excel",
+                f,
+                file_name=archivo
+                )
+
+        mensaje = "REPORTE DE VENTAS CHAMPLITTE\n\n"
+
+        for _,r in df_hist.iterrows():
+
+            mensaje += f"{r['nombre']} - Vendidos {r['vendidos']}\n"
+
+        link = f"https://wa.me/{numero_whatsapp}?text={urllib.parse.quote(mensaje)}"
+
+        st.link_button("📲 Enviar Reporte por WhatsApp",link)
+
 
 # ------------------------------------------------------------
 # TAB 3
@@ -273,10 +242,7 @@ with tab2:
 
 with tab3:
 
-    df_hist = pd.read_sql(
-        "SELECT nombre as Producto, vendidos as Vendidos, fecha_corte as Fecha FROM historial_ventas",
-        conn
-    )
+    df_hist = pd.read_sql("SELECT * FROM historial_ventas",conn)
 
     if df_hist.empty:
 
@@ -284,18 +250,18 @@ with tab3:
 
     else:
 
-        st.dataframe(df_hist)
+        df_hist["fecha_corte"] = pd.to_datetime(df_hist["fecha_corte"]).dt.date
 
-        ventas_dia = df_hist.groupby("Fecha")["Vendidos"].sum().reset_index()
+        ventas = df_hist.groupby("fecha_corte")["vendidos"].sum().reset_index()
 
-        st.line_chart(ventas_dia, x="Fecha", y="Vendidos")
+        st.line_chart(ventas,x="fecha_corte",y="vendidos")
 
-        top = df_hist.groupby("Producto")["Vendidos"].sum().sort_values(ascending=False)
+        top = df_hist.groupby("nombre")["vendidos"].sum().sort_values(ascending=False)
 
         if not top.empty:
 
-            st.subheader("Producto Estrella")
+            st.subheader("Producto estrella")
 
-            st.metric(top.index[0], f"{int(top.iloc[0])} vendidos")
+            st.metric(top.index[0],int(top.iloc[0]))
 
             st.bar_chart(top)
