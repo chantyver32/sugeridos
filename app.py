@@ -25,81 +25,98 @@ c.execute('''CREATE TABLE IF NOT EXISTS historial_ventas (
 )''')
 conn.commit()
 
-# ------------------ FUNCIÓN EXCEL (ESTILO IMAGEN) ------------------
+# ------------------ FUNCIÓN EXCEL (IDÉNTICO A LA IMAGEN) ------------------
 def generar_excel_formato(df, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V."):
     """
-    Genera un archivo Excel que replica visualmente el formato de la imagen adjunta.
+    Genera un archivo Excel replicando con exactitud la estructura de celdas y diseño de la foto.
     """
     output = io.BytesIO()
     writer = pd.ExcelWriter(output, engine='xlsxwriter')
     workbook = writer.book
     sheet = workbook.add_worksheet('SUGERIDOS')
 
-    # --- FORMATOS ---
-    color_guinda = '#800000'
+    # Ocultar las líneas de la cuadrícula de fondo para que se vea limpio
+    sheet.hide_gridlines(2)
+
+    # --- DEFINICIÓN DE FORMATOS ---
+    color_guinda = '#8C1515'
+    
     fmt_header_rojo = workbook.add_format({
         'bold': True, 'font_color': 'white', 'bg_color': color_guinda,
-        'align': 'center', 'valign': 'vcenter', 'font_size': 14, 'border': 1
+        'align': 'center', 'valign': 'vcenter', 'font_size': 12, 'border': 1
     })
     fmt_sub_header = workbook.add_format({
-        'bold': True, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 11
+        'bold': True, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10
     })
     fmt_label = workbook.add_format({
-        'bold': True, 'bg_color': '#F2F2F2', 'border': 1, 'font_size': 10
+        'bold': True, 'align': 'left', 'valign': 'vcenter', 'border': 1, 'font_size': 9
     })
-    fmt_data_gray = workbook.add_format({'border': 1, 'font_size': 10})
+    fmt_data_gray = workbook.add_format({
+        'border': 1, 'align': 'left', 'valign': 'vcenter', 'font_size': 9
+    })
     fmt_col_title = workbook.add_format({
-        'bold': True, 'bg_color': '#FFFFFF', 'align': 'center', 'border': 1, 'font_size': 10
+        'bold': True, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 9
     })
-    fmt_border = workbook.add_format({'border': 1})
+    fmt_data_center = workbook.add_format({
+        'border': 1, 'align': 'center', 'valign': 'vcenter', 'font_size': 9
+    })
+    fmt_data_left = workbook.add_format({
+        'border': 1, 'align': 'left', 'valign': 'vcenter', 'font_size': 9
+    })
 
     # --- AJUSTE DE COLUMNAS ---
-    sheet.set_column('A:A', 15)  # Etiquetas
-    sheet.set_column('B:B', 40)  # DESCRIPCIÓN
-    sheet.set_column('C:C', 12)  # CANTIDAD
-    sheet.set_column('D:D', 20)  # FECHA CADUCIDAD
-    sheet.set_column('E:E', 25)  # VENDEDOR
+    sheet.set_column('A:A', 14)  # Col A: SUCURSAL / FECHA / ELABORA
+    sheet.set_column('B:B', 22)  # Col B: DESCRIPCIÓN (Parte 1)
+    sheet.set_column('C:C', 22)  # Col C: DESCRIPCIÓN (Parte 2)
+    sheet.set_column('D:D', 12)  # Col D: CANTIDAD
+    sheet.set_column('E:E', 22)  # Col E: FECHA CADUCIDAD
+    sheet.set_column('F:F', 28)  # Col F: VENDEDOR
 
-    # --- ENCABEZADO SUPERIOR ---
-    sheet.merge_range('A1:E1', titulo, fmt_header_rojo)
-    sheet.set_row(0, 30)
-    sheet.merge_range('A2:E2', "SUGERIDOS DEL DÍA", fmt_sub_header)
-
-    # Filas de Información (Basado en imagen)
-    sheet.write('A3', "SUCURSAL", fmt_label)
-    sheet.merge_range('B3:E3', "COSTA VERDE", fmt_data_gray)
+    # --- ENCABEZADOS SUPERIORES ---
+    # Fila 1 (Título que abarca de la A a la F)
+    sheet.merge_range('A1:F1', titulo, fmt_header_rojo)
+    sheet.set_row(0, 32)
     
-    sheet.write('A4', "FECHA", fmt_label)
-    sheet.merge_range('B4:E4', str(datetime.now(zona_mx).strftime("%d/%m/%Y")), fmt_data_gray)
+    # Fila 2 (Subtítulo)
+    sheet.merge_range('A2:F2', "SUGERIDOS DEL DÍA", fmt_sub_header)
+
+    # Filas 3, 4 y 5 (Datos Generales)
+    sheet.write('A3', " SUCURSAL", fmt_label)
+    sheet.merge_range('B3:F3', "", fmt_data_gray) # Espacio para sucursal
     
-    sheet.write('A5', "ELABORA", fmt_label)
-    sheet.merge_range('B5:E5', "PEDRO GARCÍA", fmt_data_gray)
+    sheet.write('A4', " FECHA", fmt_label)
+    sheet.merge_range('B4:F4', " " + str(datetime.now(zona_mx).strftime("%d/%m/%Y")), fmt_data_gray)
+    
+    sheet.write('A5', " ELABORA", fmt_label)
+    sheet.merge_range('B5:F5', " PEDRO GARCÍA", fmt_data_gray)
 
-    # Encabezados de Tabla
-    sheet.write('B6', "DESCRIPCIÓN", fmt_col_title)
-    sheet.write('C6', "CANTIDAD", fmt_col_title)
-    sheet.write('D6', "FECHA DE CADUCIDAD", fmt_col_title)
-    sheet.write('E6', "VENDEDOR", fmt_col_title)
+    # --- ENCABEZADOS DE TABLA (Fila 6) ---
+    # En la imagen, B y C están fusionados para Descripción, A queda fuera de la tabla
+    sheet.merge_range('B6:C6', "DESCRIPCIÓN", fmt_col_title)
+    sheet.write('D6', "CANTIDAD", fmt_col_title)
+    sheet.write('E6', "FECHA DE CADUCIDAD", fmt_col_title)
+    sheet.write('F6', "VENDEDOR", fmt_col_title)
 
-    # --- DATOS ---
+    # --- LLENADO DE DATOS ---
     row = 6
     if not df.empty:
-        # Detectar nombres de columnas
         col_n = 'Producto' if 'Producto' in df.columns else 'nombre'
         col_c = 'Existencia' if 'Existencia' in df.columns else 'cantidad'
         col_f = 'Caducidad' if 'Caducidad' in df.columns else 'fecha_cad'
 
         for _, fila in df.iterrows():
-            sheet.write(row, 1, str(fila[col_n]), fmt_border)
-            sheet.write(row, 2, fila[col_c], fmt_border)
-            sheet.write(row, 3, str(fila[col_f]), fmt_border)
-            sheet.write(row, 4, "PEDRO GARCÍA", fmt_border) # Vendedor solicitado
+            sheet.merge_range(row, 1, row, 2, " " + str(fila[col_n]), fmt_data_left) # B y C fusionados
+            sheet.write(row, 3, fila[col_c], fmt_data_center)                        # D
+            sheet.write(row, 4, str(fila[col_f]), fmt_data_center)                   # E
+            sheet.write(row, 5, "PEDRO GARCÍA", fmt_data_center)                     # F (Vendedor fijo)
             row += 1
     
-    # Rellenar filas vacías para mantener el formato visual (hasta la 25)
-    for r in range(row, 25):
-        for c_idx in range(1, 5):
-            sheet.write(r, c_idx, "", fmt_border)
+    # Rellenar filas vacías para que el cuadro llegue hasta abajo (como un formato impreso real)
+    for r in range(row, 26):
+        sheet.merge_range(r, 1, r, 2, "", fmt_data_left)
+        sheet.write(r, 3, "", fmt_data_center)
+        sheet.write(r, 4, "", fmt_data_center)
+        sheet.write(r, 5, "", fmt_data_center)
 
     writer.close()
     return output.getvalue()
@@ -176,7 +193,7 @@ with tab2:
         
         # Botones de Exportación
         excel_data = generar_excel_formato(df_stock)
-        st.download_button("📗 Descargar Excel (Formato Champlitte)", data=excel_data, file_name=f"Inventario_{fecha_hoy_mx}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+        st.download_button("📗 Descargar Excel Sugeridos", data=excel_data, file_name=f"Sugeridos_{fecha_hoy_mx}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
 
     st.divider()
     if st.button("🚀 REALIZAR CORTE DE VENTAS", type="primary", use_container_width=True):
@@ -207,4 +224,3 @@ with tab3:
         st.dataframe(df_hist, use_container_width=True)
     else:
         st.info("No hay historial aún.")
-
