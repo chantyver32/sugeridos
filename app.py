@@ -63,7 +63,7 @@ def generar_excel_formato(df, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V."):
     # Ocultar líneas de cuadrícula para aspecto de reporte limpio
     sheet.hide_gridlines(2)
 
-    # --- FORMATOS ---
+    # --- FORMATOS (TODOS CENTRADOS) ---
     color_guinda = '#8C0000'
     
     fmt_titulo = workbook.add_format({
@@ -74,16 +74,13 @@ def generar_excel_formato(df, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V."):
         'bold': True, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 11
     })
     fmt_etiqueta = workbook.add_format({
-        'bold': True, 'align': 'left', 'valign': 'vcenter', 'border': 1, 'font_size': 10
+        'bold': True, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10
     })
     fmt_valor = workbook.add_format({
-        'align': 'left', 'valign': 'vcenter', 'border': 1, 'font_size': 10
+        'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10
     })
     fmt_header_tabla = workbook.add_format({
         'bold': True, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10
-    })
-    fmt_datos_izq = workbook.add_format({
-        'align': 'left', 'valign': 'vcenter', 'border': 1, 'font_size': 10
     })
     fmt_datos_centro = workbook.add_format({
         'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10
@@ -102,15 +99,15 @@ def generar_excel_formato(df, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V."):
     sheet.merge_range('A2:E2', 'SUGERIDOS DEL DÍA', fmt_subtitulo)
 
     # --- BLOQUE DE INFORMACIÓN GENERAL ---
-    sheet.write('A3', ' SUCURSAL', fmt_etiqueta)
-    sheet.merge_range('B3:E3', ' COSTA VERDE', fmt_valor)
+    sheet.write('A3', 'SUCURSAL', fmt_etiqueta)
+    sheet.merge_range('B3:E3', 'COSTA VERDE', fmt_valor)
     
-    sheet.write('A4', ' FECHA', fmt_etiqueta)
+    sheet.write('A4', 'FECHA', fmt_etiqueta)
     fecha_str = datetime.now(pytz.timezone('America/Mexico_City')).strftime("%d/%m/%Y")
-    sheet.merge_range('B4:E4', f' {fecha_str}', fmt_valor)
+    sheet.merge_range('B4:E4', fecha_str, fmt_valor)
     
-    sheet.write('A5', ' ELABORA', fmt_etiqueta)
-    sheet.merge_range('B5:E5', ' PEDRO GARCÍA', fmt_valor)
+    sheet.write('A5', 'ELABORA', fmt_etiqueta)
+    sheet.merge_range('B5:E5', 'PEDRO GARCÍA', fmt_valor)
 
     # --- ENCABEZADOS DE TABLA (FILA 6) ---
     sheet.write('A6', '', fmt_valor) # Celda debajo de "ELABORA" (vacía con borde)
@@ -128,7 +125,7 @@ def generar_excel_formato(df, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V."):
 
         for _, fila in df.iterrows():
             sheet.write(row, 0, '', fmt_valor) # Columna A vacía para mantener la cuadrícula
-            sheet.write(row, 1, f" {str(fila[col_nombre])}", fmt_datos_izq)
+            sheet.write(row, 1, str(fila[col_nombre]), fmt_datos_centro) # Cambiado a centrado
             sheet.write(row, 2, fila[col_cant], fmt_datos_centro)
             sheet.write(row, 3, str(fila[col_fecha]), fmt_datos_centro)
             sheet.write(row, 4, 'PEDRO GARCÍA', fmt_datos_centro) # Vendedor fijo
@@ -188,6 +185,24 @@ with tab1:
         ).upper()
     with col_limpiar:
         st.button("🧹", on_click=limpiar_buscador, use_container_width=True)
+
+    # --- ENTRADA POR VOZ ---
+    audio_val = st.audio_input("🎤 Dictar producto (opcional)")
+    if audio_val is not None:
+        try:
+            import speech_recognition as sr
+            r = sr.Recognizer()
+            with sr.AudioFile(audio_val) as source:
+                audio_data = r.record(source)
+                texto_voz = r.recognize_google(audio_data, language="es-MX")
+                # Si reconoció algo, actualizamos la caja de texto y recargamos
+                if texto_voz:
+                    st.session_state.buscar_prod = texto_voz.upper()
+                    st.rerun()
+        except ImportError:
+            st.error("⚠️ Faltan dependencias para voz. Ejecuta en tu terminal: pip install SpeechRecognition")
+        except Exception as e:
+            st.toast("❌ No se pudo entender el audio o hubo un error.")
 
     nombres_prev = [r[0] for r in c.execute(
         "SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual"
