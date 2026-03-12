@@ -14,6 +14,27 @@ with st.spinner('Iniciando sistema Champlitte... 🥐'):
     
     st.set_page_config(page_title="Inventario Champlitte MX", page_icon="🥐", layout="wide")
 
+# --- TRUCO CSS PARA MÓVILES ---
+# Esto evita que Streamlit ponga las columnas una debajo de la otra en celulares
+st.markdown("""
+    <style>
+    @media (max-width: 768px) {
+        div[data-testid="stHorizontalBlock"] {
+            flex-wrap: nowrap !important;
+        }
+        div[data-testid="column"] {
+            width: auto !important;
+            min-width: 0 !important;
+        }
+    }
+    /* Ajuste fino para la altura del contenedor de la métrica */
+    [data-testid="stMetric"] {
+        margin-bottom: 0px !important;
+        padding-bottom: 0px !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 # Contenedores para mensajes específicos debajo de los botones
 msg_conteo = st.empty()
 msg_tabla = st.empty()
