@@ -191,7 +191,7 @@ with tab1:
         if "sel_prod" in st.session_state:
             del st.session_state["sel_prod"]
 
-    # Buscador en su propia fila
+    # Buscador
     buscar = st.text_input("Buscar", placeholder="🔎 BUSCAR PRODUCTO...", key="buscar_prod", label_visibility="collapsed").upper()
     st.button("🧹 Limpiar Búsqueda", on_click=limpiar_buscador, use_container_width=True)
 
@@ -217,29 +217,32 @@ with tab1:
             except Exception as e:
                 st.toast("❌ No pude entender el audio o hubo mucho ruido de fondo.")
 
-    # --- CUADRO DE CONFIRMACIÓN POR VOZ ---
+    # --- CUADRO DE CONFIRMACIÓN EDITABLE ---
     if st.session_state.get("confirmacion_voz"):
         datos = st.session_state.confirmacion_voz
         st.info(f"🗣️ **Escuché:** '{datos['original']}'")
+        st.write("✏️ *Puedes corregir los datos antes de registrar:*")
         
-        st.metric("Producto", datos['prod'] if datos['prod'] else "❓ Faltó nombre")
-        st.metric("Cantidad", datos['cant'])
-        st.metric("Caducidad", str(datos['fecha']))
+        # Ahora son campos de edición en lugar de solo métricas fijas
+        edit_prod = st.text_input("Producto", value=datos['prod']).upper()
+        edit_cant = st.number_input("Cantidad", value=int(datos['cant']), min_value=1)
+        edit_fech = st.date_input("Caducidad", value=datos['fecha'])
         
         if st.button("✅ Sí, registrar esto", use_container_width=True, type="primary"):
-            if datos['prod']:
-                existe = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", (datos['prod'], str(datos['fecha']))).fetchone()
+            if edit_prod and edit_prod.strip() != "":
+                prod_final = edit_prod.strip()
+                existe = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", (prod_final, str(edit_fech))).fetchone()
                 if existe:
-                    c.execute("UPDATE captura_actual SET cantidad=cantidad+? WHERE nombre=? AND fecha_cad=?", (int(datos['cant']), datos['prod'], str(datos['fecha'])))
+                    c.execute("UPDATE captura_actual SET cantidad=cantidad+? WHERE nombre=? AND fecha_cad=?", (int(edit_cant), prod_final, str(edit_fech)))
                 else:
-                    c.execute("INSERT INTO captura_actual VALUES (?,?,?)", (datos['prod'], str(datos['fecha']), int(datos['cant'])))
+                    c.execute("INSERT INTO captura_actual VALUES (?,?,?)", (prod_final, str(edit_fech), int(edit_cant)))
                 conn.commit()
-                st.success(f"✅ {datos['cant']} {datos['prod']} registrado(s) en inventario.")
+                st.success(f"✅ {edit_cant} {prod_final} registrado(s) en inventario.")
                 st.session_state.confirmacion_voz = None
                 time.sleep(1.5)
                 st.rerun()
             else:
-                st.error("El nombre del producto no fue detectado. Intenta decirlo de nuevo.")
+                st.error("El nombre del producto no puede estar vacío.")
                 
         if st.button("❌ Cancelar / Reintentar", use_container_width=True):
             st.session_state.confirmacion_voz = None
@@ -252,7 +255,7 @@ with tab1:
     sugerencias = [p for p in nombres_prev if buscar in p] if buscar else nombres_prev
 
     nombre_input = st.selectbox("Seleccionar producto", sugerencias, key="sel_prod") if sugerencias else buscar
-    f_cad = st.date_input("Caducidad", value=fecha_hoy_mx)
+    f_cad = st.date_input("Caducidad normal", value=fecha_hoy_mx)
 
     st.write("")
     
