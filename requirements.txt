@@ -4,3 +4,6 @@ pillow
 pyzbar
 openpyxl
 xlsxwriter
+pytz
+SpeechRecognition
+
