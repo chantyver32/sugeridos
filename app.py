@@ -14,15 +14,17 @@ with st.spinner('Iniciando sistema Champlitte... 🥐'):
     
     st.set_page_config(page_title="Inventario Champlitte MX", page_icon="🥐", layout="wide")
 
-# --- TRUCO CSS PARA MÓVILES ---
-# Esto evita que Streamlit ponga las columnas una debajo de la otra en celulares
+# --- TRUCO CSS CORREGIDO PARA MÓVILES ---
+# Este código obliga a Streamlit a NO apilar los elementos en el celular,
+# pero SOLO en las filas específicas que tengan la clase "mantener-fila"
 st.markdown("""
     <style>
     @media (max-width: 768px) {
-        div[data-testid="stHorizontalBlock"] {
+        div[data-testid="stHorizontalBlock"]:has(.mantener-fila) {
             flex-wrap: nowrap !important;
         }
-        div[data-testid="column"] {
+        div[data-testid="stHorizontalBlock"]:has(.mantener-fila) > div[data-testid="column"] {
+            flex: 1 1 0 !important;
             width: auto !important;
             min-width: 0 !important;
         }
@@ -241,12 +243,17 @@ with tab1:
     with col3:
         st.write("")
 
-    # --- MODIFICACIÓN DE LOS BOTONES: SOLO +1, +2, -1 y Borrar ---
+    # --- BOTONES EN UNA SOLA FILA (MÓVIL Y PC) ---
     c1, c2, c3, c4 = st.columns(4)
-    with c1: st.button("+1", use_container_width=True, on_click=sumar, args=(1,))
-    with c2: st.button("+2", use_container_width=True, on_click=sumar, args=(2,))
-    with c3: st.button("-1", use_container_width=True, on_click=sumar, args=(-1,))
-    with c4: st.button("Borrar", use_container_width=True, on_click=resetear)
+    with c1: 
+        st.markdown('<span class="mantener-fila"></span>', unsafe_allow_html=True)
+        st.button("+1", use_container_width=True, on_click=sumar, args=(1,))
+    with c2: 
+        st.button("+2", use_container_width=True, on_click=sumar, args=(2,))
+    with c3: 
+        st.button("-1", use_container_width=True, on_click=sumar, args=(-1,))
+    with c4: 
+        st.button("Borrar", use_container_width=True, on_click=resetear)
     # ------------------------------------------------
 
     st.write("") # Un poco de espacio
@@ -255,6 +262,7 @@ with tab1:
     col_metric, col_btn = st.columns([1, 2], vertical_alignment="bottom")
     
     with col_metric:
+        st.markdown('<span class="mantener-fila"></span>', unsafe_allow_html=True)
         st.metric("Total a registrar", st.session_state.conteo_temp)
 
     with col_btn:
