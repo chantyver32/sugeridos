@@ -205,14 +205,14 @@ with tab1:
     with col3:
         st.write("")
 
-    # --- NUEVOS BOTONES DE CONTEO ---
-    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    # --- AQUI ESTA LA MODIFICACIÓN DE LOS BOTONES ---
+    c1, c2, c3, c4, c5 = st.columns(5)
     with c1: st.button("+1", use_container_width=True, on_click=sumar, args=(1,))
     with c2: st.button("+2", use_container_width=True, on_click=sumar, args=(2,))
     with c3: st.button("+4", use_container_width=True, on_click=sumar, args=(4,))
-    with c4: st.button("+5", use_container_width=True, on_click=sumar, args=(5,))
-    with c5: st.button("-1", use_container_width=True, on_click=sumar, args=(-1,))
-    with c6: st.button("Borrar", use_container_width=True, on_click=resetear)
+    with c4: st.button("-1", use_container_width=True, on_click=sumar, args=(-1,))
+    with c5: st.button("Borrar", use_container_width=True, on_click=resetear)
+    # ------------------------------------------------
 
     st.metric("Total a registrar", st.session_state.conteo_temp)
 
