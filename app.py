@@ -15,26 +15,6 @@ with st.spinner('Iniciando sistema Champlitte... 🥐'):
     
     st.set_page_config(page_title="Inventario Champlitte MX", page_icon="🥐", layout="wide")
 
-# --- TRUCO CSS (SOLO PARA LA FILA DEL BOTÓN FINAL) ---
-st.markdown("""
-    <style>
-    @media (max-width: 768px) {
-        div[data-testid="stHorizontalBlock"]:has(.fila-final) {
-            flex-wrap: nowrap !important;
-        }
-        div[data-testid="stHorizontalBlock"]:has(.fila-final) > div[data-testid="column"] {
-            flex: 1 1 0 !important;
-            width: auto !important;
-            min-width: 0 !important;
-        }
-    }
-    [data-testid="stMetric"] {
-        margin-bottom: 0px !important;
-        padding-bottom: 0px !important;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
 # Contenedores para mensajes
 msg_conteo = st.empty()
 msg_tabla = st.empty()
@@ -211,7 +191,7 @@ with tab1:
         if "sel_prod" in st.session_state:
             del st.session_state["sel_prod"]
 
-    # Buscador en su propia fila (Una columna)
+    # Buscador en su propia fila
     buscar = st.text_input("Buscar", placeholder="🔎 BUSCAR PRODUCTO...", key="buscar_prod", label_visibility="collapsed").upper()
     st.button("🧹 Limpiar Búsqueda", on_click=limpiar_buscador, use_container_width=True)
 
@@ -233,11 +213,11 @@ with tab1:
                         st.session_state.confirmacion_voz = {"prod": prod, "cant": cant, "fecha": fech, "original": texto_voz}
                         st.rerun()
             except ImportError:
-                st.error("⚠️ Faltan dependencias. Ejecuta: pip install SpeechRecognition")
+                st.error("⚠️ Faltan dependencias. Asegúrate de tener SpeechRecognition en tu requirements.txt")
             except Exception as e:
                 st.toast("❌ No pude entender el audio o hubo mucho ruido de fondo.")
 
-    # --- CUADRO DE CONFIRMACIÓN POR VOZ (TODO EN UNA COLUMNA) ---
+    # --- CUADRO DE CONFIRMACIÓN POR VOZ ---
     if st.session_state.get("confirmacion_voz"):
         datos = st.session_state.confirmacion_voz
         st.info(f"🗣️ **Escuché:** '{datos['original']}'")
@@ -267,7 +247,7 @@ with tab1:
         
         st.divider()
 
-    # --- ENTRADA MANUAL NORMAL (TODO EN UNA COLUMNA) ---
+    # --- ENTRADA MANUAL NORMAL ---
     nombres_prev = [r[0] for r in c.execute("SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual").fetchall()]
     sugerencias = [p for p in nombres_prev if buscar in p] if buscar else nombres_prev
 
@@ -276,7 +256,7 @@ with tab1:
 
     st.write("")
     
-    # Botones en una sola columna (verticales, amigables con el celular)
+    # Botones de suma y resta
     st.button("+1", use_container_width=True, on_click=sumar, args=(1,))
     st.button("+2", use_container_width=True, on_click=sumar, args=(2,))
     st.button("-1", use_container_width=True, on_click=sumar, args=(-1,))
@@ -284,30 +264,26 @@ with tab1:
 
     st.write("") 
     
-    # --- MÉTRICA Y BOTÓN DE REGISTRO EN LA MISMA LÍNEA ---
-    col_metric, col_btn = st.columns([1, 2], vertical_alignment="bottom")
-    with col_metric:
-        st.markdown('<span class="fila-final"></span>', unsafe_allow_html=True)
-        st.metric("Total a registrar", st.session_state.conteo_temp)
+    # --- MÉTRICA Y BOTÓN DE REGISTRO VERTICALES ---
+    st.metric("Total a registrar", st.session_state.conteo_temp)
 
-    with col_btn:
-        if st.button("➕ Registrar en Inventario", use_container_width=True, type="primary"):
-            if nombre_input and nombre_input.strip() != "":
-                nombre_final = nombre_input.strip().upper()
-                cant = st.session_state.conteo_temp
-                
-                existe = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", (nombre_final, str(f_cad))).fetchone()
-                
-                if existe:
-                    c.execute("UPDATE captura_actual SET cantidad=cantidad+? WHERE nombre=? AND fecha_cad=?", (int(cant), nombre_final, str(f_cad)))
-                else:
-                    c.execute("INSERT INTO captura_actual VALUES (?,?,?)", (nombre_final, str(f_cad), int(cant)))
-                
-                conn.commit()
-                st.session_state.conteo_temp = 0
-                st.success(f"✅ {nombre_final} registrado correctamente")
-                time.sleep(1)
-                st.rerun()
+    if st.button("➕ Registrar en Inventario", use_container_width=True, type="primary"):
+        if nombre_input and nombre_input.strip() != "":
+            nombre_final = nombre_input.strip().upper()
+            cant = st.session_state.conteo_temp
+            
+            existe = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", (nombre_final, str(f_cad))).fetchone()
+            
+            if existe:
+                c.execute("UPDATE captura_actual SET cantidad=cantidad+? WHERE nombre=? AND fecha_cad=?", (int(cant), nombre_final, str(f_cad)))
+            else:
+                c.execute("INSERT INTO captura_actual VALUES (?,?,?)", (nombre_final, str(f_cad), int(cant)))
+            
+            conn.commit()
+            st.session_state.conteo_temp = 0
+            st.success(f"✅ {nombre_final} registrado correctamente")
+            time.sleep(1)
+            st.rerun()
 
     st.divider()
     st.subheader("🛒 Captura de hoy (sin procesar)")
