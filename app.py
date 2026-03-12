@@ -14,29 +14,6 @@ with st.spinner('Iniciando sistema Champlitte... 🥐'):
     
     st.set_page_config(page_title="Inventario Champlitte MX", page_icon="🥐", layout="wide")
 
-# --- TRUCO CSS CORREGIDO PARA MÓVILES ---
-# Este código obliga a Streamlit a NO apilar los elementos en el celular,
-# pero SOLO en las filas específicas que tengan la clase "mantener-fila"
-st.markdown("""
-    <style>
-    @media (max-width: 768px) {
-        div[data-testid="stHorizontalBlock"]:has(.mantener-fila) {
-            flex-wrap: nowrap !important;
-        }
-        div[data-testid="stHorizontalBlock"]:has(.mantener-fila) > div[data-testid="column"] {
-            flex: 1 1 0 !important;
-            width: auto !important;
-            min-width: 0 !important;
-        }
-    }
-    /* Ajuste fino para la altura del contenedor de la métrica */
-    [data-testid="stMetric"] {
-        margin-bottom: 0px !important;
-        padding-bottom: 0px !important;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
 # Contenedores para mensajes específicos debajo de los botones
 msg_conteo = st.empty()
 msg_tabla = st.empty()
@@ -243,51 +220,39 @@ with tab1:
     with col3:
         st.write("")
 
-    # --- BOTONES EN UNA SOLA FILA (MÓVIL Y PC) ---
-    c1, c2, c3, c4 = st.columns(4)
-    with c1: 
-        st.markdown('<span class="mantener-fila"></span>', unsafe_allow_html=True)
-        st.button("+1", use_container_width=True, on_click=sumar, args=(1,))
-    with c2: 
-        st.button("+2", use_container_width=True, on_click=sumar, args=(2,))
-    with c3: 
-        st.button("-1", use_container_width=True, on_click=sumar, args=(-1,))
-    with c4: 
-        st.button("Borrar", use_container_width=True, on_click=resetear)
+    # --- AQUI ESTA LA MODIFICACIÓN DE LOS BOTONES ---
+    c1, c2, c3, c4, c5 = st.columns(5)
+    with c1: st.button("+1", use_container_width=True, on_click=sumar, args=(1,))
+    with c2: st.button("+2", use_container_width=True, on_click=sumar, args=(2,))
+    with c3: st.button("+4", use_container_width=True, on_click=sumar, args=(4,))
+    with c4: st.button("-1", use_container_width=True, on_click=sumar, args=(-1,))
+    with c5: st.button("Borrar", use_container_width=True, on_click=resetear)
     # ------------------------------------------------
 
-    st.write("") # Un poco de espacio
-    
-    # --- MÉTRICA Y BOTÓN DE REGISTRO EN LA MISMA LÍNEA ---
-    col_metric, col_btn = st.columns([1, 2], vertical_alignment="bottom")
-    
-    with col_metric:
-        st.markdown('<span class="mantener-fila"></span>', unsafe_allow_html=True)
-        st.metric("Total a registrar", st.session_state.conteo_temp)
+    st.metric("Total a registrar", st.session_state.conteo_temp)
 
-    with col_btn:
-        # Botón de Registro
-        if st.button("➕ Registrar en Inventario", use_container_width=True, type="primary"):
-            if nombre_input and nombre_input.strip() != "":
-                nombre_final = nombre_input.strip().upper()
-                cant = st.session_state.conteo_temp
-                
-                existe = c.execute(
-                    "SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?",
-                    (nombre_final, str(f_cad))
-                ).fetchone()
-                
-                if existe:
-                    c.execute("UPDATE captura_actual SET cantidad=cantidad+? WHERE nombre=? AND fecha_cad=?", (int(cant), nombre_final, str(f_cad)))
-                else:
-                    c.execute("INSERT INTO captura_actual VALUES (?,?,?)", (nombre_final, str(f_cad), int(cant)))
-                
-                conn.commit()
-                st.session_state.conteo_temp = 0
-                # Notificación verde justo abajo
-                st.success(f"✅ {nombre_final} registrado correctamente")
-                time.sleep(1)
-                st.rerun()
+    # Botón de Registro
+    if st.button("➕ Registrar en Inventario", use_container_width=True, type="primary"):
+        if nombre_input and nombre_input.strip() != "":
+            nombre_final = nombre_input.strip().upper()
+            cant = st.session_state.conteo_temp
+            
+            existe = c.execute(
+                "SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?",
+                (nombre_final, str(f_cad))
+            ).fetchone()
+            
+            if existe:
+                c.execute("UPDATE captura_actual SET cantidad=cantidad+? WHERE nombre=? AND fecha_cad=?", (int(cant), nombre_final, str(f_cad)))
+            else:
+                c.execute("INSERT INTO captura_actual VALUES (?,?,?)", (nombre_final, str(f_cad), int(cant)))
+            
+            conn.commit()
+            st.session_state.conteo_temp = 0
+            # Notificación verde justo abajo
+            st.success(f"✅ {nombre_final} registrado correctamente")
+            time.sleep(1)
+            st.rerun()
 
     st.divider()
     st.subheader("🛒 Captura de hoy (sin procesar)")
