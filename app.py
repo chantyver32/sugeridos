@@ -15,14 +15,14 @@ with st.spinner('Iniciando sistema Champlitte... 🥐'):
     
     st.set_page_config(page_title="Inventario Champlitte MX", page_icon="🥐", layout="wide")
 
-# --- TRUCO CSS CORREGIDO PARA MÓVILES ---
+# --- TRUCO CSS (SOLO PARA LA FILA DEL BOTÓN FINAL) ---
 st.markdown("""
     <style>
     @media (max-width: 768px) {
-        div[data-testid="stHorizontalBlock"]:has(.mantener-fila) {
+        div[data-testid="stHorizontalBlock"]:has(.fila-final) {
             flex-wrap: nowrap !important;
         }
-        div[data-testid="stHorizontalBlock"]:has(.mantener-fila) > div[data-testid="column"] {
+        div[data-testid="stHorizontalBlock"]:has(.fila-final) > div[data-testid="column"] {
             flex: 1 1 0 !important;
             width: auto !important;
             min-width: 0 !important;
@@ -136,12 +136,8 @@ def generar_excel_formato(df, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V."):
     return output.getvalue()
 
 def analizar_dictado(texto, fecha_base):
-    """
-    Extrae la cantidad, fecha y nombre del producto del texto dictado.
-    """
     texto = texto.lower()
     
-    # Convertir palabras numéricas comunes a dígitos
     nums = {"un": "1", "uno": "1", "una": "1", "dos": "2", "tres": "3", "cuatro": "4", "cinco": "5"}
     for k, v in nums.items():
         texto = re.sub(rf'\b{k}\b', v, texto)
@@ -151,32 +147,28 @@ def analizar_dictado(texto, fecha_base):
     meses = {"enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6, 
              "julio": 7, "agosto": 8, "septiembre": 9, "octubre": 10, "noviembre": 11, "diciembre": 12}
     
-    # Buscar fecha (Ej: "15 de marzo")
     match_fecha = re.search(r'(\d{1,2})\s*(?:de\s*)?(' + '|'.join(meses.keys()) + r')', texto)
     if match_fecha:
         dia = int(match_fecha.group(1))
         mes = meses[match_fecha.group(2)]
         try:
             fecha_calc = fecha_base.replace(month=mes, day=dia)
-            # Si el mes pasó hace mucho, asumimos que es del próximo año
             if fecha_calc < fecha_base and (fecha_base.month - fecha_calc.month) > 5:
                 fecha_calc = fecha_calc.replace(year=fecha_calc.year + 1)
         except ValueError:
             pass
-        texto = texto.replace(match_fecha.group(0), "") # Quitar la fecha del texto
+        texto = texto.replace(match_fecha.group(0), "")
     elif "mañana" in texto:
         fecha_calc = fecha_base + timedelta(days=1)
         texto = texto.replace("mañana", "")
     elif "hoy" in texto:
         texto = texto.replace("hoy", "")
         
-    # Buscar cantidad (el primer número que quede)
     match_cant = re.search(r'\b(\d+)\b', texto)
     if match_cant:
         cantidad = int(match_cant.group(1))
         texto = texto.replace(match_cant.group(1), "", 1)
         
-    # Limpiar palabras basura para dejar solo el producto
     basura = ["para el", "para", "caduca el", "caduca", "cantidad", "agregar", "registrar", "de"]
     for p in basura:
         texto = re.sub(rf'\b{p}\b', '', texto)
@@ -219,18 +211,15 @@ with tab1:
         if "sel_prod" in st.session_state:
             del st.session_state["sel_prod"]
 
-    col_busq, col_limpiar = st.columns([4,1])
-    with col_busq:
-        buscar = st.text_input("Buscar", placeholder="🔎 BUSCAR PRODUCTO...", key="buscar_prod", label_visibility="collapsed").upper()
-    with col_limpiar:
-        st.button("🧹", on_click=limpiar_buscador, use_container_width=True)
+    # Buscador en su propia fila (Una columna)
+    buscar = st.text_input("Buscar", placeholder="🔎 BUSCAR PRODUCTO...", key="buscar_prod", label_visibility="collapsed").upper()
+    st.button("🧹 Limpiar Búsqueda", on_click=limpiar_buscador, use_container_width=True)
 
     # --- ENTRADA POR VOZ INTELIGENTE ---
     audio_val = st.audio_input("🎤 Dictar (Ej. '3 conchas para el 15 de marzo')")
     
     if audio_val is not None:
         audio_bytes = audio_val.getvalue()
-        # Evitamos procesar el mismo audio dos veces si la app se recarga
         if st.session_state.get("ultimo_audio") != audio_bytes:
             st.session_state.ultimo_audio = audio_bytes
             try:
@@ -248,67 +237,57 @@ with tab1:
             except Exception as e:
                 st.toast("❌ No pude entender el audio o hubo mucho ruido de fondo.")
 
-    # --- CUADRO DE CONFIRMACIÓN POR VOZ ---
+    # --- CUADRO DE CONFIRMACIÓN POR VOZ (TODO EN UNA COLUMNA) ---
     if st.session_state.get("confirmacion_voz"):
         datos = st.session_state.confirmacion_voz
         st.info(f"🗣️ **Escuché:** '{datos['original']}'")
         
-        col_c1, col_c2, col_c3 = st.columns(3)
-        col_c1.metric("Producto", datos['prod'] if datos['prod'] else "❓ Faltó nombre")
-        col_c2.metric("Cantidad", datos['cant'])
-        col_c3.metric("Caducidad", str(datos['fecha']))
+        st.metric("Producto", datos['prod'] if datos['prod'] else "❓ Faltó nombre")
+        st.metric("Cantidad", datos['cant'])
+        st.metric("Caducidad", str(datos['fecha']))
         
-        c_btn1, c_btn2 = st.columns(2)
-        with c_btn1:
-            if st.button("✅ Sí, registrar esto", use_container_width=True, type="primary"):
-                if datos['prod']:
-                    existe = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", (datos['prod'], str(datos['fecha']))).fetchone()
-                    if existe:
-                        c.execute("UPDATE captura_actual SET cantidad=cantidad+? WHERE nombre=? AND fecha_cad=?", (int(datos['cant']), datos['prod'], str(datos['fecha'])))
-                    else:
-                        c.execute("INSERT INTO captura_actual VALUES (?,?,?)", (datos['prod'], str(datos['fecha']), int(datos['cant'])))
-                    conn.commit()
-                    st.success(f"✅ {datos['cant']} {datos['prod']} registrado(s) en inventario.")
-                    st.session_state.confirmacion_voz = None
-                    time.sleep(1.5)
-                    st.rerun()
+        if st.button("✅ Sí, registrar esto", use_container_width=True, type="primary"):
+            if datos['prod']:
+                existe = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", (datos['prod'], str(datos['fecha']))).fetchone()
+                if existe:
+                    c.execute("UPDATE captura_actual SET cantidad=cantidad+? WHERE nombre=? AND fecha_cad=?", (int(datos['cant']), datos['prod'], str(datos['fecha'])))
                 else:
-                    st.error("El nombre del producto no fue detectado. Intenta decirlo de nuevo.")
-        with c_btn2:
-            if st.button("❌ Cancelar / Reintentar", use_container_width=True):
+                    c.execute("INSERT INTO captura_actual VALUES (?,?,?)", (datos['prod'], str(datos['fecha']), int(datos['cant'])))
+                conn.commit()
+                st.success(f"✅ {datos['cant']} {datos['prod']} registrado(s) en inventario.")
                 st.session_state.confirmacion_voz = None
+                time.sleep(1.5)
                 st.rerun()
+            else:
+                st.error("El nombre del producto no fue detectado. Intenta decirlo de nuevo.")
+                
+        if st.button("❌ Cancelar / Reintentar", use_container_width=True):
+            st.session_state.confirmacion_voz = None
+            st.rerun()
         
         st.divider()
 
-    # --- ENTRADA MANUAL NORMAL ---
+    # --- ENTRADA MANUAL NORMAL (TODO EN UNA COLUMNA) ---
     nombres_prev = [r[0] for r in c.execute("SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual").fetchall()]
     sugerencias = [p for p in nombres_prev if buscar in p] if buscar else nombres_prev
 
-    col1, col2, col3 = st.columns([2,1,1])
-    with col1:
-        nombre_input = st.selectbox("Seleccionar producto", sugerencias, key="sel_prod") if sugerencias else buscar
-    with col2:
-        f_cad = st.date_input("Caducidad", value=fecha_hoy_mx)
-    with col3:
-        st.write("")
+    nombre_input = st.selectbox("Seleccionar producto", sugerencias, key="sel_prod") if sugerencias else buscar
+    f_cad = st.date_input("Caducidad", value=fecha_hoy_mx)
 
-    c1, c2, c3, c4 = st.columns(4)
-    with c1: 
-        st.markdown('<span class="mantener-fila"></span>', unsafe_allow_html=True)
-        st.button("+1", use_container_width=True, on_click=sumar, args=(1,))
-    with c2: 
-        st.button("+2", use_container_width=True, on_click=sumar, args=(2,))
-    with c3: 
-        st.button("-1", use_container_width=True, on_click=sumar, args=(-1,))
-    with c4: 
-        st.button("Borrar", use_container_width=True, on_click=resetear)
+    st.write("")
+    
+    # Botones en una sola columna (verticales, amigables con el celular)
+    st.button("+1", use_container_width=True, on_click=sumar, args=(1,))
+    st.button("+2", use_container_width=True, on_click=sumar, args=(2,))
+    st.button("-1", use_container_width=True, on_click=sumar, args=(-1,))
+    st.button("Borrar", use_container_width=True, on_click=resetear)
 
     st.write("") 
     
+    # --- MÉTRICA Y BOTÓN DE REGISTRO EN LA MISMA LÍNEA ---
     col_metric, col_btn = st.columns([1, 2], vertical_alignment="bottom")
     with col_metric:
-        st.markdown('<span class="mantener-fila"></span>', unsafe_allow_html=True)
+        st.markdown('<span class="fila-final"></span>', unsafe_allow_html=True)
         st.metric("Total a registrar", st.session_state.conteo_temp)
 
     with col_btn:
@@ -357,10 +336,9 @@ with tab2:
         st.info("No hay stock registrado en la base anterior. Realiza un corte para cargar inventario.")
     else:
         fechas_stock = sorted(df_stock['Caducidad'].unique())
-        col_st1, col_st2 = st.columns([2,1])
         
-        with col_st1:
-            filtro_st_fecha = st.multiselect("Filtrar stock por Caducidad:", fechas_stock, default=fechas_stock)
+        # Filtros en una columna
+        filtro_st_fecha = st.multiselect("Filtrar stock por Caducidad:", fechas_stock, default=fechas_stock)
             
         df_stock_filt = df_stock[df_stock['Caducidad'].isin(filtro_st_fecha)]
         st.dataframe(df_stock_filt, use_container_width=True, hide_index=True)
@@ -377,13 +355,10 @@ with tab2:
         csv_stock = df_stock_filt.to_csv(index=False).encode('utf-8')
         excel_stock = generar_excel_formato(df_stock_filt, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.")
 
-        col_w1, col_w2, col_w3 = st.columns(3)
-        with col_w1:
-            st.link_button("💬 Enviar Resumen a WhatsApp", link_st, use_container_width=True, type="primary")
-        with col_w2:
-            st.download_button("📊 Descargar CSV", data=csv_stock, file_name=f"inventario_{fecha_hoy_mx}.csv", mime="text/csv", use_container_width=True)
-        with col_w3:
-            st.download_button("📗 Descargar Excel", data=excel_stock, file_name=f"Sugeridos_{fecha_hoy_mx}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+        # Botones de exportación en una sola columna
+        st.link_button("💬 Enviar Resumen a WhatsApp", link_st, use_container_width=True, type="primary")
+        st.download_button("📊 Descargar CSV", data=csv_stock, file_name=f"inventario_{fecha_hoy_mx}.csv", mime="text/csv", use_container_width=True)
+        st.download_button("📗 Descargar Excel", data=excel_stock, file_name=f"Sugeridos_{fecha_hoy_mx}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
 
     st.divider()
     st.header("🚀 Realizar Corte de Ventas")
@@ -427,12 +402,10 @@ with tab3:
         st.info("Aún no hay historial de ventas.")
     else:
         df_hist['Fecha'] = pd.to_datetime(df_hist['Fecha']).dt.date
-        col_a, col_b = st.columns(2)
         
-        with col_a:
-            buscar_h = st.text_input("Buscar producto en historial").upper()
-        with col_b:
-            fecha_filtro = st.date_input("Filtrar por día de corte", value=None)
+        # Filtros en una columna
+        buscar_h = st.text_input("Buscar producto en historial").upper()
+        fecha_filtro = st.date_input("Filtrar por día de corte", value=None)
             
         if buscar_h:
             df_hist = df_hist[df_hist["Producto"].str.contains(buscar_h, na=False)]
