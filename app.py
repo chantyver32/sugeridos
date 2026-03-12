@@ -228,30 +228,37 @@ with tab1:
     with c4: st.button("Borrar", use_container_width=True, on_click=resetear)
     # ------------------------------------------------
 
-    st.metric("Total a registrar", st.session_state.conteo_temp)
+    st.write("") # Un poco de espacio
+    
+    # --- MÉTRICA Y BOTÓN DE REGISTRO EN LA MISMA LÍNEA ---
+    col_metric, col_btn = st.columns([1, 2], vertical_alignment="bottom")
+    
+    with col_metric:
+        st.metric("Total a registrar", st.session_state.conteo_temp)
 
-    # Botón de Registro
-    if st.button("➕ Registrar en Inventario", use_container_width=True, type="primary"):
-        if nombre_input and nombre_input.strip() != "":
-            nombre_final = nombre_input.strip().upper()
-            cant = st.session_state.conteo_temp
-            
-            existe = c.execute(
-                "SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?",
-                (nombre_final, str(f_cad))
-            ).fetchone()
-            
-            if existe:
-                c.execute("UPDATE captura_actual SET cantidad=cantidad+? WHERE nombre=? AND fecha_cad=?", (int(cant), nombre_final, str(f_cad)))
-            else:
-                c.execute("INSERT INTO captura_actual VALUES (?,?,?)", (nombre_final, str(f_cad), int(cant)))
-            
-            conn.commit()
-            st.session_state.conteo_temp = 0
-            # Notificación verde justo abajo
-            st.success(f"✅ {nombre_final} registrado correctamente")
-            time.sleep(1)
-            st.rerun()
+    with col_btn:
+        # Botón de Registro
+        if st.button("➕ Registrar en Inventario", use_container_width=True, type="primary"):
+            if nombre_input and nombre_input.strip() != "":
+                nombre_final = nombre_input.strip().upper()
+                cant = st.session_state.conteo_temp
+                
+                existe = c.execute(
+                    "SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?",
+                    (nombre_final, str(f_cad))
+                ).fetchone()
+                
+                if existe:
+                    c.execute("UPDATE captura_actual SET cantidad=cantidad+? WHERE nombre=? AND fecha_cad=?", (int(cant), nombre_final, str(f_cad)))
+                else:
+                    c.execute("INSERT INTO captura_actual VALUES (?,?,?)", (nombre_final, str(f_cad), int(cant)))
+                
+                conn.commit()
+                st.session_state.conteo_temp = 0
+                # Notificación verde justo abajo
+                st.success(f"✅ {nombre_final} registrado correctamente")
+                time.sleep(1)
+                st.rerun()
 
     st.divider()
     st.subheader("🛒 Captura de hoy (sin procesar)")
