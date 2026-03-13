@@ -220,7 +220,15 @@ with tab1:
     # --- CUADRO DE CONFIRMACIÓN EDITABLE ---
     if st.session_state.get("confirmacion_voz"):
         datos = st.session_state.confirmacion_voz
+        
+        # 1. Mostramos el texto reconocido
         st.info(f"🗣️ **Escuché:** '{datos['original']}'")
+        
+        # 2. Reproducimos el audio que grabó el usuario (autoplay opcional)
+        st.write("🎧 **Tu grabación:**")
+        if "ultimo_audio" in st.session_state:
+            st.audio(st.session_state.ultimo_audio, autoplay=True)
+            
         st.write("✏️ *Puedes corregir los datos antes de registrar:*")
         
         # Ahora son campos de edición en lugar de solo métricas fijas
