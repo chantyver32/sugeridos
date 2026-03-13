@@ -16,23 +16,6 @@ with st.spinner('Iniciando sistema Champlitte... 🥐'):
     
     st.set_page_config(page_title="Inventario Champlitte MX", page_icon="🥐", layout="wide")
 
-# --- ESTILOS CSS PARA EXPANDIR EL BOTÓN DE AUDIO ---
-st.markdown("""
-    <style>
-    /* Expande el botón del micrófono para que sea clickeable en toda su área */
-    div[data-testid="stAudioInput"] button {
-        width: 100% !important;
-        height: 80px !important;
-        border-radius: 12px !important;
-        background-color: #e6f2ff !important;
-        border: 2px dashed #1f77b4 !important;
-    }
-    div[data-testid="stAudioInput"] button:hover {
-        background-color: #cce5ff !important;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
 # Contenedores para mensajes
 msg_conteo = st.empty()
 msg_tabla = st.empty()
@@ -240,30 +223,44 @@ with tab1:
     if st.session_state.get("confirmacion_voz"):
         datos = st.session_state.confirmacion_voz
         
-        # --- SCRIPT DE LECTURA EN VOZ ALTA ---
+        # --- SCRIPT DE LECTURA EN VOZ ALTA (VOZ FEMENINA) ---
         if not st.session_state.get("audio_leido", False):
             js_tts = f"""
             <script>
-                const utterance = new SpeechSynthesisUtterance("{datos['original']}");
-                utterance.lang = 'es-MX';
-                utterance.rate = 1.0;
-                window.speechSynthesis.speak(utterance);
+                function speakText() {{
+                    const utterance = new SpeechSynthesisUtterance("{datos['original']}");
+                    utterance.lang = 'es-MX';
+                    utterance.rate = 1.0;
+                    
+                    let voices = window.speechSynthesis.getVoices();
+                    // Buscar preferencia por voz femenina en español
+                    let femaleVoice = voices.find(v => v.lang.includes('es') && (v.name.includes('Female') || v.name.includes('Mujer') || v.name.includes('Sabina') || v.name.includes('Paulina') || v.name.includes('Elena') || v.name.includes('Monica')));
+                    
+                    if (!femaleVoice) {{
+                        femaleVoice = voices.find(v => v.lang.includes('es-MX'));
+                    }}
+                    if (femaleVoice) {{
+                        utterance.voice = femaleVoice;
+                    }}
+                    window.speechSynthesis.speak(utterance);
+                }}
+                
+                if (speechSynthesis.getVoices().length === 0) {{
+                    speechSynthesis.onvoiceschanged = speakText;
+                }} else {{
+                    speakText();
+                }}
             </script>
             """
             components.html(js_tts, height=0)
             st.session_state.audio_leido = True
             
-        # 1. Mostramos el texto reconocido
-        st.info(f"🗣️ **Escuché:** '{datos['original']}'")
-        
-        # 2. Reproducimos el audio que grabó el usuario (autoplay opcional)
-        st.write("🎧 **Tu grabación:**")
-        if "ultimo_audio" in st.session_state:
-            st.audio(st.session_state.ultimo_audio, autoplay=True)
+        # 1. Mostramos el texto reconocido en un cuadro verde
+        st.success(f"🗣️ **Confirmado:** '{datos['original']}'")
             
         st.write("✏️ *Puedes corregir los datos antes de registrar:*")
         
-        # Ahora son campos de edición en lugar de solo métricas fijas
+        # Campos de edición
         edit_prod = st.text_input("Producto", value=datos['prod']).upper()
         edit_cant = st.number_input("Cantidad", value=int(datos['cant']), min_value=1)
         edit_fech = st.date_input("Caducidad", value=datos['fecha'])
