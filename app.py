@@ -7,6 +7,7 @@ import urllib.parse
 import time
 import io
 import re
+import streamlit.components.v1 as components
 
 # ------------------ CONFIGURACIÓN GENERAL ------------------
 with st.spinner('Iniciando sistema Champlitte... 🥐'):
@@ -14,6 +15,23 @@ with st.spinner('Iniciando sistema Champlitte... 🥐'):
     fecha_hoy_mx = datetime.now(zona_mx).date()
     
     st.set_page_config(page_title="Inventario Champlitte MX", page_icon="🥐", layout="wide")
+
+# --- ESTILOS CSS PARA EXPANDIR EL BOTÓN DE AUDIO ---
+st.markdown("""
+    <style>
+    /* Expande el botón del micrófono para que sea clickeable en toda su área */
+    div[data-testid="stAudioInput"] button {
+        width: 100% !important;
+        height: 80px !important;
+        border-radius: 12px !important;
+        background-color: #e6f2ff !important;
+        border: 2px dashed #1f77b4 !important;
+    }
+    div[data-testid="stAudioInput"] button:hover {
+        background-color: #cce5ff !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 # Contenedores para mensajes
 msg_conteo = st.empty()
@@ -211,6 +229,7 @@ with tab1:
                     if texto_voz:
                         prod, cant, fech = analizar_dictado(texto_voz, fecha_hoy_mx)
                         st.session_state.confirmacion_voz = {"prod": prod, "cant": cant, "fecha": fech, "original": texto_voz}
+                        st.session_state.audio_leido = False  # Reinicia la bandera para leer el nuevo audio
                         st.rerun()
             except ImportError:
                 st.error("⚠️ Faltan dependencias. Asegúrate de tener SpeechRecognition en tu requirements.txt")
@@ -221,6 +240,19 @@ with tab1:
     if st.session_state.get("confirmacion_voz"):
         datos = st.session_state.confirmacion_voz
         
+        # --- SCRIPT DE LECTURA EN VOZ ALTA ---
+        if not st.session_state.get("audio_leido", False):
+            js_tts = f"""
+            <script>
+                const utterance = new SpeechSynthesisUtterance("{datos['original']}");
+                utterance.lang = 'es-MX';
+                utterance.rate = 1.0;
+                window.speechSynthesis.speak(utterance);
+            </script>
+            """
+            components.html(js_tts, height=0)
+            st.session_state.audio_leido = True
+            
         # 1. Mostramos el texto reconocido
         st.info(f"🗣️ **Escuché:** '{datos['original']}'")
         
@@ -247,6 +279,7 @@ with tab1:
                 conn.commit()
                 st.success(f"✅ {edit_cant} {prod_final} registrado(s) en inventario.")
                 st.session_state.confirmacion_voz = None
+                st.session_state.audio_leido = False
                 time.sleep(1.5)
                 st.rerun()
             else:
@@ -254,6 +287,7 @@ with tab1:
                 
         if st.button("❌ Cancelar / Reintentar", use_container_width=True):
             st.session_state.confirmacion_voz = None
+            st.session_state.audio_leido = False
             st.rerun()
         
         st.divider()
