@@ -312,16 +312,15 @@ with tab1:
     sugerencias = [p for p in nombres_prev if buscar in p] if buscar else nombres_prev
 
     nombre_input = st.selectbox("Seleccionar producto", sugerencias, key="sel_prod") if sugerencias else buscar
-    f_cad = st.date_input("Caducidad normal", value=fecha_hoy_mx)
+    f_cad = st.date_input("Caducidad", value=fecha_hoy_mx)
 
     st.write("")
     
-    # Botones de suma y resta
-    col_sum1, col_sum2, col_sum3, col_sum4 = st.columns(4)
+    # Botones de suma y borrar (Se quitó el botón -1 y se ajustaron a 3 columnas)
+    col_sum1, col_sum2, col_sum3 = st.columns(3)
     with col_sum1: st.button("+1", use_container_width=True, on_click=sumar, args=(1,))
     with col_sum2: st.button("+2", use_container_width=True, on_click=sumar, args=(2,))
-    with col_sum3: st.button("-1", use_container_width=True, on_click=sumar, args=(-1,))
-    with col_sum4: st.button("Borrar", use_container_width=True, on_click=resetear)
+    with col_sum3: st.button("Borrar", use_container_width=True, on_click=resetear)
 
     st.write("") 
     
