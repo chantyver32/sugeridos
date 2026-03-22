@@ -197,27 +197,28 @@ with tab1:
     st.button("🧹 Limpiar Búsqueda", on_click=limpiar_buscador, use_container_width=True)
 
     # --- ENTRADA POR VOZ INTELIGENTE ---
-    audio_val = st.audio_input("🎤 Dictar (Ej. '3 conchas para el 15 de marzo')")
-    
-    if audio_val is not None:
-        audio_bytes = audio_val.getvalue()
-        if st.session_state.get("ultimo_audio") != audio_bytes:
-            st.session_state.ultimo_audio = audio_bytes
-            try:
-                import speech_recognition as sr
-                r = sr.Recognizer()
-                with sr.AudioFile(audio_val) as source:
-                    audio_data = r.record(source)
-                    texto_voz = r.recognize_google(audio_data, language="es-MX")
-                    if texto_voz:
-                        prod, cant, fech = analizar_dictado(texto_voz, fecha_hoy_mx)
-                        st.session_state.confirmacion_voz = {"prod": prod, "cant": cant, "fecha": fech, "original": texto_voz}
-                        st.session_state.audio_leido = False  
-                        st.rerun()
-            except ImportError:
-                st.error("⚠️ Faltan dependencias. Asegúrate de tener SpeechRecognition en tu requirements.txt")
-            except Exception as e:
-                st.toast("❌ No pude entender el audio o hubo mucho ruido de fondo.")
+    with st.expander("🎤 Entrada por Voz Inteligente (Clic para desplegar)", expanded=False):
+        audio_val = st.audio_input("Dictar (Ej. '3 conchas para el 15 de marzo')")
+        
+        if audio_val is not None:
+            audio_bytes = audio_val.getvalue()
+            if st.session_state.get("ultimo_audio") != audio_bytes:
+                st.session_state.ultimo_audio = audio_bytes
+                try:
+                    import speech_recognition as sr
+                    r = sr.Recognizer()
+                    with sr.AudioFile(audio_val) as source:
+                        audio_data = r.record(source)
+                        texto_voz = r.recognize_google(audio_data, language="es-MX")
+                        if texto_voz:
+                            prod, cant, fech = analizar_dictado(texto_voz, fecha_hoy_mx)
+                            st.session_state.confirmacion_voz = {"prod": prod, "cant": cant, "fecha": fech, "original": texto_voz}
+                            st.session_state.audio_leido = False  
+                            st.rerun()
+                except ImportError:
+                    st.error("⚠️ Faltan dependencias. Asegúrate de tener SpeechRecognition en tu requirements.txt")
+                except Exception as e:
+                    st.toast("❌ No pude entender el audio o hubo mucho ruido de fondo.")
 
     # --- CUADRO DE CONFIRMACIÓN EDITABLE ---
     if st.session_state.get("confirmacion_voz"):
