@@ -212,7 +212,7 @@ with tab1:
                     if texto_voz:
                         prod, cant, fech = analizar_dictado(texto_voz, fecha_hoy_mx)
                         st.session_state.confirmacion_voz = {"prod": prod, "cant": cant, "fecha": fech, "original": texto_voz}
-                        st.session_state.audio_leido = False  # Reinicia la bandera para leer el nuevo audio
+                        st.session_state.audio_leido = False  
                         st.rerun()
             except ImportError:
                 st.error("⚠️ Faltan dependencias. Asegúrate de tener SpeechRecognition en tu requirements.txt")
@@ -233,7 +233,6 @@ with tab1:
                     utterance.rate = 1.0;
                     
                     let voices = window.speechSynthesis.getVoices();
-                    // Buscar preferencia por voz femenina en español
                     let femaleVoice = voices.find(v => v.lang.includes('es') && (v.name.includes('Female') || v.name.includes('Mujer') || v.name.includes('Sabina') || v.name.includes('Paulina') || v.name.includes('Elena') || v.name.includes('Monica')));
                     
                     if (!femaleVoice) {{
@@ -255,33 +254,51 @@ with tab1:
             components.html(js_tts, height=0)
             st.session_state.audio_leido = True
             
-        # 1. Mostramos el texto reconocido en un cuadro verde
         st.success(f"🗣️ **Confirmado:** '{datos['original']}'")
-            
         st.write("✏️ *Puedes corregir los datos antes de registrar:*")
         
-        # Campos de edición
         edit_prod = st.text_input("Producto", value=datos['prod']).upper()
         edit_cant = st.number_input("Cantidad", value=int(datos['cant']), min_value=1)
         edit_fech = st.date_input("Caducidad", value=datos['fecha'])
         
-        if st.button("✅ Sí, registrar esto", use_container_width=True, type="primary"):
-            if edit_prod and edit_prod.strip() != "":
-                prod_final = edit_prod.strip()
-                existe = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", (prod_final, str(edit_fech))).fetchone()
-                if existe:
-                    c.execute("UPDATE captura_actual SET cantidad=cantidad+? WHERE nombre=? AND fecha_cad=?", (int(edit_cant), prod_final, str(edit_fech)))
+        col_voz_1, col_voz_2 = st.columns(2)
+        
+        with col_voz_1:
+            if st.button("📝 Guardar en Conteo (Para Corte)", use_container_width=True, type="primary"):
+                if edit_prod and edit_prod.strip() != "":
+                    prod_final = edit_prod.strip()
+                    existe = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", (prod_final, str(edit_fech))).fetchone()
+                    if existe:
+                        c.execute("UPDATE captura_actual SET cantidad=cantidad+? WHERE nombre=? AND fecha_cad=?", (int(edit_cant), prod_final, str(edit_fech)))
+                    else:
+                        c.execute("INSERT INTO captura_actual VALUES (?,?,?)", (prod_final, str(edit_fech), int(edit_cant)))
+                    conn.commit()
+                    st.success(f"✅ {edit_cant} {prod_final} a Conteo.")
+                    st.session_state.confirmacion_voz = None
+                    st.session_state.audio_leido = False
+                    time.sleep(1.5)
+                    st.rerun()
                 else:
-                    c.execute("INSERT INTO captura_actual VALUES (?,?,?)", (prod_final, str(edit_fech), int(edit_cant)))
-                conn.commit()
-                st.success(f"✅ {edit_cant} {prod_final} registrado(s) en inventario.")
-                st.session_state.confirmacion_voz = None
-                st.session_state.audio_leido = False
-                time.sleep(1.5)
-                st.rerun()
-            else:
-                st.error("El nombre del producto no puede estar vacío.")
-                
+                    st.error("El nombre no puede estar vacío.")
+                    
+        with col_voz_2:
+            if st.button("🥖 Ingresar Producción Directa al Stock", use_container_width=True):
+                if edit_prod and edit_prod.strip() != "":
+                    prod_final = edit_prod.strip()
+                    existe_stock = c.execute("SELECT cantidad FROM base_anterior WHERE nombre=? AND fecha_cad=?", (prod_final, str(edit_fech))).fetchone()
+                    if existe_stock:
+                        c.execute("UPDATE base_anterior SET cantidad=cantidad+? WHERE nombre=? AND fecha_cad=?", (int(edit_cant), prod_final, str(edit_fech)))
+                    else:
+                        c.execute("INSERT INTO base_anterior VALUES (?,?,?)", (prod_final, str(edit_fech), int(edit_cant)))
+                    conn.commit()
+                    st.success(f"✅ {edit_cant} {prod_final} añadidos directamente al inventario general.")
+                    st.session_state.confirmacion_voz = None
+                    st.session_state.audio_leido = False
+                    time.sleep(1.5)
+                    st.rerun()
+                else:
+                    st.error("El nombre no puede estar vacío.")
+
         if st.button("❌ Cancelar / Reintentar", use_container_width=True):
             st.session_state.confirmacion_voz = None
             st.session_state.audio_leido = False
@@ -299,36 +316,59 @@ with tab1:
     st.write("")
     
     # Botones de suma y resta
-    st.button("+1", use_container_width=True, on_click=sumar, args=(1,))
-    st.button("+2", use_container_width=True, on_click=sumar, args=(2,))
-    st.button("-1", use_container_width=True, on_click=sumar, args=(-1,))
-    st.button("Borrar", use_container_width=True, on_click=resetear)
+    col_sum1, col_sum2, col_sum3, col_sum4 = st.columns(4)
+    with col_sum1: st.button("+1", use_container_width=True, on_click=sumar, args=(1,))
+    with col_sum2: st.button("+2", use_container_width=True, on_click=sumar, args=(2,))
+    with col_sum3: st.button("-1", use_container_width=True, on_click=sumar, args=(-1,))
+    with col_sum4: st.button("Borrar", use_container_width=True, on_click=resetear)
 
     st.write("") 
     
-    # --- MÉTRICA Y BOTÓN DE REGISTRO VERTICALES ---
+    # --- MÉTRICA Y BOTÓN DE REGISTRO ---
     st.metric("Total a registrar", st.session_state.conteo_temp)
 
-    if st.button("➕ Registrar en Inventario", use_container_width=True, type="primary"):
-        if nombre_input and nombre_input.strip() != "":
-            nombre_final = nombre_input.strip().upper()
-            cant = st.session_state.conteo_temp
-            
-            existe = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", (nombre_final, str(f_cad))).fetchone()
-            
-            if existe:
-                c.execute("UPDATE captura_actual SET cantidad=cantidad+? WHERE nombre=? AND fecha_cad=?", (int(cant), nombre_final, str(f_cad)))
-            else:
-                c.execute("INSERT INTO captura_actual VALUES (?,?,?)", (nombre_final, str(f_cad), int(cant)))
-            
-            conn.commit()
-            st.session_state.conteo_temp = 0
-            st.success(f"✅ {nombre_final} registrado correctamente")
-            time.sleep(1)
-            st.rerun()
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("➕ Registrar en Conteo (Para Corte)", use_container_width=True, type="primary"):
+            if nombre_input and nombre_input.strip() != "":
+                nombre_final = nombre_input.strip().upper()
+                cant = st.session_state.conteo_temp
+                if cant > 0:
+                    existe = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", (nombre_final, str(f_cad))).fetchone()
+                    if existe:
+                        c.execute("UPDATE captura_actual SET cantidad=cantidad+? WHERE nombre=? AND fecha_cad=?", (int(cant), nombre_final, str(f_cad)))
+                    else:
+                        c.execute("INSERT INTO captura_actual VALUES (?,?,?)", (nombre_final, str(f_cad), int(cant)))
+                    conn.commit()
+                    st.session_state.conteo_temp = 0
+                    st.success(f"✅ {nombre_final} registrado para el próximo corte.")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.warning("Agrega una cantidad mayor a 0.")
+
+    with col2:
+        if st.button("🥖 Sumar directamente al Stock Actual", use_container_width=True):
+            if nombre_input and nombre_input.strip() != "":
+                nombre_final = nombre_input.strip().upper()
+                cant = st.session_state.conteo_temp
+                if cant > 0:
+                    existe_stock = c.execute("SELECT cantidad FROM base_anterior WHERE nombre=? AND fecha_cad=?", (nombre_final, str(f_cad))).fetchone()
+                    if existe_stock:
+                        c.execute("UPDATE base_anterior SET cantidad=cantidad+? WHERE nombre=? AND fecha_cad=?", (int(cant), nombre_final, str(f_cad)))
+                    else:
+                        c.execute("INSERT INTO base_anterior VALUES (?,?,?)", (nombre_final, str(f_cad), int(cant)))
+                    conn.commit()
+                    st.session_state.conteo_temp = 0
+                    st.success(f"✅ {cant} de {nombre_final} se sumaron directamente a tu inventario activo.")
+                    time.sleep(1.5)
+                    st.rerun()
+                else:
+                    st.warning("Agrega una cantidad mayor a 0.")
 
     st.divider()
-    st.subheader("🛒 Captura de hoy (sin procesar)")
+    st.subheader("🛒 Captura de Conteo Actual (Pendiente de Corte)")
     
     df_hoy_captura = pd.read_sql("SELECT rowid, nombre, fecha_cad, cantidad FROM captura_actual", conn)
     
@@ -351,11 +391,10 @@ with tab2:
     df_stock = pd.read_sql("SELECT nombre as Producto, fecha_cad as Caducidad, cantidad as Existencia FROM base_anterior", conn)
     
     if df_stock.empty:
-        st.info("No hay stock registrado en la base anterior. Realiza un corte para cargar inventario.")
+        st.info("No hay stock registrado. Realiza un corte inicial o usa el botón de sumar al stock en la pestaña de Conteo.")
     else:
         fechas_stock = sorted(df_stock['Caducidad'].unique())
         
-        # Filtros en una columna
         filtro_st_fecha = st.multiselect("Filtrar stock por Caducidad:", fechas_stock, default=fechas_stock)
             
         df_stock_filt = df_stock[df_stock['Caducidad'].isin(filtro_st_fecha)]
@@ -364,19 +403,21 @@ with tab2:
         st.divider()
         st.subheader("📥 Exportar Reportes")
         
-        msg_stock = "🍞 *INVENTARIO DISPONIBLE - CHAMPLITTE*\n\n"
-        for _, r in df_stock_filt.iterrows():
-            msg_stock += (f"▫️ *{r['Producto']}*\n   Cad: {r['Caducidad']} | Stock: *{r['Existencia']} pza*\n\n")
-        
+        msg_stock = "🍞 *INVENTARIO DISPONIBLE - CHAMPLITTE*\n\nAdjunto archivo de Excel con los detalles.\n\n"
         link_st = f"https://wa.me/{numero_whatsapp.strip()}?text={urllib.parse.quote(msg_stock)}"
         
         csv_stock = df_stock_filt.to_csv(index=False).encode('utf-8')
         excel_stock = generar_excel_formato(df_stock_filt, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.")
 
-        # Botones de exportación en una sola columna
-        st.link_button("💬 Enviar Resumen a WhatsApp", link_st, use_container_width=True, type="primary")
-        st.download_button("📊 Descargar CSV", data=csv_stock, file_name=f"inventario_{fecha_hoy_mx}.csv", mime="text/csv", use_container_width=True)
-        st.download_button("📗 Descargar Excel", data=excel_stock, file_name=f"Sugeridos_{fecha_hoy_mx}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+        st.info("💡 **Tip para WhatsApp:** Descarga el Excel primero y luego abre WhatsApp para arrastrar el archivo al chat.")
+        
+        col_down1, col_down2, col_down3 = st.columns(3)
+        with col_down1:
+            st.download_button("📗 1. Descargar Excel", data=excel_stock, file_name=f"Sugeridos_{fecha_hoy_mx}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+        with col_down2:
+            st.link_button("💬 2. Abrir WhatsApp", link_st, use_container_width=True, type="primary")
+        with col_down3:
+            st.download_button("📊 Descargar CSV", data=csv_stock, file_name=f"inventario_{fecha_hoy_mx}.csv", mime="text/csv", use_container_width=True)
 
     st.divider()
     st.header("🚀 Realizar Corte de Ventas")
@@ -386,7 +427,7 @@ with tab2:
         df_actualizado = pd.read_sql("SELECT * FROM captura_actual", conn)
         
         if df_actualizado.empty:
-            st.warning("⚠️ No hay datos en la pestaña de CONTEO. Captura algo primero.")
+            st.warning("⚠️ No hay datos en la tabla de CONTEO para comparar. Captura tu conteo final primero.")
         else:
             df_anterior = pd.read_sql("SELECT * FROM base_anterior", conn)
             ts_mx = datetime.now(zona_mx).strftime("%Y-%m-%d %H:%M:%S")
@@ -421,7 +462,6 @@ with tab3:
     else:
         df_hist['Fecha'] = pd.to_datetime(df_hist['Fecha']).dt.date
         
-        # Filtros en una columna
         buscar_h = st.text_input("Buscar producto en historial").upper()
         fecha_filtro = st.date_input("Filtrar por día de corte", value=None)
             
