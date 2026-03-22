@@ -163,7 +163,7 @@ st.sidebar.header("⚙️ Configuración")
 # Opción 1: Lista desplegable para números de WhatsApp
 opciones_wa = {
     "Contacto Principal": "522283530069",
-    "Contacto Secundario": "521234567890", # Cambia por el número real
+    "Contacto Secundario": "522299359597", # Cambia por el número real
     "Contacto 3": "520987654321"           # Cambia por el número real
 }
 seleccion_wa = st.sidebar.selectbox("📱 Selecciona el WhatsApp destino", list(opciones_wa.keys()))
