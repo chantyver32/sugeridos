@@ -179,7 +179,7 @@ with st.sidebar.expander("🚨 Zona de Peligro"):
 tab1, tab2, tab3 = st.tabs(["📝 Conteo", "📦 Inventario y Corte", "📊 Análisis"])
 
 # ------------------------------------------------------------
-# TAB 1: CONTEO (Optimizado para Tablet)
+# TAB 1: CONTEO (Optimizada para Tablet)
 # ------------------------------------------------------------
 with tab1:
     if "conteo_temp" not in st.session_state:
@@ -192,13 +192,9 @@ with tab1:
         if "sel_prod" in st.session_state:
             del st.session_state["sel_prod"]
 
-    # --- DIVISIÓN DE PANTALLA EN 2 COLUMNAS PRINCIPALES ---
-    col_izq, col_der = st.columns([1.2, 1], gap="medium")
-
-    # ================= COLUMNA IZQUIERDA: CONTROLES =================
-    with col_izq:
-        # --- ENTRADA POR VOZ INTELIGENTE ---
-        audio_val = st.audio_input("🎤 Dictar (Ej. '3 conchas para el 15 de marzo')")
+    # --- ENTRADA POR VOZ OCULTA EN EXPANDER PARA AHORRAR ESPACIO ---
+    with st.expander("🎤 Entrada por Voz Inteligente (Tocar para abrir)", expanded=False):
+        audio_val = st.audio_input("Dictar (Ej. '3 conchas para el 15 de marzo')")
         
         if audio_val is not None:
             audio_bytes = audio_val.getvalue()
@@ -213,10 +209,10 @@ with tab1:
                         if texto_voz:
                             prod, cant, fech = analizar_dictado(texto_voz, fecha_hoy_mx)
                             st.session_state.confirmacion_voz = {"prod": prod, "cant": cant, "fecha": fech, "original": texto_voz}
-                            st.session_state.audio_leido = False
+                            st.session_state.audio_leido = False  
                             st.rerun()
                 except ImportError:
-                    st.error("⚠️ Faltan dependencias: SpeechRecognition.")
+                    st.error("⚠️ Faltan dependencias. Asegúrate de tener SpeechRecognition.")
                 except Exception as e:
                     st.toast("❌ No pude entender el audio o hubo mucho ruido.")
 
@@ -224,117 +220,119 @@ with tab1:
         if st.session_state.get("confirmacion_voz"):
             datos = st.session_state.confirmacion_voz
             
-            # SCRIPT DE LECTURA EN VOZ ALTA (VOZ FEMENINA)
             if not st.session_state.get("audio_leido", False):
                 js_tts = f"""
                 <script>
                     function speakText() {{
                         const utterance = new SpeechSynthesisUtterance("{datos['original']}");
                         utterance.lang = 'es-MX';
-                        let voices = window.speechSynthesis.getVoices();
-                        let femaleVoice = voices.find(v => v.lang.includes('es') && (v.name.includes('Female') || v.name.includes('Mujer') || v.name.includes('Sabina') || v.name.includes('Paulina') || v.name.includes('Elena') || v.name.includes('Monica')));
-                        if (!femaleVoice) {{ femaleVoice = voices.find(v => v.lang.includes('es-MX')); }}
-                        if (femaleVoice) {{ utterance.voice = femaleVoice; }}
                         window.speechSynthesis.speak(utterance);
                     }}
-                    if (speechSynthesis.getVoices().length === 0) {{ speechSynthesis.onvoiceschanged = speakText; }} 
-                    else {{ speakText(); }}
+                    if (speechSynthesis.getVoices().length === 0) {{
+                        speechSynthesis.onvoiceschanged = speakText;
+                    }} else {{
+                        speakText();
+                    }}
                 </script>
                 """
                 components.html(js_tts, height=0)
                 st.session_state.audio_leido = True
                 
-            st.success(f"🗣️ **Entendido:** '{datos['original']}'")
+            st.success(f"🗣️ **Confirmado:** '{datos['original']}'")
             
-            # Edición en una sola fila
-            c_v1, c_v2, c_v3 = st.columns([2, 1, 1])
-            with c_v1: edit_prod = st.text_input("Producto", value=datos['prod'], key="v_prod").upper()
-            with c_v2: edit_cant = st.number_input("Cant.", value=int(datos['cant']), min_value=1, key="v_cant")
-            with c_v3: edit_fech = st.date_input("Caducidad", value=datos['fecha'], key="v_fech")
+            col_v1, col_v2, col_v3 = st.columns([2, 1, 1])
+            edit_prod = col_v1.text_input("Producto", value=datos['prod'], key="edit_v_prod").upper()
+            edit_cant = col_v2.number_input("Cantidad", value=int(datos['cant']), min_value=1, key="edit_v_cant")
+            edit_fech = col_v3.date_input("Caducidad", value=datos['fecha'], key="edit_v_fech")
             
-            c_v4, c_v5 = st.columns(2)
-            with c_v4:
-                if st.button("✅ Registrar esto", use_container_width=True, type="primary"):
-                    if edit_prod.strip() != "":
-                        existe = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", (edit_prod.strip(), str(edit_fech))).fetchone()
-                        if existe:
-                            c.execute("UPDATE captura_actual SET cantidad=cantidad+? WHERE nombre=? AND fecha_cad=?", (int(edit_cant), edit_prod.strip(), str(edit_fech)))
-                        else:
-                            c.execute("INSERT INTO captura_actual VALUES (?,?,?)", (edit_prod.strip(), str(edit_fech), int(edit_cant)))
-                        conn.commit()
-                        st.toast(f"✅ {edit_cant} {edit_prod.strip()} guardado.")
-                        st.session_state.confirmacion_voz = None
-                        st.session_state.audio_leido = False
-                        time.sleep(0.5)
-                        st.rerun()
-            with c_v5:
-                if st.button("❌ Cancelar", use_container_width=True):
+            col_b1, col_b2 = st.columns(2)
+            if col_b1.button("✅ Sí, registrar esto", use_container_width=True, type="primary"):
+                if edit_prod and edit_prod.strip() != "":
+                    prod_final = edit_prod.strip()
+                    existe = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", (prod_final, str(edit_fech))).fetchone()
+                    if existe:
+                        c.execute("UPDATE captura_actual SET cantidad=cantidad+? WHERE nombre=? AND fecha_cad=?", (int(edit_cant), prod_final, str(edit_fech)))
+                    else:
+                        c.execute("INSERT INTO captura_actual VALUES (?,?,?)", (prod_final, str(edit_fech), int(edit_cant)))
+                    conn.commit()
+                    st.success(f"✅ {edit_cant} {prod_final} registrado(s).")
                     st.session_state.confirmacion_voz = None
                     st.session_state.audio_leido = False
+                    time.sleep(1)
                     st.rerun()
+                    
+            if col_b2.button("❌ Cancelar", use_container_width=True):
+                st.session_state.confirmacion_voz = None
+                st.session_state.audio_leido = False
+                st.rerun()
 
-        st.markdown("---")
+    # --- ENTRADA MANUAL NORMAL (COMPACTA EN COLUMNAS) ---
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col1:
+        buscar = st.text_input("Buscar Producto", placeholder="🔎 BUSCAR...", key="buscar_prod").upper()
+        if st.button("🧹 Limpiar", use_container_width=True, on_click=limpiar_buscador):
+            pass
 
-        # --- ENTRADA MANUAL NORMAL (Compacta) ---
-        c_m1, c_m2 = st.columns([3, 1])
-        with c_m1:
-            buscar = st.text_input("🔎 BUSCAR PRODUCTO...", key="buscar_prod", label_visibility="collapsed").upper()
-        with c_m2:
-            st.button("🧹 Limpiar", on_click=limpiar_buscador, use_container_width=True)
+    nombres_prev = [r[0] for r in c.execute("SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual").fetchall()]
+    sugerencias = [p for p in nombres_prev if buscar in p] if buscar else nombres_prev
 
-        nombres_prev = [r[0] for r in c.execute("SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual").fetchall()]
-        sugerencias = [p for p in nombres_prev if buscar in p] if buscar else nombres_prev
-
-        c_m3, c_m4 = st.columns([2, 1])
-        with c_m3:
-            nombre_input = st.selectbox("Seleccionar producto", sugerencias, key="sel_prod", label_visibility="collapsed") if sugerencias else buscar
-        with c_m4:
-            f_cad = st.date_input("Caducidad normal", value=fecha_hoy_mx, label_visibility="collapsed")
-
-        # Botones de suma y resta en una fila
-        b1, b2, b3, b4 = st.columns(4)
-        with b1: st.button("+1", use_container_width=True, on_click=sumar, args=(1,))
-        with b2: st.button("+2", use_container_width=True, on_click=sumar, args=(2,))
-        with b3: st.button("-1", use_container_width=True, on_click=sumar, args=(-1,))
-        with b4: st.button("Borrar", use_container_width=True, on_click=resetear)
-
-        # Métrica y registro final alineados
-        c_m5, c_m6 = st.columns([1, 2.5])
-        with c_m5:
-            st.metric("A registrar", st.session_state.conteo_temp)
-        with c_m6:
-            st.write("") # Espaciador para alinear con la métrica
-            if st.button("➕ Enviar a Tabla", use_container_width=True, type="primary"):
-                if nombre_input and nombre_input.strip() != "" and st.session_state.conteo_temp > 0:
-                    nombre_final = nombre_input.strip().upper()
-                    cant = st.session_state.conteo_temp
-                    existe = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", (nombre_final, str(f_cad))).fetchone()
-                    if existe:
-                        c.execute("UPDATE captura_actual SET cantidad=cantidad+? WHERE nombre=? AND fecha_cad=?", (int(cant), nombre_final, str(f_cad)))
-                    else:
-                        c.execute("INSERT INTO captura_actual VALUES (?,?,?)", (nombre_final, str(f_cad), int(cant)))
-                    conn.commit()
-                    st.session_state.conteo_temp = 0
-                    st.toast(f"✅ {nombre_final} agregado a la tabla.")
-                    time.sleep(0.5)
-                    st.rerun()
-
-    # ================= COLUMNA DERECHA: TABLA Y CORTE =================
-    with col_der:
-        st.subheader("🛒 Captura Actual")
-        df_hoy_captura = pd.read_sql("SELECT rowid, nombre, fecha_cad, cantidad FROM captura_actual ORDER BY rowid DESC", conn)
+    with col2:
+        nombre_input = st.selectbox("Seleccionar producto a registrar", sugerencias, key="sel_prod") if sugerencias else buscar
         
-        # Ajustamos el height de la tabla para que encaje bien en tablet
-        df_editado = st.data_editor(df_hoy_captura, column_config={"rowid": None}, num_rows="dynamic", height=380, use_container_width=True, hide_index=True, key="editor_conteo")
+    with col3:
+        f_cad = st.date_input("Caducidad normal", value=fecha_hoy_mx)
 
-        if st.button("💾 Guardar Cambios Manuales en Tabla", use_container_width=True):
-            c.execute("DELETE FROM captura_actual")
-            for _, fila in df_editado.iterrows():
-                if pd.notna(fila["nombre"]) and str(fila["nombre"]).strip() != "":
-                    c.execute("INSERT INTO captura_actual VALUES (?,?,?)", (str(fila["nombre"]).upper(), str(fila["fecha_cad"]), int(fila["cantidad"])))
-            conn.commit()
-            st.toast("✅ Tabla actualizada")
-            time.sleep(0.5)
+    # Botones de suma y resta horizontales
+    col_btn1, col_btn2, col_btn3, col_btn4 = st.columns(4)
+    col_btn1.button("+1", use_container_width=True, on_click=sumar, args=(1,))
+    col_btn2.button("+2", use_container_width=True, on_click=sumar, args=(2,))
+    col_btn3.button("-1", use_container_width=True, on_click=sumar, args=(-1,))
+    col_btn4.button("Borrar Conteo", use_container_width=True, on_click=resetear)
+
+    # --- MÉTRICA Y BOTÓN DE REGISTRO EN LA MISMA FILA ---
+    col_reg1, col_reg2 = st.columns([1, 3])
+    with col_reg1:
+        st.metric("Total a registrar", st.session_state.conteo_temp)
+    with col_reg2:
+        st.write("") # Espaciador para alinear con la métrica
+        st.write("")
+        if st.button("➕ Registrar en Inventario", use_container_width=True, type="primary"):
+            if nombre_input and nombre_input.strip() != "" and st.session_state.conteo_temp > 0:
+                nombre_final = nombre_input.strip().upper()
+                cant = st.session_state.conteo_temp
+                
+                existe = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", (nombre_final, str(f_cad))).fetchone()
+                if existe:
+                    c.execute("UPDATE captura_actual SET cantidad=cantidad+? WHERE nombre=? AND fecha_cad=?", (int(cant), nombre_final, str(f_cad)))
+                else:
+                    c.execute("INSERT INTO captura_actual VALUES (?,?,?)", (nombre_final, str(f_cad), int(cant)))
+                
+                conn.commit()
+                st.session_state.conteo_temp = 0
+                st.success(f"✅ {nombre_final} registrado correctamente")
+                time.sleep(1)
+                st.rerun()
+            elif st.session_state.conteo_temp == 0:
+                st.warning("⚠️ La cantidad a registrar es 0. Suma al menos 1.")
+
+    st.divider()
+    
+    # --- TABLA DE CAPTURA DE HOY (Altura reducida) ---
+    st.subheader("🛒 Captura de hoy (sin procesar)")
+    df_hoy_captura = pd.read_sql("SELECT rowid, nombre, fecha_cad, cantidad FROM captura_actual", conn)
+    
+    # Reduje la altura a 200 para ahorrar espacio vertical en la tablet
+    df_editado = st.data_editor(df_hoy_captura, column_config={"rowid": None}, num_rows="dynamic", height=200, use_container_width=True, hide_index=True, key="editor_conteo")
+
+    if st.button("💾 Guardar Cambios en Tabla", use_container_width=True):
+        c.execute("DELETE FROM captura_actual")
+        for _, fila in df_editado.iterrows():
+            if pd.notna(fila["nombre"]) and str(fila["nombre"]).strip() != "":
+                c.execute("INSERT INTO captura_actual VALUES (?,?,?)", (str(fila["nombre"]).upper(), str(fila["fecha_cad"]), int(fila["cantidad"])))
+        conn.commit()
+        st.success("✅ Tabla de conteo guardada y actualizada")
+        time.sleep(1.5)
 
 # ------------------------------------------------------------
 # TAB 2: INVENTARIO Y CORTE
@@ -366,10 +364,11 @@ with tab2:
         csv_stock = df_stock_filt.to_csv(index=False).encode('utf-8')
         excel_stock = generar_excel_formato(df_stock_filt, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.")
 
-        # Botones de exportación en una sola columna
-        st.link_button("💬 Enviar Resumen a WhatsApp", link_st, use_container_width=True, type="primary")
-        st.download_button("📊 Descargar CSV", data=csv_stock, file_name=f"inventario_{fecha_hoy_mx}.csv", mime="text/csv", use_container_width=True)
-        st.download_button("📗 Descargar Excel", data=excel_stock, file_name=f"Sugeridos_{fecha_hoy_mx}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+        # Botones de exportación en una sola columna (o divididos si prefieres)
+        col_exp1, col_exp2, col_exp3 = st.columns(3)
+        col_exp1.link_button("💬 Enviar a WhatsApp", link_st, use_container_width=True, type="primary")
+        col_exp2.download_button("📊 Descargar CSV", data=csv_stock, file_name=f"inventario_{fecha_hoy_mx}.csv", mime="text/csv", use_container_width=True)
+        col_exp3.download_button("📗 Descargar Excel", data=excel_stock, file_name=f"Sugeridos_{fecha_hoy_mx}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
 
     st.divider()
     st.header("🚀 Realizar Corte de Ventas")
@@ -414,9 +413,10 @@ with tab3:
     else:
         df_hist['Fecha'] = pd.to_datetime(df_hist['Fecha']).dt.date
         
-        # Filtros en una columna
-        buscar_h = st.text_input("Buscar producto en historial").upper()
-        fecha_filtro = st.date_input("Filtrar por día de corte", value=None)
+        # Filtros en columnas para ahorrar espacio vertical
+        col_f1, col_f2 = st.columns(2)
+        buscar_h = col_f1.text_input("Buscar producto en historial").upper()
+        fecha_filtro = col_f2.date_input("Filtrar por día de corte", value=None)
             
         if buscar_h:
             df_hist = df_hist[df_hist["Producto"].str.contains(buscar_h, na=False)]
