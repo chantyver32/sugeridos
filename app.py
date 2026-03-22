@@ -446,18 +446,15 @@ with tab2:
         msg_stock = "🍞 *INVENTARIO DISPONIBLE - CHAMPLITTE*\n\nAdjunto archivo de Excel con los detalles.\n\n"
         link_st = f"https://wa.me/{numero_whatsapp.strip()}?text={urllib.parse.quote(msg_stock)}"
         
-        csv_stock = df_stock_filt.to_csv(index=False).encode('utf-8')
         excel_stock = generar_excel_formato(df_stock_filt, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.")
 
         st.info("💡 **Tip para WhatsApp:** Descarga el Excel primero y luego abre WhatsApp para arrastrar el archivo al chat.")
         
-        col_down1, col_down2, col_down3 = st.columns(3)
+        col_down1, col_down2 = st.columns(2)
         with col_down1:
             st.download_button("📗 1. Descargar Excel", data=excel_stock, file_name=f"Sugeridos_{fecha_hoy_mx}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
         with col_down2:
             st.link_button("💬 2. Abrir WhatsApp", link_st, use_container_width=True, type="primary")
-        with col_down3:
-            st.download_button("📊 Descargar CSV", data=csv_stock, file_name=f"inventario_{fecha_hoy_mx}.csv", mime="text/csv", use_container_width=True)
 
     st.divider()
     st.header("🚀 Realizar Corte de Ventas")
