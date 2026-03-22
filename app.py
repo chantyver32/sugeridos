@@ -171,10 +171,10 @@ numero_whatsapp = opciones_wa[seleccion_wa]
 
 st.sidebar.divider()
 
-# Opción 2: Espacio para adjuntar CSV y restaurar el inventario
-st.sidebar.subheader("📂 Restaurar Inventario")
-st.sidebar.write("Sube el último CSV generado para restaurar el stock.")
-archivo_csv = st.sidebar.file_uploader("Adjuntar archivo CSV", type=["csv"])
+# Opción 2: Espacio para adjuntar CSV y restaurar el inventario (MODIFICADO AQUÍ)
+st.sidebar.subheader("💾 Respaldo de Base de Datos")
+st.sidebar.info("Guarda o restaura tu stock (bóveda) mediante un archivo CSV para mantenerlo fijo y no perderlo.")
+archivo_csv = st.sidebar.file_uploader("⬆️ Subir Respaldo CSV", type=["csv"])
 
 if archivo_csv is not None:
     if st.sidebar.button("🔄 Cargar y Restaurar Stock", use_container_width=True):
@@ -356,7 +356,7 @@ with tab1:
 
     st.write("")
     
-    # Botones de suma y borrar (Se quitó el botón -1 y se ajustaron a 3 columnas)
+    # Botones de suma y borrar
     col_sum1, col_sum2, col_sum3 = st.columns(3)
     with col_sum1: st.button("+1", use_container_width=True, on_click=sumar, args=(1,))
     with col_sum2: st.button("+2", use_container_width=True, on_click=sumar, args=(2,))
