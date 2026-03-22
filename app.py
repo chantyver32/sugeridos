@@ -159,7 +159,47 @@ def analizar_dictado(texto, fecha_base):
 
 # ------------------ SIDEBAR ------------------
 st.sidebar.header("⚙️ Configuración")
-numero_whatsapp = st.sidebar.text_input("📱 Número WhatsApp", value="522283530069")
+
+# Opción 1: Lista desplegable para números de WhatsApp
+opciones_wa = {
+    "Contacto Principal": "522283530069",
+    "Contacto Secundario": "521234567890", # Cambia por el número real
+    "Contacto 3": "520987654321"           # Cambia por el número real
+}
+seleccion_wa = st.sidebar.selectbox("📱 Selecciona el WhatsApp destino", list(opciones_wa.keys()))
+numero_whatsapp = opciones_wa[seleccion_wa]
+
+st.sidebar.divider()
+
+# Opción 2: Espacio para adjuntar CSV y restaurar el inventario
+st.sidebar.subheader("📂 Restaurar Inventario")
+st.sidebar.write("Sube el último CSV generado para restaurar el stock.")
+archivo_csv = st.sidebar.file_uploader("Adjuntar archivo CSV", type=["csv"])
+
+if archivo_csv is not None:
+    if st.sidebar.button("🔄 Cargar y Restaurar Stock", use_container_width=True):
+        try:
+            # Leer el CSV
+            df_restaurar = pd.read_csv(archivo_csv)
+            
+            # Ajustar nombres de columnas si vienen del formato de exportación
+            if 'Producto' in df_restaurar.columns:
+                df_restaurar = df_restaurar.rename(columns={'Producto': 'nombre', 'Caducidad': 'fecha_cad', 'Existencia': 'cantidad'})
+            
+            # Limpiar la tabla de base_anterior e insertar la nueva data
+            c.execute("DELETE FROM base_anterior")
+            for _, fila in df_restaurar.iterrows():
+                c.execute("INSERT INTO base_anterior (nombre, fecha_cad, cantidad) VALUES (?, ?, ?)", 
+                          (str(fila['nombre']).upper(), str(fila['fecha_cad']), int(fila['cantidad'])))
+            conn.commit()
+            
+            st.sidebar.success("✅ Inventario restaurado correctamente")
+            time.sleep(1.5)
+            st.rerun()
+        except Exception as e:
+            st.sidebar.error(f"⚠️ Error al restaurar: {e}")
+
+st.sidebar.divider()
 
 with st.sidebar.expander("🚨 Zona de Peligro"):
     confirmar_reset = st.checkbox("Confirmar que deseo borrar todo", key="check_reset")
