@@ -119,7 +119,7 @@ def generar_excel_formato(df, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V."):
 def analizar_dictado(texto, fecha_base):
     texto = texto.lower()
     
-    nums = {"un": "1", "uno": "1", "una": "1", "dos": "2", "tres": "3", "cuatro": "4", "cinco": "5"}
+    nums = {"un": "1", "uno": "1", "una": "1", "dos": "2", "tres": "3", "cuatro": "4", "cinco": "5", "seis": "6"}
     for k, v in nums.items():
         texto = re.sub(rf'\b{k}\b', v, texto)
 
@@ -238,7 +238,7 @@ with tab1:
 
     # --- ENTRADA POR VOZ INTELIGENTE ---
     
-    with st.expander("🎤 *Ingreso por Voz* (Clic para desplegar)", expanded=False):
+    with st.expander("🎤 Ingreso por Voz (Clic para desplegar)", expanded=False):
         audio_val = st.audio_input("Di algo como: 3 brownies para el 15 de octubre")
 
         if audio_val is not None:
