@@ -239,7 +239,7 @@ with tab1:
     # --- ENTRADA POR VOZ INTELIGENTE ---
     
     with st.expander("🎤 **Ingreso por Voz** (Clic para desplegar)", expanded=False):
-        audio_val = st.audio_input("Di algo como: 3 brownies para el 15 de octubre")
+        audio_val = st.audio_input("Di algo como: 3 brownies para el 15 de octubre.")
 
         if audio_val is not None:
             audio_bytes = audio_val.getvalue()
