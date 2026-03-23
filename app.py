@@ -237,9 +237,9 @@ with tab1:
     st.button("🧹 Limpiar Búsqueda", on_click=limpiar_buscador, use_container_width=True)
 
     # --- ENTRADA POR VOZ INTELIGENTE ---
+    
     with st.expander("🎤 *Ingreso por Voz* (Clic para desplegar)", expanded=False):
-        st.info("Dictar (Ej. '3 conchas para el 15 de marzo')")
-        audio_val = st.audio_input("Grabar voz para registro", key="audio_reg")
+        audio_val = st.audio_input("Di algo como: 3 brownies para el 15 de octubre")
 
         if audio_val is not None:
             audio_bytes = audio_val.getvalue()
