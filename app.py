@@ -62,13 +62,17 @@ def generar_excel_formato(df, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V."):
     sheet.hide_gridlines(2)
 
     color_guinda = '#8C0000'
+    color_sombreado_rojo = '#FCE4D6' # Color similar al de la imagen para próximos a vencer
     
     fmt_titulo = workbook.add_format({'bold': True, 'font_color': 'white', 'bg_color': color_guinda, 'align': 'center', 'valign': 'vcenter', 'font_size': 14, 'border': 1})
     fmt_subtitulo = workbook.add_format({'bold': True, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 11})
     fmt_etiqueta = workbook.add_format({'bold': True, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10})
     fmt_valor = workbook.add_format({'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10})
     fmt_header_tabla = workbook.add_format({'bold': True, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10})
+    
+    # Formatos de datos normales y sombreados
     fmt_datos_centro = workbook.add_format({'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10})
+    fmt_sombreado = workbook.add_format({'bg_color': color_sombreado_rojo, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10})
 
     sheet.set_column('A:A', 15)  
     sheet.set_column('B:B', 35)  
@@ -102,12 +106,21 @@ def generar_excel_formato(df, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V."):
         col_cant = 'Existencia' if 'Existencia' in df.columns else 'cantidad'
         col_fecha = 'Caducidad' if 'Caducidad' in df.columns else 'fecha_cad'
 
+        # ORDENAR POR FECHA DE CADUCIDAD (De la más próxima a la más lejana)
+        df = df.sort_values(by=col_fecha).reset_index(drop=True)
+        
+        # IDENTIFICAR LA FECHA MÁS PRÓXIMA (Para el sombreado)
+        fecha_proxima_vencer = df[col_fecha].min()
+
         for _, fila in df.iterrows():
+            # Seleccionar formato dependiendo si es de los próximos a vencer
+            formato_actual = fmt_sombreado if fila[col_fecha] == fecha_proxima_vencer else fmt_datos_centro
+            
             sheet.write(row, 0, '', fmt_valor) 
-            sheet.write(row, 1, str(fila[col_nombre]), fmt_datos_centro) 
-            sheet.write(row, 2, fila[col_cant], fmt_datos_centro)
-            sheet.write(row, 3, str(fila[col_fecha]), fmt_datos_centro)
-            sheet.write(row, 4, 'PEDRO GARCÍA', fmt_datos_centro) 
+            sheet.write(row, 1, str(fila[col_nombre]), formato_actual) 
+            sheet.write(row, 2, fila[col_cant], formato_actual)
+            sheet.write(row, 3, str(fila[col_fecha]), formato_actual)
+            sheet.write(row, 4, 'PEDRO GARCÍA', formato_actual) 
             row += 1
 
     last_row = row - 1 if row > 6 else 6
@@ -444,7 +457,8 @@ with tab2:
         st.divider()
         st.subheader("📥 Exportar Reportes")
         
-        msg_stock = "🍞 *INVENTARIO DISPONIBLE - CHAMPLITTE*\n\nAdjunto archivo de Excel con los detalles.\n\n"
+        # TEXTO DE WHATSAPP MODIFICADO AQUÍ A "SUGERIDOS"
+        msg_stock = "🍞 *SUGERIDOS - CHAMPLITTE*\n\nAdjunto archivo de Excel con los detalles.\n\n"
         link_st = f"https://wa.me/{numero_whatsapp.strip()}?text={urllib.parse.quote(msg_stock)}"
         
         excel_stock = generar_excel_formato(df_stock_filt, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.")
