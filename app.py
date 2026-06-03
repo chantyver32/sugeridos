@@ -53,7 +53,8 @@ def resetear():
     st.session_state.conteo_temp = 0
     sonido_click()
 
-def generar_excel_formato(df, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V."):
+# --- SE MODIFICÓ ESTA FUNCIÓN PARA ACEPTAR ELABORA Y VENDEDOR ---
+def generar_excel_formato(df, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.", elabora="PEDRO GARCÍA", vendedor="PEDRO GARCÍA"):
     output = io.BytesIO()
     writer = pd.ExcelWriter(output, engine='xlsxwriter')
     workbook = writer.book
@@ -62,7 +63,7 @@ def generar_excel_formato(df, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V."):
     sheet.hide_gridlines(2)
 
     color_guinda = '#8C0000'
-    color_sombreado_rojo = '#FCE4D6' # Color similar al de la imagen para próximos a vencer
+    color_sombreado_rojo = '#FCE4D6' 
     
     fmt_titulo = workbook.add_format({'bold': True, 'font_color': 'white', 'bg_color': color_guinda, 'align': 'center', 'valign': 'vcenter', 'font_size': 14, 'border': 1})
     fmt_subtitulo = workbook.add_format({'bold': True, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 11})
@@ -70,7 +71,6 @@ def generar_excel_formato(df, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V."):
     fmt_valor = workbook.add_format({'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10})
     fmt_header_tabla = workbook.add_format({'bold': True, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10})
     
-    # Formatos de datos normales y sombreados
     fmt_datos_centro = workbook.add_format({'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10})
     fmt_sombreado = workbook.add_format({'bg_color': color_sombreado_rojo, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10})
 
@@ -92,7 +92,7 @@ def generar_excel_formato(df, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V."):
     sheet.merge_range('B4:E4', fecha_str, fmt_valor)
     
     sheet.write('A5', 'ELABORA', fmt_etiqueta)
-    sheet.merge_range('B5:E5', 'PEDRO GARCÍA', fmt_valor)
+    sheet.merge_range('B5:E5', elabora, fmt_valor) # <--- Variable elabora
 
     sheet.write('A6', '', fmt_valor)
     sheet.write('B6', 'DESCRIPCIÓN', fmt_header_tabla)
@@ -106,21 +106,27 @@ def generar_excel_formato(df, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V."):
         col_cant = 'Existencia' if 'Existencia' in df.columns else 'cantidad'
         col_fecha = 'Caducidad' if 'Caducidad' in df.columns else 'fecha_cad'
 
-        # ORDENAR POR FECHA DE CADUCIDAD (De la más próxima a la más lejana)
         df = df.sort_values(by=col_fecha).reset_index(drop=True)
-        
-        # IDENTIFICAR LA FECHA MÁS PRÓXIMA (Para el sombreado)
         fecha_proxima_vencer = df[col_fecha].min()
 
         for _, fila in df.iterrows():
-            # Seleccionar formato dependiendo si es de los próximos a vencer
             formato_actual = fmt_sombreado if fila[col_fecha] == fecha_proxima_vencer else fmt_datos_centro
+            
+            # --- CONVERSIÓN DE FECHA A DD/MM/YYYY ---
+            fecha_str_out = str(fila[col_fecha])
+            try:
+                if '-' in fecha_str_out:
+                    partes = fecha_str_out.split('-')
+                    if len(partes) == 3:
+                        fecha_str_out = f"{partes[2]}/{partes[1]}/{partes[0]}"
+            except Exception:
+                pass
             
             sheet.write(row, 0, '', fmt_valor) 
             sheet.write(row, 1, str(fila[col_nombre]), formato_actual) 
             sheet.write(row, 2, fila[col_cant], formato_actual)
-            sheet.write(row, 3, str(fila[col_fecha]), formato_actual)
-            sheet.write(row, 4, 'PEDRO GARCÍA', formato_actual) 
+            sheet.write(row, 3, fecha_str_out, formato_actual) # <--- Fecha formatada
+            sheet.write(row, 4, vendedor, formato_actual) # <--- Variable vendedor
             row += 1
 
     last_row = row - 1 if row > 6 else 6
@@ -173,18 +179,16 @@ def analizar_dictado(texto, fecha_base):
 # ------------------ SIDEBAR ------------------
 st.sidebar.header("⚙️ Configuración")
 
-# Opción 1: Lista desplegable para números de WhatsApp
 opciones_wa = {
     "Contacto Principal": "522283530069",
-    "Contacto Secundario": "522299359597", # Cambia por el número real
-    "Contacto 3": "520987654321"           # Cambia por el número real
+    "Contacto Secundario": "522299359597", 
+    "Contacto 3": "520987654321"           
 }
 seleccion_wa = st.sidebar.selectbox("📱 Selecciona el WhatsApp destino", list(opciones_wa.keys()))
 numero_whatsapp = opciones_wa[seleccion_wa]
 
 st.sidebar.divider()
 
-# Opción 2: Espacio para adjuntar CSV y restaurar el inventario (MODIFICADO AQUÍ)
 st.sidebar.subheader("💾 Respaldo de Base de Datos")
 st.sidebar.info("Guarda o restaura tu stock (bóveda) mediante un archivo CSV para mantenerlo fijo y no perderlo.")
 archivo_csv = st.sidebar.file_uploader("⬆️ Subir Respaldo CSV", type=["csv"])
@@ -192,14 +196,10 @@ archivo_csv = st.sidebar.file_uploader("⬆️ Subir Respaldo CSV", type=["csv"]
 if archivo_csv is not None:
     if st.sidebar.button("🔄 Cargar y Restaurar Stock", use_container_width=True):
         try:
-            # Leer el CSV
             df_restaurar = pd.read_csv(archivo_csv)
-            
-            # Ajustar nombres de columnas si vienen del formato de exportación
             if 'Producto' in df_restaurar.columns:
                 df_restaurar = df_restaurar.rename(columns={'Producto': 'nombre', 'Caducidad': 'fecha_cad', 'Existencia': 'cantidad'})
             
-            # Limpiar la tabla de base_anterior e insertar la nueva data
             c.execute("DELETE FROM base_anterior")
             for _, fila in df_restaurar.iterrows():
                 c.execute("INSERT INTO base_anterior (nombre, fecha_cad, cantidad) VALUES (?, ?, ?)", 
@@ -245,12 +245,9 @@ with tab1:
         if "sel_prod" in st.session_state:
             del st.session_state["sel_prod"]
 
-    # Buscador
     buscar = st.text_input("Buscar", placeholder="🔎 BUSCAR PRODUCTO...", key="buscar_prod", label_visibility="collapsed").upper()
     st.button("🧹 Limpiar Búsqueda", on_click=limpiar_buscador, use_container_width=True)
 
-    # --- ENTRADA POR VOZ INTELIGENTE ---
-    
     with st.expander("🎤 **Ingreso por Voz** (Clic para desplegar)", expanded=False):
         audio_val = st.audio_input("Di algo como: 3 brownies para el 15 de octubre.")
 
@@ -274,11 +271,9 @@ with tab1:
                 except Exception as e:
                     st.toast("❌ No pude entender el audio o hubo mucho ruido de fondo.")
 
-    # --- CUADRO DE CONFIRMACIÓN EDITABLE ---
     if st.session_state.get("confirmacion_voz"):
         datos = st.session_state.confirmacion_voz
         
-        # --- SCRIPT DE LECTURA EN VOZ ALTA (VOZ FEMENINA) ---
         if not st.session_state.get("audio_leido", False):
             js_tts = f"""
             <script>
@@ -361,7 +356,6 @@ with tab1:
         
         st.divider()
 
-    # --- ENTRADA MANUAL NORMAL ---
     nombres_prev = [r[0] for r in c.execute("SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual").fetchall()]
     sugerencias = [p for p in nombres_prev if buscar in p] if buscar else nombres_prev
 
@@ -370,7 +364,6 @@ with tab1:
 
     st.write("")
     
-    # Botones de suma y borrar
     col_sum1, col_sum2, col_sum3 = st.columns(3)
     with col_sum1: st.button("+1", use_container_width=True, on_click=sumar, args=(1,))
     with col_sum2: st.button("+2", use_container_width=True, on_click=sumar, args=(2,))
@@ -378,7 +371,6 @@ with tab1:
 
     st.write("") 
     
-    # --- MÉTRICA Y BOTÓN DE REGISTRO ---
     st.metric("Total a registrar", st.session_state.conteo_temp)
 
     col1, col2 = st.columns(2)
@@ -457,11 +449,18 @@ with tab2:
         st.divider()
         st.subheader("📥 Exportar Reportes")
         
-        # TEXTO DE WHATSAPP MODIFICADO AQUÍ A "SUGERIDOS"
+        # --- NUEVOS CAMPOS DE SELECCIÓN PARA EXCEL ---
+        col_export1, col_export2 = st.columns(2)
+        with col_export1:
+            elabora_input = st.text_input("👨‍🍳 Nombre de quien Elabora", value="PEDRO GARCÍA").upper()
+        with col_export2:
+            vendedor_input = st.text_input("🛒 Nombre del Vendedor", value="PEDRO GARCÍA").upper()
+        
         msg_stock = "🍞 *SUGERIDOS - CHAMPLITTE*\n\nAdjunto archivo de Excel con los detalles.\n\n"
         link_st = f"https://wa.me/{numero_whatsapp.strip()}?text={urllib.parse.quote(msg_stock)}"
         
-        excel_stock = generar_excel_formato(df_stock_filt, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.")
+        # --- LLAMADA MODIFICADA ---
+        excel_stock = generar_excel_formato(df_stock_filt, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.", elabora=elabora_input, vendedor=vendedor_input)
 
         st.info("💡 **Tip para WhatsApp:** Descarga el Excel primero y luego abre WhatsApp para arrastrar el archivo al chat.")
         
