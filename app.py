@@ -53,7 +53,6 @@ def resetear():
     st.session_state.conteo_temp = 0
     sonido_click()
 
-# --- SE MODIFICÓ ESTA FUNCIÓN PARA ACEPTAR ELABORA Y VENDEDOR ---
 def generar_excel_formato(df, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.", elabora="PEDRO GARCÍA", vendedor="PEDRO GARCÍA"):
     output = io.BytesIO()
     writer = pd.ExcelWriter(output, engine='xlsxwriter')
@@ -92,7 +91,7 @@ def generar_excel_formato(df, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.", ela
     sheet.merge_range('B4:E4', fecha_str, fmt_valor)
     
     sheet.write('A5', 'ELABORA', fmt_etiqueta)
-    sheet.merge_range('B5:E5', elabora, fmt_valor) # <--- Variable elabora
+    sheet.merge_range('B5:E5', elabora, fmt_valor)
 
     sheet.write('A6', '', fmt_valor)
     sheet.write('B6', 'DESCRIPCIÓN', fmt_header_tabla)
@@ -112,7 +111,6 @@ def generar_excel_formato(df, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.", ela
         for _, fila in df.iterrows():
             formato_actual = fmt_sombreado if fila[col_fecha] == fecha_proxima_vencer else fmt_datos_centro
             
-            # --- CONVERSIÓN DE FECHA A DD/MM/YYYY ---
             fecha_str_out = str(fila[col_fecha])
             try:
                 if '-' in fecha_str_out:
@@ -125,8 +123,8 @@ def generar_excel_formato(df, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.", ela
             sheet.write(row, 0, '', fmt_valor) 
             sheet.write(row, 1, str(fila[col_nombre]), formato_actual) 
             sheet.write(row, 2, fila[col_cant], formato_actual)
-            sheet.write(row, 3, fecha_str_out, formato_actual) # <--- Fecha formatada
-            sheet.write(row, 4, vendedor, formato_actual) # <--- Variable vendedor
+            sheet.write(row, 3, fecha_str_out, formato_actual) 
+            sheet.write(row, 4, vendedor, formato_actual) 
             row += 1
 
     last_row = row - 1 if row > 6 else 6
@@ -158,6 +156,9 @@ def analizar_dictado(texto, fecha_base):
         except ValueError:
             pass
         texto = texto.replace(match_fecha.group(0), "")
+    elif "pasado mañana" in texto:
+        fecha_calc = fecha_base + timedelta(days=2)
+        texto = texto.replace("pasado mañana", "")
     elif "mañana" in texto:
         fecha_calc = fecha_base + timedelta(days=1)
         texto = texto.replace("mañana", "")
@@ -180,9 +181,9 @@ def analizar_dictado(texto, fecha_base):
 st.sidebar.header("⚙️ Configuración")
 
 opciones_wa = {
-    "Contacto Principal": "522283530069",
-    "Contacto Secundario": "522299359597", 
-    "Contacto 3": "520987654321"           
+    "Costa Verde":"522299359597",
+    "Donato Casas": "522291653833", 
+    "Costa de Oro": "522292780850"           
 }
 seleccion_wa = st.sidebar.selectbox("📱 Selecciona el WhatsApp destino", list(opciones_wa.keys()))
 numero_whatsapp = opciones_wa[seleccion_wa]
@@ -360,7 +361,17 @@ with tab1:
     sugerencias = [p for p in nombres_prev if buscar in p] if buscar else nombres_prev
 
     nombre_input = st.selectbox("Seleccionar producto", sugerencias, key="sel_prod") if sugerencias else buscar
-    f_cad = st.date_input("Caducidad", value=fecha_hoy_mx)
+    
+    fecha_sugerido = fecha_hoy_mx + timedelta(days=1)
+    fecha_dia_mas = fecha_hoy_mx + timedelta(days=2)
+    
+    opcion_fecha = st.radio(
+        "📅 Fecha de Caducidad:",
+        options=["Sugerido (Mañana)", "Día Más (Pasado Mañana)"],
+        horizontal=True
+    )
+    
+    f_cad = fecha_sugerido if opcion_fecha == "Sugerido (Mañana)" else fecha_dia_mas
 
     st.write("")
     
@@ -449,7 +460,6 @@ with tab2:
         st.divider()
         st.subheader("📥 Exportar Reportes")
         
-        # --- NUEVOS CAMPOS DE SELECCIÓN PARA EXCEL ---
         col_export1, col_export2 = st.columns(2)
         with col_export1:
             elabora_input = st.text_input("👨‍🍳 Nombre de quien Elabora", value="PEDRO GARCÍA").upper()
@@ -459,7 +469,6 @@ with tab2:
         msg_stock = "🍞 *SUGERIDOS - CHAMPLITTE*\n\nAdjunto archivo de Excel con los detalles.\n\n"
         link_st = f"https://wa.me/{numero_whatsapp.strip()}?text={urllib.parse.quote(msg_stock)}"
         
-        # --- LLAMADA MODIFICADA ---
         excel_stock = generar_excel_formato(df_stock_filt, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.", elabora=elabora_input, vendedor=vendedor_input)
 
         st.info("💡 **Tip para WhatsApp:** Descarga el Excel primero y luego abre WhatsApp para arrastrar el archivo al chat.")
