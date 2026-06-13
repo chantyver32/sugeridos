@@ -53,7 +53,7 @@ def resetear():
     st.session_state.conteo_temp = 0
     sonido_click()
 
-def generar_excel_formato(df, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.", elabora="PEDRO GARCÍA", vendedor="PEDRO GARCÍA"):
+def generar_excel_formato(df, sucursal, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.", elabora="PEDRO GARCÍA"):
     output = io.BytesIO()
     writer = pd.ExcelWriter(output, engine='xlsxwriter')
     workbook = writer.book
@@ -77,27 +77,25 @@ def generar_excel_formato(df, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.", ela
     sheet.set_column('B:B', 35)  
     sheet.set_column('C:C', 12)  
     sheet.set_column('D:D', 22)  
-    sheet.set_column('E:E', 20)  
 
     sheet.set_row(0, 30)
-    sheet.merge_range('A1:E1', titulo, fmt_titulo)
-    sheet.merge_range('A2:E2', 'SUGERIDOS DEL DÍA', fmt_subtitulo)
+    sheet.merge_range('A1:D1', titulo, fmt_titulo)
+    sheet.merge_range('A2:D2', 'SUGERIDOS DEL DÍA', fmt_subtitulo)
 
     sheet.write('A3', 'SUCURSAL', fmt_etiqueta)
-    sheet.merge_range('B3:E3', 'COSTA VERDE', fmt_valor)
+    sheet.merge_range('B3:D3', sucursal.upper(), fmt_valor)
     
     sheet.write('A4', 'FECHA', fmt_etiqueta)
     fecha_str = datetime.now(pytz.timezone('America/Mexico_City')).strftime("%d/%m/%Y")
-    sheet.merge_range('B4:E4', fecha_str, fmt_valor)
+    sheet.merge_range('B4:D4', fecha_str, fmt_valor)
     
     sheet.write('A5', 'ELABORA', fmt_etiqueta)
-    sheet.merge_range('B5:E5', elabora, fmt_valor)
+    sheet.merge_range('B5:D5', elabora, fmt_valor)
 
     sheet.write('A6', '', fmt_valor)
     sheet.write('B6', 'DESCRIPCIÓN', fmt_header_tabla)
     sheet.write('C6', 'CANTIDAD', fmt_header_tabla)
     sheet.write('D6', 'FECHA DE CADUCIDAD', fmt_header_tabla)
-    sheet.write('E6', 'VENDEDOR', fmt_header_tabla)
 
     row = 6
     if not df.empty:
@@ -124,11 +122,10 @@ def generar_excel_formato(df, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.", ela
             sheet.write(row, 1, str(fila[col_nombre]), formato_actual) 
             sheet.write(row, 2, fila[col_cant], formato_actual)
             sheet.write(row, 3, fecha_str_out, formato_actual) 
-            sheet.write(row, 4, vendedor, formato_actual) 
             row += 1
 
     last_row = row - 1 if row > 6 else 6
-    sheet.autofilter(5, 1, last_row, 4)
+    sheet.autofilter(5, 1, last_row, 3)
 
     writer.close()
     return output.getvalue()
@@ -157,11 +154,9 @@ def analizar_dictado(texto, fecha_base):
         except ValueError:
             pass
         texto = texto.replace(match_fecha.group(0), "")
-    # MODIFICACIÓN: Capturar "pasado mañana", "día más" o "dia mas"
     elif "pasado mañana" in texto or "día más" in texto or "dia mas" in texto:
         fecha_calc = fecha_base + timedelta(days=2)
         texto = texto.replace("pasado mañana", "").replace("día más", "").replace("diamas", "")
-    # MODIFICACIÓN: Capturar "mañana" o "sugerido"
     elif "mañana" in texto or "sugerido" in texto:
         fecha_calc = fecha_base + timedelta(days=1)
         texto = texto.replace("mañana", "").replace("sugerido", "")
@@ -183,12 +178,13 @@ def analizar_dictado(texto, fecha_base):
 # ------------------ SIDEBAR ------------------
 st.sidebar.header("⚙️ Configuración")
 
+# MODIFICACIÓN: Definición explícita de sucursales reales
 opciones_wa = {
-    "Contacto Principal": "522283530069",
-    "Contacto Secundario": "522299359597", 
-    "Contacto 3": "520987654321"           
+    "Costa Verde": "522283530069",
+    "Costa de Oro": "522299359597", 
+    "Donato": "520987654321"           
 }
-seleccion_wa = st.sidebar.selectbox("📱 Selecciona el WhatsApp destino", list(opciones_wa.keys()))
+seleccion_wa = st.sidebar.selectbox("📱 Selecciona la Sucursal / WhatsApp", list(opciones_wa.keys()))
 numero_whatsapp = opciones_wa[seleccion_wa]
 
 st.sidebar.divider()
@@ -311,7 +307,6 @@ with tab1:
         st.success(f"🗣️ **Confirmado:** '{datos['original']}'")
         st.write("✏️ *Puedes corregir los datos antes de registrar:*")
         
-        # MODIFICACIÓN: Orden actualizado a Cantidad, Producto y Fecha
         edit_cant = st.number_input("Cantidad", value=int(datos['cant']), min_value=1)
         edit_prod = st.text_input("Producto", value=datos['prod']).upper()
         edit_fech = st.date_input("Caducidad", value=datos['fecha'])
@@ -464,22 +459,20 @@ with tab2:
         st.divider()
         st.subheader("📥 Exportar Reportes")
         
-        col_export1, col_export2 = st.columns(2)
-        with col_export1:
-            elabora_input = st.text_input("👨‍🍳 Nombre de quien Elabora", value="PEDRO GARCÍA").upper()
-        with col_export2:
-            vendedor_input = st.text_input("🛒 Nombre del Vendedor", value="PEDRO GARCÍA").upper()
+        # MODIFICACIÓN: Removido el input de Vendedor que ya no se necesita
+        elabora_input = st.text_input("👨‍🍳 Nombre de quien Elabora", value="PEDRO GARCÍA").upper()
         
-        msg_stock = "🍞 *SUGERIDOS - CHAMPLITTE*\n\nAdjunto archivo de Excel con los detalles.\n\n"
+        msg_stock = f"🍞 *SUGERIDOS - CHAMPLITTE ({seleccion_wa.upper()})*\n\nAdjunto archivo de Excel con los detalles.\n\n"
         link_st = f"https://wa.me/{numero_whatsapp.strip()}?text={urllib.parse.quote(msg_stock)}"
         
-        excel_stock = generar_excel_formato(df_stock_filt, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.", elabora=elabora_input, vendedor=vendedor_input)
+        # MODIFICACIÓN: Pasamos la variable seleccion_wa dinámicamente como sucursal
+        excel_stock = generar_excel_formato(df_stock_filt, sucursal=seleccion_wa, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.", elabora=elabora_input)
 
         st.info("💡 **Tip para WhatsApp:** Descarga el Excel primero y luego abre WhatsApp para arrastrar el archivo al chat.")
         
         col_down1, col_down2 = st.columns(2)
         with col_down1:
-            st.download_button("📗 1. Descargar Excel", data=excel_stock, file_name=f"Sugeridos_{fecha_hoy_mx}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+            st.download_button("📗 1. Descargar Excel", data=excel_stock, file_name=f"Sugeridos_{seleccion_wa}_{fecha_hoy_mx}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
         with col_down2:
             st.link_button("💬 2. Abrir WhatsApp", link_st, use_container_width=True, type="primary")
 
