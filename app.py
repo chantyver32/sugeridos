@@ -182,7 +182,7 @@ st.sidebar.header("⚙️ Configuración")
 opciones_wa = {
     "Costa Verde": "522283530069",
     "Costa de Oro": "522299359597", 
-    "Donato": "520987654321"           
+    "Donato Casas": "520987654321"           
 }
 seleccion_wa = st.sidebar.selectbox("📱 Selecciona la Sucursal / WhatsApp", list(opciones_wa.keys()))
 numero_whatsapp = opciones_wa[seleccion_wa]
