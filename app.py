@@ -160,7 +160,7 @@ def analizar_dictado(texto, fecha_base):
     # MODIFICACIÓN: Capturar "pasado mañana", "día más" o "dia mas"
     elif "pasado mañana" in texto or "día más" in texto or "dia mas" in texto:
         fecha_calc = fecha_base + timedelta(days=2)
-        texto = texto.replace("pasado mañana", "").replace("día más", "").replace("dia mas", "")
+        texto = texto.replace("pasado mañana", "").replace("día más", "").replace("diamas", "")
     # MODIFICACIÓN: Capturar "mañana" o "sugerido"
     elif "mañana" in texto or "sugerido" in texto:
         fecha_calc = fecha_base + timedelta(days=1)
