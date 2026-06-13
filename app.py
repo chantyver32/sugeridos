@@ -180,9 +180,9 @@ st.sidebar.header("⚙️ Configuración")
 
 # MODIFICACIÓN: Definición explícita de sucursales reales
 opciones_wa = {
-    "Costa Verde": "522283530069",
-    "Costa de Oro": "522299359597", 
-    "Donato Casas": "520987654321"           
+    "Costa Verde": "522299359597",
+    "Costa de Oro": "522292780850", 
+    "Donato Casas": "522291653833"           
 }
 seleccion_wa = st.sidebar.selectbox("📱 Selecciona la Sucursal / WhatsApp", list(opciones_wa.keys()))
 numero_whatsapp = opciones_wa[seleccion_wa]
