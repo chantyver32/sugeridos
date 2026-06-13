@@ -146,6 +146,7 @@ def analizar_dictado(texto, fecha_base):
              "julio": 7, "agosto": 8, "septiembre": 9, "octubre": 10, "noviembre": 11, "diciembre": 12}
     
     match_fecha = re.search(r'(\d{1,2})\s*(?:de\s*)?(' + '|'.join(meses.keys()) + r')', texto)
+    
     if match_fecha:
         dia = int(match_fecha.group(1))
         mes = meses[match_fecha.group(2)]
@@ -156,12 +157,14 @@ def analizar_dictado(texto, fecha_base):
         except ValueError:
             pass
         texto = texto.replace(match_fecha.group(0), "")
-    elif "pasado mañana" in texto:
+    # MODIFICACIÓN: Capturar "pasado mañana", "día más" o "dia mas"
+    elif "pasado mañana" in texto or "día más" in texto or "dia mas" in texto:
         fecha_calc = fecha_base + timedelta(days=2)
-        texto = texto.replace("pasado mañana", "")
-    elif "mañana" in texto:
+        texto = texto.replace("pasado mañana", "").replace("día más", "").replace("dia mas", "")
+    # MODIFICACIÓN: Capturar "mañana" o "sugerido"
+    elif "mañana" in texto or "sugerido" in texto:
         fecha_calc = fecha_base + timedelta(days=1)
-        texto = texto.replace("mañana", "")
+        texto = texto.replace("mañana", "").replace("sugerido", "")
     elif "hoy" in texto:
         texto = texto.replace("hoy", "")
         
@@ -181,9 +184,9 @@ def analizar_dictado(texto, fecha_base):
 st.sidebar.header("⚙️ Configuración")
 
 opciones_wa = {
-    "Costa Verde":"522299359597",
-    "Donato Casas": "522291653833", 
-    "Costa de Oro": "522292780850"           
+    "Contacto Principal": "522283530069",
+    "Contacto Secundario": "522299359597", 
+    "Contacto 3": "520987654321"           
 }
 seleccion_wa = st.sidebar.selectbox("📱 Selecciona el WhatsApp destino", list(opciones_wa.keys()))
 numero_whatsapp = opciones_wa[seleccion_wa]
@@ -308,8 +311,9 @@ with tab1:
         st.success(f"🗣️ **Confirmado:** '{datos['original']}'")
         st.write("✏️ *Puedes corregir los datos antes de registrar:*")
         
-        edit_prod = st.text_input("Producto", value=datos['prod']).upper()
+        # MODIFICACIÓN: Orden actualizado a Cantidad, Producto y Fecha
         edit_cant = st.number_input("Cantidad", value=int(datos['cant']), min_value=1)
+        edit_prod = st.text_input("Producto", value=datos['prod']).upper()
         edit_fech = st.date_input("Caducidad", value=datos['fecha'])
         
         col_voz_1, col_voz_2 = st.columns(2)
