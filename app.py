@@ -226,20 +226,22 @@ if archivo_csv is not None:
 
 st.sidebar.divider()
 
-with st.sidebar.expander("🚨 Zona de Peligro"):
-    confirmar_reset = st.checkbox("Confirmar que deseo borrar todo", key="check_reset")
-    if st.button("⚠️ EJECUTAR RESET (Solo esta sucursal)", use_container_width=True):
-        if confirmar_reset:
-            with conn.session as s:
-                s.execute(text("DELETE FROM sug_captura_actual WHERE sucursal = :suc"), {"suc": sucursal_in})
-                s.execute(text("DELETE FROM sug_base_anterior WHERE sucursal = :suc"), {"suc": sucursal_in})
-                s.execute(text("DELETE FROM sug_historial_ventas WHERE sucursal = :suc"), {"suc": sucursal_in})
-                s.commit()
-            st.sidebar.success(f"✅ Base de {sucursal_in} limpiada.")
-            time.sleep(1)
-            st.rerun()
+# --- ZONA DE PELIGRO ACTUALIZADA (GLOBAL Y CON DISEÑO EXACTO) ---
+with st.sidebar.expander("🚨 Zona de Peligro (Formatear Nube)", expanded=False):
+    st.warning("⚠️ ESTE BOTÓN BORRA TODAS LAS TABLAS PARA ACTUALIZAR LA ESTRUCTURA.")
+    confirmar_borrado = st.checkbox("Confirmar el formateo total")
+    if st.button("⚠️ EJECUTAR REINICIO Y ACTUALIZACIÓN", use_container_width=True):
+        if not confirmar_borrado:
+            st.error("Debes confirmar primero")
         else:
-            st.sidebar.error("Debes confirmar primero")
+            with conn.session as s:
+                # Este comando formatea por completo las tres tablas de los Sugeridos
+                s.execute(text("DROP TABLE IF EXISTS sug_captura_actual, sug_base_anterior, sug_historial_ventas CASCADE"))
+                s.commit()
+            st.success("✅ Base de datos formateada. Reiniciando para aplicar nueva estructura...")
+            time.sleep(2)
+            st.rerun()
+# ----------------------------------------------------------------
 
 # ------------------ TABS ------------------
 tab1, tab2, tab3 = st.tabs(["📝 Conteo", "📦 Inventario y Corte", "📊 Análisis"])
