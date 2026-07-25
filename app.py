@@ -7,7 +7,7 @@ import urllib.parse
 import time
 import io
 import re
-import os  # <-- NUEVO: Para leer contraseñas ocultas del servidor
+import os  
 import streamlit.components.v1 as components
 
 # ------------------ CONFIGURACIÓN GENERAL ------------------
@@ -33,20 +33,16 @@ with conn.session as s:
     s.commit()
 
 # ------------------ SISTEMA DE USUARIOS EN SUPABASE ------------------
-# 1. Crear la tabla de usuarios si no existe y poner un admin por defecto
 with conn.session as s:
     s.execute(text('''CREATE TABLE IF NOT EXISTS usuarios 
                  (id SERIAL PRIMARY KEY, username TEXT UNIQUE, password TEXT)'''))
     
-    # Verificamos si la tabla está vacía para crear un usuario maestro inicial
     res = s.execute(text("SELECT COUNT(*) FROM usuarios")).fetchone()
     if res[0] == 0:
-        # <-- NUEVO: Lee la contraseña secreta de Render, si no existe usa 'Temp123*'
         clave_secreta = os.getenv("PASS_ADMIN", "Temp123*")
         s.execute(text("INSERT INTO usuarios (username, password) VALUES ('admin', :pass)"), {"pass": clave_secreta})
     s.commit()
 
-# 2. Pantalla de Login
 def verificar_login():
     if "autenticado" not in st.session_state:
         st.session_state.autenticado = False
@@ -63,7 +59,6 @@ def verificar_login():
                 btn_login = st.form_submit_button("Iniciar Sesión", use_container_width=True, type="primary")
                 
                 if btn_login:
-                    # Consultamos a Supabase si el usuario y contraseña coinciden
                     df_check = conn.query("SELECT * FROM usuarios WHERE username = :u AND password = :p", 
                                           params={"u": usuario_input.strip(), "p": password_input}, ttl=0)
                     
@@ -78,10 +73,8 @@ def verificar_login():
         return False
     return True
 
-# Si no ha iniciado sesión, detenemos la app aquí y mostramos el login
 if not verificar_login():
     st.stop()
-# ---------------------------------------------------------------------
 
 # ------------------ FUNCIONES ------------------
 def sonido_click():
@@ -212,8 +205,8 @@ def analizar_dictado(texto, fecha_base):
     producto = re.sub(r'\s+', ' ', texto).strip().upper()
     return producto, cantidad, fecha_calc
 
-# ------------------ SIDEBAR & SUCURSALES ------------------
-st.sidebar.header("⚙️ Configuración")
+# ------------------ SIDEBAR & SUCURSALES (CORREGIDO AL MOLDE 94332.jpg) ------------------
+st.sidebar.header("🏢 Datos de Sesión")
 
 # Mostrar el usuario que inició sesión
 st.sidebar.caption(f"👤 Conectado como: **{st.session_state.get('usuario_actual', 'Usuario')}**")
@@ -260,12 +253,16 @@ datos_sucursales = {
 
 sucursal_in = st.sidebar.selectbox("📍 Selecciona tu sucursal:", list(datos_sucursales.keys()))
 numero_wa = datos_sucursales[sucursal_in]
-st.sidebar.caption(f"📱 WhatsApp enlazado: **{numero_wa}**")
+
+# TEXTO WHATSAPP CORREGIDO
+st.sidebar.caption(f"📱 Los reportes de WhatsApp se enviarán al: **{numero_wa}**")
 
 st.sidebar.divider()
 
 st.sidebar.subheader("💾 Respaldo de Base de Datos")
-st.sidebar.info(f"Guarda o restaura el stock específicamente para {sucursal_in}.")
+
+# CAJA INFO CORREGIDA
+st.sidebar.info(f"Restaura pre-conteos (bóveda) específicamente para {sucursal_in}.")
 archivo_csv = st.sidebar.file_uploader("⬆️ Subir Respaldo CSV", type=["csv"])
 
 if archivo_csv is not None:
@@ -288,23 +285,21 @@ if archivo_csv is not None:
         except Exception as e:
             st.sidebar.error(f"⚠️ Error al restaurar: {e}")
 
-st.sidebar.divider()
-
-# --- ZONA DE PELIGRO RESTRINGIDA SOLO A ADMIN ---
-if st.session_state.get('usuario_actual') == 'admin':
-    with st.sidebar.expander("🚨 Zona de Peligro (Formatear Nube)", expanded=False):
-        st.warning("⚠️ ESTE BOTÓN BORRA TODAS LAS TABLAS PARA ACTUALIZAR LA ESTRUCTURA.")
-        confirmar_borrado = st.checkbox("Confirmar el formateo total")
-        if st.button("⚠️ EJECUTAR REINICIO Y ACTUALIZACIÓN", use_container_width=True):
-            if not confirmar_borrado:
-                st.error("Debes confirmar primero")
-            else:
-                with conn.session as s:
-                    s.execute(text("DROP TABLE IF EXISTS sug_captura_actual, sug_base_anterior, sug_historial_ventas CASCADE"))
-                    s.commit()
-                st.success("✅ Base de datos formateada. Reiniciando para aplicar nueva estructura...")
-                time.sleep(2)
-                st.rerun()
+# ZONA DE PELIGRO COMENTADA PARA IGUALAR EL MOLDE VISUAL
+# if st.session_state.get('usuario_actual') == 'admin':
+#     with st.sidebar.expander("🚨 Zona de Peligro (Formatear Nube)", expanded=False):
+#         st.warning("⚠️ ESTE BOTÓN BORRA TODAS LAS TABLAS PARA ACTUALIZAR LA ESTRUCTURA.")
+#         confirmar_borrado = st.checkbox("Confirmar el formateo total")
+#         if st.button("⚠️ EJECUTAR REINICIO Y ACTUALIZACIÓN", use_container_width=True):
+#             if not confirmar_borrado:
+#                 st.error("Debes confirmar primero")
+#             else:
+#                 with conn.session as s:
+#                     s.execute(text("DROP TABLE IF EXISTS sug_captura_actual, sug_base_anterior, sug_historial_ventas CASCADE"))
+#                     s.commit()
+#                 st.success("✅ Base de datos formateada. Reiniciando para aplicar nueva estructura...")
+#                 time.sleep(2)
+#                 st.rerun()
 # ----------------------------------------------------------------
 
 # ------------------ TABS ------------------
