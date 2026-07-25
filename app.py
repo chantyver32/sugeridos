@@ -226,95 +226,120 @@ def analizar_dictado(texto, fecha_base):
     return producto, cantidad, fecha_calc
 
 
-# ==========================================
-# BARRA LATERAL (SIDEBAR) 
-# ==========================================
+# --- BARRA LATERAL (SIDEBAR) ---
 with st.sidebar:
+    # Estilo compacto opcional para mantenerlo estilizado ("flaquito")
+    st.markdown("""
+        <style>
+            [data-testid="stSidebar"] {
+                width: 280px;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
     st.markdown("### 🏢 Datos de Sesión")
     
     # Mostrar usuario y botón de cerrar sesión
-    usuario_actual = st.session_state.get('usuario_actual', 'Usuario')
-    st.caption(f"👤 Conectado como: **{usuario_actual}**")
-    
+    st.caption(f"👤 Conectado como: **{st.session_state.get('usuario_actual', 'Usuario')}**")
     if st.button("🚪 Cerrar Sesión", use_container_width=True):
         st.session_state.autenticado = False
         if "usuario_actual" in st.session_state:
             del st.session_state["usuario_actual"]
         st.rerun()
-        
+    st.divider()
+    
+    # --- MENÚ DESPLEGABLE / EXPANSOR PARA LA APP DE SUGERIDOS ---
+    with st.expander("📦 App de Sugeridos", expanded=False):
+        st.caption("Opciones y filtros de sugeridos")
+        # Aquí puedes colocar los controles específicos de tu app de sugeridos
+        filtro_sugeridos = st.selectbox("Modo de vista:", ["General", "Por Categoría", "Críticos"], key="vista_sugeridos")
+    
     st.divider()
     
     datos_sucursales = {
-        "URANO": "522299272100", "COSTA DE ORO": "522299272100", "COSTA VERDE": "522299359597",
-        "DÍAZ MIRÓN": "522291302759", "EJÉRCITO MEXICANO": "522299272107", "PLAZA RÍO": "522299864120",
-        "PLAYAS DEL CONCHAL": "522291794020", "COYOL": "522299398334", "LA PLACITA": "522299208481",
-        "CUAUHTÉMOC": "522291651340", "MARIO MOLINA": "522291780851", "RAFAEL CUERVO": "522291980229",
-        "RÍO MEDIO": "522291005852", "DIVERPLAZA": "522293763180", "BOLÍVAR": "522291002947",
-        "CIRCUNVALACIÓN": "522299393726", "J.B. LOBOS": "522299201956", "YÁÑEZ": "522293764940",
-        "PALACIO DE HIERRO": "522299272100", "CIUDAD INDUSTRIAL": "522299200278", "DONATO CASAS": "522291653833",
-        "LAS VEGAS": "522291932980", "PUENTE MORENO": "522296893999", "CONDESA": "522299863464",
-        "MURILLO VIDAL": "522286886443", "ARAUCARIAS": "522281177133", "ÁVILA CAMACHO": "522288170989",
+        "URANO": "522299272100",
+        "COSTA DE ORO": "522299272100",
+        "COSTA VERDE": "522299359597",
+        "DÍAZ MIRÓN": "522291302759",
+        "EJÉRCITO MEXICANO": "522299272107",
+        "PLAZA RÍO": "522299864120",
+        "PLAYAS DEL CONCHAL": "522291794020",
+        "COYOL": "522299398334",
+        "LA PLACITA": "522299208481",
+        "CUAUHTÉMOC": "522291651340",
+        "MARIO MOLINA": "522291780851",
+        "RAFAEL CUERVO": "522291980229",
+        "RÍO MEDIO": "522291005852",
+        "DIVERPLAZA": "522293763180",
+        "BOLÍVAR": "522291002947",
+        "CIRCUNVALACIÓN": "522299393726",
+        "J.B. LOBOS": "522299201956",
+        "YÁÑEZ": "522293764940",
+        "PALACIO DE HIERRO": "522299272100",
+        "CIUDAD INDUSTRIAL": "522299200278",
+        "DONATO CASAS": "522291653833",
+        "LAS VEGAS": "522291932980",
+        "PUENTE MORENO": "522296893999",
+        "CONDESA": "522299863464",
+        "MURILLO VIDAL": "522286886443",
+        "ARAUCARIAS": "522281177133",
+        "ÁVILA CAMACHO": "522288170989",
         "EMILIANO ZAPATA": "522969628525"
     }
     
     sucursal_in = st.selectbox("📍 Selecciona tu sucursal:", list(datos_sucursales.keys()))
     
-    # Nombre en automático usando el usuario logueado
+    # Asigna automáticamente el nombre del usuario logueado en mayúsculas para los reportes
     elabora_in = st.session_state.get('usuario_actual', 'USUARIO').upper()
     
     numero_wa = datos_sucursales[sucursal_in]
     st.caption(f"📱 Los reportes de WhatsApp se enviarán al: **{numero_wa}**")
 
     st.divider()
-    
     st.markdown("### 💾 Respaldo de Base de Datos")
-    st.info(f"Restaura el stock (bóveda) específicamente para {sucursal_in}.")
+    st.info(f"Restaura pre-conteos (bóveda) específicamente para {sucursal_in}.")
     
     with st.form("form_restaurar_boveda"):
-        archivo_respaldo = st.file_uploader("⬆️ Subir Respaldo CSV", type=["csv"], help="Limit 200MB per file • CSV")
-        btn_restaurar = st.form_submit_button("🔄 Restaurar Stock", use_container_width=True)
+        uploaded_csv = st.file_uploader("⬆️ Subir Respaldo CSV", type=["csv"])
+        btn_restaurar = st.form_submit_button("🔄 Restaurar Preconteos", use_container_width=True)
         
         if btn_restaurar:
-            if archivo_respaldo is not None:
+            if uploaded_csv is not None:
                 try:
-                    df_restaurar = pd.read_csv(archivo_respaldo)
-                    if 'Producto' in df_restaurar.columns:
-                        df_restaurar = df_restaurar.rename(columns={'Producto': 'nombre', 'Caducidad': 'fecha_cad', 'Existencia': 'cantidad'})
+                    df_upload = pd.read_csv(uploaded_csv)
+                    if 'id' in df_upload.columns:
+                        df_upload = df_upload.drop(columns=['id'])
                     
-                    with conn.session as s:
-                        s.execute(text("DELETE FROM sug_base_anterior WHERE sucursal = :suc"), {"suc": sucursal_in})
-                        for _, fila in df_restaurar.iterrows():
-                            s.execute(text("INSERT INTO sug_base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fc, :cant)"), 
-                                      {"suc": sucursal_in, "nom": str(fila['nombre']).upper(), "fc": str(fila['fecha_cad']), "cant": int(fila['cantidad'])})
-                        s.commit()
-                    
-                    st.success(f"✅ Inventario restaurado para {sucursal_in}")
-                    time.sleep(1.5)
+                    df_upload['sucursal'] = sucursal_in 
+                    df_upload.to_sql("pesajes_guardados", con=conn.engine, if_exists="append", index=False)
+                    st.success("✅ Respaldo restaurado con éxito en Supabase")
+                    time.sleep(1)
                     st.rerun()
                 except Exception as e:
-                    st.error(f"⚠️ Error al restaurar: {e}")
+                    st.error(f"Error al restaurar: {e}")
             else:
                 st.warning("⚠️ Primero selecciona un archivo CSV.")
 
     st.divider()
     
-    # 4. Zona de Peligro (Expander)
+    # --- ZONA DE PELIGRO RESTRINGIDA SOLO A ADMIN ---
     if st.session_state.get('usuario_actual') == 'admin':
         with st.expander("🚨 Zona de Peligro (Formatear Nube)", expanded=False):
             st.warning("⚠️ ESTE BOTÓN BORRA TODAS LAS TABLAS PARA ACTUALIZAR LA ESTRUCTURA.")
-            
-            confirmar_formateo = st.checkbox("Confirmar el formateo total")
-            
+            confirmar_borrado = st.checkbox("Confirmar el formateo total")
             if st.button("⚠️ EJECUTAR REINICIO Y ACTUALIZACIÓN", use_container_width=True):
-                if confirmar_formateo:
+                if not confirmar_borrado:
+                    st.error("Debes confirmar primero")
+                else:
                     with conn.session as s:
-                        s.execute(text("DROP TABLE IF EXISTS sug_captura_actual, sug_base_anterior, sug_historial_ventas CASCADE"))
+                        s.execute(text("DROP TABLE IF EXISTS pesajes_individuales, pesajes_guardados, auditoria_stock CASCADE"))
                         s.commit()
                     st.success("✅ Base de datos formateada. Reiniciando para aplicar nueva estructura...")
                     time.sleep(2)
                     st.rerun()
-                else:
-                    st.error("Debes marcar la casilla de confirmación primero.")
+
+    
+    
 
 # ==========================================
 # TABS PRINCIPALES
