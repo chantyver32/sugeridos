@@ -463,14 +463,19 @@ with tab1:
         time.sleep(1)
 
 # ------------------------------------------------------------
-# TAB 2: INVENTARIO Y CORTE
+# TAB 2: INVENTARIO Y CORTE (CON VALIDACIÓN DE SEGURIDAD)
 # ------------------------------------------------------------
 with tab2:
     st.header(f"📦 Stock en {sucursal_in}")
-    df_stock = conn.query("SELECT nombre as Producto, fecha_cad as Caducidad, cantidad as Existencia FROM sug_base_anterior WHERE sucursal=:suc", params={"suc": sucursal_in}, ttl=0)
     
-    if df_stock.empty:
-        st.info("No hay stock registrado para esta sucursal.")
+    # Consulta robusta y segura
+    try:
+        df_stock = conn.query("SELECT nombre as Producto, fecha_cad as Caducidad, cantidad as Existencia FROM sug_base_anterior WHERE sucursal=:suc", params={"suc": sucursal_in}, ttl=0)
+    except Exception:
+        df_stock = pd.DataFrame()
+
+    if df_stock is None or df_stock.empty or 'Caducidad' not in df_stock.columns:
+        st.info("No hay stock registrado para esta sucursal o la tabla está vacía.")
     else:
         fechas_stock = sorted(df_stock['Caducidad'].unique())
         filtro_st_fecha = st.multiselect("Filtrar stock por Caducidad:", fechas_stock, default=fechas_stock)
