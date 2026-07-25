@@ -1,9 +1,7 @@
 streamlit
 pandas
-pillow
-pyzbar
-openpyxl
-xlsxwriter
-pytz
 SpeechRecognition
-
+python-docx
+pytz
+SQLAlchemy
+psycopg2-binary
