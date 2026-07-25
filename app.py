@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import sqlite3
+from sqlalchemy import text
 from datetime import datetime, timedelta
 import pytz
 import urllib.parse
@@ -16,23 +16,61 @@ with st.spinner('Iniciando sistema Champlitte... 🥐'):
     
     st.set_page_config(page_title="Inventario Champlitte MX", page_icon="🥐", layout="wide")
 
-# Contenedores para mensajes
-msg_conteo = st.empty()
-msg_tabla = st.empty()
-msg_corte = st.empty()
+# ------------------ BASE DE DATOS (SUPABASE) ------------------
+conn = st.connection("supabase", type="sql")
 
-# ------------------ BASE DE DATOS ------------------
-conn = sqlite3.connect('inventario_pan.db', check_same_thread=False)
-c = conn.cursor()
+with conn.session as s:
+    # Tabla de Usuarios
+    s.execute(text('''CREATE TABLE IF NOT EXISTS usuarios (
+        id SERIAL PRIMARY KEY, username TEXT UNIQUE, password TEXT
+    )'''))
+    # Tablas de Inventario con columna 'sucursal'
+    s.execute(text('''CREATE TABLE IF NOT EXISTS captura_actual (
+        id SERIAL PRIMARY KEY, sucursal TEXT, nombre TEXT, fecha_cad DATE, cantidad INTEGER
+    )'''))
+    s.execute(text('''CREATE TABLE IF NOT EXISTS base_anterior (
+        id SERIAL PRIMARY KEY, sucursal TEXT, nombre TEXT, fecha_cad DATE, cantidad INTEGER
+    )'''))
+    s.execute(text('''CREATE TABLE IF NOT EXISTS historial_ventas (
+        id SERIAL PRIMARY KEY, sucursal TEXT, nombre TEXT, fecha_cad DATE, 
+        habia INTEGER, quedan INTEGER, vendidos INTEGER, fecha_corte TIMESTAMP 
+    )'''))
+    s.commit()
 
-c.execute('CREATE TABLE IF NOT EXISTS captura_actual (nombre TEXT, fecha_cad DATE, cantidad INTEGER)')
-c.execute('CREATE TABLE IF NOT EXISTS base_anterior (nombre TEXT, fecha_cad DATE, cantidad INTEGER)')
-c.execute('''CREATE TABLE IF NOT EXISTS historial_ventas (
-    nombre TEXT, fecha_cad DATE, habia INTEGER, quedan INTEGER, vendidos INTEGER, fecha_corte DATETIME 
-)''')
-c.execute("CREATE INDEX IF NOT EXISTS idx_nombre1 ON captura_actual(nombre)")
-c.execute("CREATE INDEX IF NOT EXISTS idx_nombre2 ON base_anterior(nombre)")
-conn.commit()
+# ------------------ SISTEMA DE LOGIN ------------------
+def verificar_login():
+    if "autenticado" not in st.session_state:
+        st.session_state.autenticado = False
+
+    if not st.session_state.autenticado:
+        st.markdown("<h2 style='text-align: center;'>🥐 Inventario Champlitte</h2>", unsafe_allow_html=True)
+        st.markdown("<h4 style='text-align: center; color: gray;'>Control de Acceso</h4>", unsafe_allow_html=True)
+        
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            with st.form("form_login"):
+                usuario_input = st.text_input("👤 Usuario:")
+                password_input = st.text_input("🔑 Contraseña:", type="password")
+                btn_login = st.form_submit_button("Iniciar Sesión", use_container_width=True, type="primary")
+                
+                if btn_login:
+                    # Validar usuario en Supabase
+                    df_check = conn.query("SELECT * FROM usuarios WHERE username = :u AND password = :p", 
+                                          params={"u": usuario_input.strip(), "p": password_input}, ttl=0)
+                    
+                    if not df_check.empty:
+                        st.session_state.autenticado = True
+                        st.session_state.usuario_actual = usuario_input.strip()
+                        st.success("✅ ¡Bienvenido!")
+                        time.sleep(0.8)
+                        st.rerun()
+                    else:
+                        st.error("❌ Usuario o contraseña incorrectos.")
+        return False
+    return True
+
+if not verificar_login():
+    st.stop()
 
 # ------------------ FUNCIONES ------------------
 def sonido_click():
@@ -176,21 +214,31 @@ def analizar_dictado(texto, fecha_base):
     return producto, cantidad, fecha_calc
 
 # ------------------ SIDEBAR ------------------
+st.sidebar.markdown("### 🏢 Datos de Sesión")
+st.sidebar.caption(f"👤 Conectado como: **{st.session_state.get('usuario_actual', 'Usuario')}**")
+if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True):
+    st.session_state.autenticado = False
+    if "usuario_actual" in st.session_state:
+        del st.session_state["usuario_actual"]
+    st.rerun()
+
+st.sidebar.divider()
+
 st.sidebar.header("⚙️ Configuración")
 
-# MODIFICACIÓN: Definición explícita de sucursales reales
 opciones_wa = {
     "Costa Verde": "522299359597",
     "Costa de Oro": "522292780850", 
     "Donato Casas": "522291653833"           
 }
-seleccion_wa = st.sidebar.selectbox("📱 Selecciona la Sucursal / WhatsApp", list(opciones_wa.keys()))
+seleccion_wa = st.sidebar.selectbox("📍 Selecciona la Sucursal", list(opciones_wa.keys()))
 numero_whatsapp = opciones_wa[seleccion_wa]
+st.sidebar.caption(f"📱 WhatsApp: **{numero_whatsapp}**")
 
 st.sidebar.divider()
 
 st.sidebar.subheader("💾 Respaldo de Base de Datos")
-st.sidebar.info("Guarda o restaura tu stock (bóveda) mediante un archivo CSV para mantenerlo fijo y no perderlo.")
+st.sidebar.info(f"Guarda o restaura tu stock específicamente para {seleccion_wa}.")
 archivo_csv = st.sidebar.file_uploader("⬆️ Subir Respaldo CSV", type=["csv"])
 
 if archivo_csv is not None:
@@ -200,13 +248,14 @@ if archivo_csv is not None:
             if 'Producto' in df_restaurar.columns:
                 df_restaurar = df_restaurar.rename(columns={'Producto': 'nombre', 'Caducidad': 'fecha_cad', 'Existencia': 'cantidad'})
             
-            c.execute("DELETE FROM base_anterior")
-            for _, fila in df_restaurar.iterrows():
-                c.execute("INSERT INTO base_anterior (nombre, fecha_cad, cantidad) VALUES (?, ?, ?)", 
-                          (str(fila['nombre']).upper(), str(fila['fecha_cad']), int(fila['cantidad'])))
-            conn.commit()
+            with conn.session as s:
+                s.execute(text("DELETE FROM base_anterior WHERE sucursal = :suc"), {"suc": seleccion_wa})
+                for _, fila in df_restaurar.iterrows():
+                    s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"),
+                              {"suc": seleccion_wa, "nom": str(fila['nombre']).upper(), "fec": str(fila['fecha_cad']), "can": int(fila['cantidad'])})
+                s.commit()
             
-            st.sidebar.success("✅ Inventario restaurado correctamente")
+            st.sidebar.success("✅ Inventario restaurado correctamente para " + seleccion_wa)
             time.sleep(1.5)
             st.rerun()
         except Exception as e:
@@ -216,20 +265,22 @@ st.sidebar.divider()
 
 with st.sidebar.expander("🚨 Zona de Peligro"):
     confirmar_reset = st.checkbox("Confirmar que deseo borrar todo", key="check_reset")
-    if st.button("⚠️ EJECUTAR RESET TOTAL", use_container_width=True):
+    if st.button("⚠️ EJECUTAR RESET DE SUCURSAL", use_container_width=True):
         if confirmar_reset:
-            c.execute("DELETE FROM captura_actual")
-            c.execute("DELETE FROM base_anterior")
-            c.execute("DELETE FROM historial_ventas")
-            conn.commit()
-            st.sidebar.success("✅ Base de datos limpiada por completo")
+            with conn.session as s:
+                s.execute(text("DELETE FROM captura_actual WHERE sucursal = :suc"), {"suc": seleccion_wa})
+                s.execute(text("DELETE FROM base_anterior WHERE sucursal = :suc"), {"suc": seleccion_wa})
+                s.execute(text("DELETE FROM historial_ventas WHERE sucursal = :suc"), {"suc": seleccion_wa})
+                s.commit()
+            st.sidebar.success(f"✅ Base de datos limpiada para {seleccion_wa}")
             time.sleep(1)
             st.rerun()
         else:
             st.sidebar.error("Debes confirmar primero")
 
 # ------------------ TABS ------------------
-tab1, tab2, tab3 = st.tabs(["📝 Conteo", "📦 Inventario y Corte", "📊 Análisis"])
+# Se eliminó la Pestaña 3 ("Análisis")
+tab1, tab2 = st.tabs(["📝 Conteo", "📦 Inventario y Corte"])
 
 # ------------------------------------------------------------
 # TAB 1: CONTEO
@@ -281,24 +332,9 @@ with tab1:
                     const utterance = new SpeechSynthesisUtterance("{datos['original']}");
                     utterance.lang = 'es-MX';
                     utterance.rate = 1.0;
-                    
-                    let voices = window.speechSynthesis.getVoices();
-                    let femaleVoice = voices.find(v => v.lang.includes('es') && (v.name.includes('Female') || v.name.includes('Mujer') || v.name.includes('Sabina') || v.name.includes('Paulina') || v.name.includes('Elena') || v.name.includes('Monica')));
-                    
-                    if (!femaleVoice) {{
-                        femaleVoice = voices.find(v => v.lang.includes('es-MX'));
-                    }}
-                    if (femaleVoice) {{
-                        utterance.voice = femaleVoice;
-                    }}
                     window.speechSynthesis.speak(utterance);
                 }}
-                
-                if (speechSynthesis.getVoices().length === 0) {{
-                    speechSynthesis.onvoiceschanged = speakText;
-                }} else {{
-                    speakText();
-                }}
+                speakText();
             </script>
             """
             components.html(js_tts, height=0)
@@ -317,12 +353,17 @@ with tab1:
             if st.button("📝 Guardar en Conteo (Para Corte)", use_container_width=True, type="primary"):
                 if edit_prod and edit_prod.strip() != "":
                     prod_final = edit_prod.strip()
-                    existe = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", (prod_final, str(edit_fech))).fetchone()
-                    if existe:
-                        c.execute("UPDATE captura_actual SET cantidad=cantidad+? WHERE nombre=? AND fecha_cad=?", (int(edit_cant), prod_final, str(edit_fech)))
-                    else:
-                        c.execute("INSERT INTO captura_actual VALUES (?,?,?)", (prod_final, str(edit_fech), int(edit_cant)))
-                    conn.commit()
+                    with conn.session as s:
+                        existe = s.execute(text("SELECT cantidad FROM captura_actual WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                                           {"nom": prod_final, "fec": str(edit_fech), "suc": seleccion_wa}).fetchone()
+                        if existe:
+                            s.execute(text("UPDATE captura_actual SET cantidad=cantidad+:can WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                                      {"can": int(edit_cant), "nom": prod_final, "fec": str(edit_fech), "suc": seleccion_wa})
+                        else:
+                            s.execute(text("INSERT INTO captura_actual (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
+                                      {"suc": seleccion_wa, "nom": prod_final, "fec": str(edit_fech), "can": int(edit_cant)})
+                        s.commit()
+                        
                     st.success(f"✅ {edit_cant} {prod_final} a Conteo.")
                     st.session_state.confirmacion_voz = None
                     st.session_state.audio_leido = False
@@ -335,12 +376,17 @@ with tab1:
             if st.button("🥖 Ingresar Producción Directa al Stock", use_container_width=True):
                 if edit_prod and edit_prod.strip() != "":
                     prod_final = edit_prod.strip()
-                    existe_stock = c.execute("SELECT cantidad FROM base_anterior WHERE nombre=? AND fecha_cad=?", (prod_final, str(edit_fech))).fetchone()
-                    if existe_stock:
-                        c.execute("UPDATE base_anterior SET cantidad=cantidad+? WHERE nombre=? AND fecha_cad=?", (int(edit_cant), prod_final, str(edit_fech)))
-                    else:
-                        c.execute("INSERT INTO base_anterior VALUES (?,?,?)", (prod_final, str(edit_fech), int(edit_cant)))
-                    conn.commit()
+                    with conn.session as s:
+                        existe_stock = s.execute(text("SELECT cantidad FROM base_anterior WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                                                 {"nom": prod_final, "fec": str(edit_fech), "suc": seleccion_wa}).fetchone()
+                        if existe_stock:
+                            s.execute(text("UPDATE base_anterior SET cantidad=cantidad+:can WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                                      {"can": int(edit_cant), "nom": prod_final, "fec": str(edit_fech), "suc": seleccion_wa})
+                        else:
+                            s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
+                                      {"suc": seleccion_wa, "nom": prod_final, "fec": str(edit_fech), "can": int(edit_cant)})
+                        s.commit()
+                        
                     st.success(f"✅ {edit_cant} {prod_final} añadidos directamente al inventario general.")
                     st.session_state.confirmacion_voz = None
                     st.session_state.audio_leido = False
@@ -356,7 +402,11 @@ with tab1:
         
         st.divider()
 
-    nombres_prev = [r[0] for r in c.execute("SELECT DISTINCT nombre FROM base_anterior UNION SELECT DISTINCT nombre FROM captura_actual").fetchall()]
+    # Obtener sugerencias filtrando por sucursal
+    nombres_prev_df = conn.query("SELECT nombre FROM base_anterior WHERE sucursal=:suc UNION SELECT nombre FROM captura_actual WHERE sucursal=:suc", 
+                                 params={"suc": seleccion_wa}, ttl=0)
+    nombres_prev = nombres_prev_df['nombre'].tolist() if not nombres_prev_df.empty else []
+    
     sugerencias = [p for p in nombres_prev if buscar in p] if buscar else nombres_prev
 
     nombre_input = st.selectbox("Seleccionar producto", sugerencias, key="sel_prod") if sugerencias else buscar
@@ -391,12 +441,17 @@ with tab1:
                 nombre_final = nombre_input.strip().upper()
                 cant = st.session_state.conteo_temp
                 if cant > 0:
-                    existe = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", (nombre_final, str(f_cad))).fetchone()
-                    if existe:
-                        c.execute("UPDATE captura_actual SET cantidad=cantidad+? WHERE nombre=? AND fecha_cad=?", (int(cant), nombre_final, str(f_cad)))
-                    else:
-                        c.execute("INSERT INTO captura_actual VALUES (?,?,?)", (nombre_final, str(f_cad), int(cant)))
-                    conn.commit()
+                    with conn.session as s:
+                        existe = s.execute(text("SELECT cantidad FROM captura_actual WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                                           {"nom": nombre_final, "fec": str(f_cad), "suc": seleccion_wa}).fetchone()
+                        if existe:
+                            s.execute(text("UPDATE captura_actual SET cantidad=cantidad+:can WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                                      {"can": int(cant), "nom": nombre_final, "fec": str(f_cad), "suc": seleccion_wa})
+                        else:
+                            s.execute(text("INSERT INTO captura_actual (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
+                                      {"suc": seleccion_wa, "nom": nombre_final, "fec": str(f_cad), "can": int(cant)})
+                        s.commit()
+                        
                     st.session_state.conteo_temp = 0
                     st.success(f"✅ {nombre_final} registrado para el próximo corte.")
                     time.sleep(1)
@@ -410,12 +465,17 @@ with tab1:
                 nombre_final = nombre_input.strip().upper()
                 cant = st.session_state.conteo_temp
                 if cant > 0:
-                    existe_stock = c.execute("SELECT cantidad FROM base_anterior WHERE nombre=? AND fecha_cad=?", (nombre_final, str(f_cad))).fetchone()
-                    if existe_stock:
-                        c.execute("UPDATE base_anterior SET cantidad=cantidad+? WHERE nombre=? AND fecha_cad=?", (int(cant), nombre_final, str(f_cad)))
-                    else:
-                        c.execute("INSERT INTO base_anterior VALUES (?,?,?)", (nombre_final, str(f_cad), int(cant)))
-                    conn.commit()
+                    with conn.session as s:
+                        existe_stock = s.execute(text("SELECT cantidad FROM base_anterior WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                                                 {"nom": nombre_final, "fec": str(f_cad), "suc": seleccion_wa}).fetchone()
+                        if existe_stock:
+                            s.execute(text("UPDATE base_anterior SET cantidad=cantidad+:can WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                                      {"can": int(cant), "nom": nombre_final, "fec": str(f_cad), "suc": seleccion_wa})
+                        else:
+                            s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
+                                      {"suc": seleccion_wa, "nom": nombre_final, "fec": str(f_cad), "can": int(cant)})
+                        s.commit()
+                        
                     st.session_state.conteo_temp = 0
                     st.success(f"✅ {cant} de {nombre_final} se sumaron directamente a tu inventario activo.")
                     time.sleep(1.5)
@@ -424,27 +484,33 @@ with tab1:
                     st.warning("Agrega una cantidad mayor a 0.")
 
     st.divider()
-    st.subheader("🛒 Captura de Conteo Actual (Pendiente de Corte)")
+    st.subheader(f"🛒 Captura de Conteo Actual ({seleccion_wa})")
     
-    df_hoy_captura = pd.read_sql("SELECT rowid, nombre, fecha_cad, cantidad FROM captura_actual", conn)
+    df_hoy_captura = conn.query("SELECT id, nombre, fecha_cad, cantidad FROM captura_actual WHERE sucursal=:suc", params={"suc": seleccion_wa}, ttl=0)
     
-    df_editado = st.data_editor(df_hoy_captura, column_config={"rowid": None}, num_rows="dynamic", height=300, use_container_width=True, hide_index=True, key="editor_conteo")
+    if not df_hoy_captura.empty:
+        df_editado = st.data_editor(df_hoy_captura, column_config={"id": None}, num_rows="dynamic", height=300, use_container_width=True, hide_index=True, key="editor_conteo")
 
-    if st.button("💾 Guardar Cambios en Tabla", use_container_width=True):
-        c.execute("DELETE FROM captura_actual")
-        for _, fila in df_editado.iterrows():
-            if pd.notna(fila["nombre"]) and str(fila["nombre"]).strip() != "":
-                c.execute("INSERT INTO captura_actual VALUES (?,?,?)", (str(fila["nombre"]).upper(), str(fila["fecha_cad"]), int(fila["cantidad"])))
-        conn.commit()
-        st.success("✅ Tabla de conteo guardada y actualizada")
-        time.sleep(1.5)
+        if st.button("💾 Guardar Cambios en Tabla", use_container_width=True):
+            with conn.session as s:
+                s.execute(text("DELETE FROM captura_actual WHERE sucursal = :suc"), {"suc": seleccion_wa})
+                for _, fila in df_editado.iterrows():
+                    if pd.notna(fila["nombre"]) and str(fila["nombre"]).strip() != "":
+                        s.execute(text("INSERT INTO captura_actual (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
+                                  {"suc": seleccion_wa, "nom": str(fila["nombre"]).upper(), "fec": str(fila["fecha_cad"]), "can": int(fila["cantidad"])})
+                s.commit()
+            st.success("✅ Tabla de conteo guardada y actualizada")
+            time.sleep(1.5)
+            st.rerun()
+    else:
+        st.info("No hay datos en conteo actualmente para esta sucursal.")
 
 # ------------------------------------------------------------
 # TAB 2: INVENTARIO Y CORTE
 # ------------------------------------------------------------
 with tab2:
-    st.header("📦 Stock Actual en Estantes")
-    df_stock = pd.read_sql("SELECT nombre as Producto, fecha_cad as Caducidad, cantidad as Existencia FROM base_anterior", conn)
+    st.header(f"📦 Stock Actual en Estantes - {seleccion_wa}")
+    df_stock = conn.query("SELECT nombre as Producto, fecha_cad as Caducidad, cantidad as Existencia FROM base_anterior WHERE sucursal=:suc", params={"suc": seleccion_wa}, ttl=0)
     
     if df_stock.empty:
         st.info("No hay stock registrado. Realiza un corte inicial o usa el botón de sumar al stock en la pestaña de Conteo.")
@@ -459,13 +525,11 @@ with tab2:
         st.divider()
         st.subheader("📥 Exportar Reportes")
         
-        # MODIFICACIÓN: Removido el input de Vendedor que ya no se necesita
-        elabora_input = st.text_input("👨‍🍳 Nombre de quien Elabora", value="PEDRO GARCÍA").upper()
+        elabora_input = st.text_input("👨‍🍳 Nombre de quien Elabora", value=st.session_state.get('usuario_actual', 'PEDRO GARCÍA')).upper()
         
         msg_stock = f"🍞 *SUGERIDOS - CHAMPLITTE ({seleccion_wa.upper()})*\n\nAdjunto archivo de Excel con los detalles.\n\n"
         link_st = f"https://wa.me/{numero_whatsapp.strip()}?text={urllib.parse.quote(msg_stock)}"
         
-        # MODIFICACIÓN: Pasamos la variable seleccion_wa dinámicamente como sucursal
         excel_stock = generar_excel_formato(df_stock_filt, sucursal=seleccion_wa, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.", elabora=elabora_input)
 
         st.info("💡 **Tip para WhatsApp:** Descarga el Excel primero y luego abre WhatsApp para arrastrar el archivo al chat.")
@@ -481,61 +545,33 @@ with tab2:
     st.write("Compara el **Conteo de hoy** contra el **Stock actual** para calcular ventas.")
     
     if st.button("PROCESAR CORTE AHORA", type="primary", use_container_width=True):
-        df_actualizado = pd.read_sql("SELECT * FROM captura_actual", conn)
+        df_actualizado = conn.query("SELECT * FROM captura_actual WHERE sucursal=:suc", params={"suc": seleccion_wa}, ttl=0)
         
         if df_actualizado.empty:
             st.warning("⚠️ No hay datos en la tabla de CONTEO para comparar. Captura tu conteo final primero.")
         else:
-            df_anterior = pd.read_sql("SELECT * FROM base_anterior", conn)
+            df_anterior = conn.query("SELECT * FROM base_anterior WHERE sucursal=:suc", params={"suc": seleccion_wa}, ttl=0)
             ts_mx = datetime.now(zona_mx).strftime("%Y-%m-%d %H:%M:%S")
             
-            if not df_anterior.empty:
-                for _, fila_ant in df_anterior.iterrows():
-                    res_hoy = c.execute("SELECT cantidad FROM captura_actual WHERE nombre=? AND fecha_cad=?", (fila_ant['nombre'], fila_ant['fecha_cad'])).fetchone()
-                    cant_hoy = res_hoy[0] if res_hoy else 0
-                    diferencia = fila_ant['cantidad'] - cant_hoy
-                    
-                    if diferencia > 0:
-                        c.execute("INSERT INTO historial_ventas VALUES (?,?,?,?,?,?)", (fila_ant['nombre'], fila_ant['fecha_cad'], int(fila_ant['cantidad']), int(cant_hoy), int(diferencia), ts_mx))
+            with conn.session as s:
+                if not df_anterior.empty:
+                    for _, fila_ant in df_anterior.iterrows():
+                        res_hoy = s.execute(text("SELECT cantidad FROM captura_actual WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                                            {"nom": fila_ant['nombre'], "fec": fila_ant['fecha_cad'], "suc": seleccion_wa}).fetchone()
                         
-            c.execute("DELETE FROM base_anterior")
-            c.execute("INSERT INTO base_anterior SELECT * FROM captura_actual")
-            c.execute("DELETE FROM captura_actual")
+                        cant_hoy = res_hoy[0] if res_hoy else 0
+                        diferencia = fila_ant['cantidad'] - cant_hoy
+                        
+                        if diferencia > 0:
+                            s.execute(text("INSERT INTO historial_ventas (sucursal, nombre, fecha_cad, habia, quedan, vendidos, fecha_corte) VALUES (:suc, :nom, :fec, :hab, :qued, :ven, :fc)"), 
+                                      {"suc": seleccion_wa, "nom": fila_ant['nombre'], "fec": fila_ant['fecha_cad'], "hab": int(fila_ant['cantidad']), "qued": int(cant_hoy), "ven": int(diferencia), "fc": ts_mx})
+                            
+                s.execute(text("DELETE FROM base_anterior WHERE sucursal = :suc"), {"suc": seleccion_wa})
+                s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) SELECT sucursal, nombre, fecha_cad, cantidad FROM captura_actual WHERE sucursal = :suc"), {"suc": seleccion_wa})
+                s.execute(text("DELETE FROM captura_actual WHERE sucursal = :suc"), {"suc": seleccion_wa})
+                s.commit()
             
-            conn.commit()
             st.balloons()
             st.success("✅ ¡Corte procesado con éxito! El inventario se ha actualizado.")
             time.sleep(2)
             st.rerun()
-
-# ------------------------------------------------------------
-# TAB 3: ANÁLISIS
-# ------------------------------------------------------------
-with tab3:
-    df_hist = pd.read_sql("SELECT nombre as Producto, vendidos as Vendidos, fecha_corte as Fecha, fecha_cad as Caducidad FROM historial_ventas", conn)
-    
-    if df_hist.empty:
-        st.info("Aún no hay historial de ventas.")
-    else:
-        df_hist['Fecha'] = pd.to_datetime(df_hist['Fecha']).dt.date
-        
-        buscar_h = st.text_input("Buscar producto en historial").upper()
-        fecha_filtro = st.date_input("Filtrar por día de corte", value=None)
-            
-        if buscar_h:
-            df_hist = df_hist[df_hist["Producto"].str.contains(buscar_h, na=False)]
-        if fecha_filtro:
-            df_hist = df_hist[df_hist["Fecha"] == fecha_filtro]
-            
-        st.dataframe(df_hist, use_container_width=True, hide_index=True)
-        st.divider()
-        
-        ventas_dia = df_hist.groupby("Fecha")["Vendidos"].sum().reset_index()
-        st.line_chart(ventas_dia, x="Fecha", y="Vendidos")
-        
-        top = df_hist.groupby("Producto")["Vendidos"].sum().sort_values(ascending=False)
-        
-        if not top.empty:
-            st.subheader("🏆 Producto Estrella")
-            st.metric(top.index[0], f"{int(top.iloc[0])} vendidos")
-            st.bar_chart(top)
