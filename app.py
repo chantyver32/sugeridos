@@ -15,7 +15,7 @@ with st.spinner('Iniciando sistema Champlitte... 🥐'):
     zona_mx = pytz.timezone('America/Mexico_City')
     fecha_hoy_mx = datetime.now(zona_mx).date()
     
-    st.set_page_config(page_title="Sugeridos Champlitte", page_icon="🥐", layout="wide")
+    st.set_page_config(page_title="Sugeridos", page_icon="🥐", layout="wide")
 
 # ------------------ CONEXIÓN A SUPABASE ------------------
 conn = st.connection("supabase", type="sql")
