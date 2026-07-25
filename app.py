@@ -15,7 +15,7 @@ with st.spinner('Iniciando sistema Champlitte... 🥐'):
     zona_mx = pytz.timezone('America/Mexico_City')
     fecha_hoy_mx = datetime.now(zona_mx).date()
     
-    st.set_page_config(page_title="Inventario Champlitte MX", page_icon="🥐", layout="wide")
+    st.set_page_config(page_title="Sugeridos", page_icon="🥐", layout="wide")
 
 # ------------------ BASE DE DATOS (SUPABASE) ------------------
 db_url = os.environ.get("DATABASE_URL")
@@ -45,7 +45,7 @@ def verificar_login():
         st.session_state.autenticado = False
 
     if not st.session_state.autenticado:
-        st.markdown("<h2 style='text-align: center;'>🥐 Inventario Champlitte</h2>", unsafe_allow_html=True)
+        st.markdown("<h2 style='text-align: center;'>🥐 Sugeridos</h2>", unsafe_allow_html=True)
         st.markdown("<h4 style='text-align: center; color: gray;'>Control de Acceso</h4>", unsafe_allow_html=True)
         
         col1, col2, col3 = st.columns([1, 2, 1])
@@ -229,9 +229,16 @@ st.sidebar.divider()
 st.sidebar.header("⚙️ Configuración")
 
 opciones_wa = {
-    "Costa Verde": "522299359597",
-    "Costa de Oro": "522292780850", 
-    "Donato Casas": "522291653833"           
+    "URANO": "522299272100", "COSTA DE ORO": "522299272100", "COSTA VERDE": "522299359597",
+    "DÍAZ MIRÓN": "522291302759", "EJÉRCITO MEXICANO": "522299272107", "PLAZA RÍO": "522299864120",
+    "PLAYAS DEL CONCHAL": "522291794020", "COYOL": "522299398334", "LA PLACITA": "522299208481",
+    "CUAUHTÉMOC": "522291651340", "MARIO MOLINA": "522291780851", "RAFAEL CUERVO": "522291980229",
+    "RÍO MEDIO": "522291005852", "DIVERPLAZA": "522293763180", "BOLÍVAR": "522291002947",
+    "CIRCUNVALACIÓN": "522299393726", "J.B. LOBOS": "522299201956", "YÁÑEZ": "522293764940",
+    "PALACIO DE HIERRO": "522299272100", "CIUDAD INDUSTRIAL": "522299200278", "DONATO CASAS": "522291653833",
+    "LAS VEGAS": "522291932980", "PUENTE MORENO": "522296893999", "CONDESA": "522299863464",
+    "MURILLO VIDAL": "522286886443", "ARAUCARIAS": "522281177133", "ÁVILA CAMACHO": "522288170989",
+    "EMILIANO ZAPATA": "522969628525"
 }
 seleccion_wa = st.sidebar.selectbox("📍 Selecciona la Sucursal", list(opciones_wa.keys()))
 numero_whatsapp = opciones_wa[seleccion_wa]
