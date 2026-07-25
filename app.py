@@ -15,7 +15,7 @@ with st.spinner('Iniciando sistema Champlitte... 🥐'):
     zona_mx = pytz.timezone('America/Mexico_City')
     fecha_hoy_mx = datetime.now(zona_mx).date()
     
-    st.set_page_config(page_title="Sugeridos Champlitte", page_icon="🥐", layout="wide")
+    st.set_page_config(page_title="Sugeridos", page_icon="🥐", layout="wide")
 
 # ------------------ CONEXIÓN A SUPABASE ------------------
 conn = st.connection("supabase", type="sql")
@@ -48,7 +48,7 @@ def verificar_login():
         st.session_state.autenticado = False
 
     if not st.session_state.autenticado:
-        st.markdown("<h2 style='text-align: center;'>🥐 Pastelería Champlitte</h2>", unsafe_allow_html=True)
+        st.markdown("<h2 style='text-align: center;'>🥐 Sugeridos</h2>", unsafe_allow_html=True)
         st.markdown("<h4 style='text-align: center; color: gray;'>Control de Acceso</h4>", unsafe_allow_html=True)
         
         col1, col2, col3 = st.columns([1, 2, 1])
@@ -91,7 +91,7 @@ def resetear():
     st.session_state.conteo_temp = 0
     sonido_click()
 
-def generar_excel_formato(df, sucursal, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.", elabora="PEDRO ANTONIO GARCÍA TRUJILLO"):
+def generar_excel_formato(df, sucursal, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.", elabora="PEDRO GARCÍA"):
     output = io.BytesIO()
     writer = pd.ExcelWriter(output, engine='xlsxwriter')
     workbook = writer.book
@@ -129,7 +129,7 @@ def generar_excel_formato(df, sucursal, titulo="PASTELERÍA CHAMPLITTE, S.A. DE 
     sheet.write('A6', '', fmt_valor)
     sheet.write('B6', 'DESCRIPCIÓN', fmt_header_tabla)
     sheet.write('C6', 'CANTIDAD', fmt_header_tabla)
-    sheet.write('D6', 'FECHA DE CADUCIDAD', fmt_header_tabla)
+    sheet.write('D6', 'FECHA', fmt_header_tabla)
 
     row = 6
     if not df.empty:
@@ -184,9 +184,9 @@ def analizar_dictado(texto, fecha_base):
         except ValueError:
             pass
         texto = texto.replace(match_fecha.group(0), "")
-    elif "pasado mañana" in texto or "día más" in texto or "dia mas" in texto:
+    elif "pasado" in texto or "día" in texto or "dia" in texto:
         fecha_calc = fecha_base + timedelta(days=2)
-        texto = texto.replace("pasado mañana", "").replace("día más", "").replace("diamas", "")
+        texto = texto.replace("pasado", "").replace("día", "").replace("dia", "")
     elif "mañana" in texto or "sugerido" in texto:
         fecha_calc = fecha_base + timedelta(days=1)
         texto = texto.replace("mañana", "").replace("sugerido", "")
@@ -407,7 +407,7 @@ with tab1:
     fecha_sugerido = fecha_hoy_mx + timedelta(days=1)
     fecha_dia_mas = fecha_hoy_mx + timedelta(days=2)
     
-    opcion_fecha = st.radio("📅 Fecha de Caducidad:", options=["Sugerido (Mañana)", "Día Más (Pasado Mañana)"], horizontal=True)
+    opcion_fecha = st.radio("📅 Fecha:", options=["Sugerido (Mañana)", "Día Más (Pasado Mañana)"], horizontal=True)
     f_cad = fecha_sugerido if opcion_fecha == "Sugerido (Mañana)" else fecha_dia_mas
 
     col_sum1, col_sum2, col_sum3 = st.columns(3)
