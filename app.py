@@ -7,6 +7,7 @@ import urllib.parse
 import time
 import io
 import re
+import os
 import streamlit.components.v1 as components
 
 # ------------------ CONFIGURACIÓN GENERAL ------------------
@@ -17,7 +18,8 @@ with st.spinner('Iniciando sistema Champlitte... 🥐'):
     st.set_page_config(page_title="Inventario Champlitte MX", page_icon="🥐", layout="wide")
 
 # ------------------ BASE DE DATOS (SUPABASE) ------------------
-conn = st.connection("supabase", type="sql")
+db_url = os.environ.get("DATABASE_URL")
+conn = st.connection("supabase", type="sql", url=db_url)
 
 with conn.session as s:
     # Tabla de Usuarios
