@@ -217,6 +217,14 @@ st.sidebar.header("⚙️ Configuración")
 
 # Mostrar el usuario que inició sesión
 st.sidebar.caption(f"👤 Conectado como: **{st.session_state.get('usuario_actual', 'Usuario')}**")
+
+# --- BOTÓN DE CERRAR SESIÓN ---
+if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True):
+    st.session_state.autenticado = False
+    if "usuario_actual" in st.session_state:
+        del st.session_state["usuario_actual"]
+    st.rerun()
+
 st.sidebar.divider()
 
 datos_sucursales = {
@@ -282,19 +290,21 @@ if archivo_csv is not None:
 
 st.sidebar.divider()
 
-with st.sidebar.expander("🚨 Zona de Peligro (Formatear Nube)", expanded=False):
-    st.warning("⚠️ ESTE BOTÓN BORRA TODAS LAS TABLAS PARA ACTUALIZAR LA ESTRUCTURA.")
-    confirmar_borrado = st.checkbox("Confirmar el formateo total")
-    if st.button("⚠️ EJECUTAR REINICIO Y ACTUALIZACIÓN", use_container_width=True):
-        if not confirmar_borrado:
-            st.error("Debes confirmar primero")
-        else:
-            with conn.session as s:
-                s.execute(text("DROP TABLE IF EXISTS sug_captura_actual, sug_base_anterior, sug_historial_ventas CASCADE"))
-                s.commit()
-            st.success("✅ Base de datos formateada. Reiniciando para aplicar nueva estructura...")
-            time.sleep(2)
-            st.rerun()
+# --- ZONA DE PELIGRO RESTRINGIDA SOLO A ADMIN ---
+if st.session_state.get('usuario_actual') == 'admin':
+    with st.sidebar.expander("🚨 Zona de Peligro (Formatear Nube)", expanded=False):
+        st.warning("⚠️ ESTE BOTÓN BORRA TODAS LAS TABLAS PARA ACTUALIZAR LA ESTRUCTURA.")
+        confirmar_borrado = st.checkbox("Confirmar el formateo total")
+        if st.button("⚠️ EJECUTAR REINICIO Y ACTUALIZACIÓN", use_container_width=True):
+            if not confirmar_borrado:
+                st.error("Debes confirmar primero")
+            else:
+                with conn.session as s:
+                    s.execute(text("DROP TABLE IF EXISTS sug_captura_actual, sug_base_anterior, sug_historial_ventas CASCADE"))
+                    s.commit()
+                st.success("✅ Base de datos formateada. Reiniciando para aplicar nueva estructura...")
+                time.sleep(2)
+                st.rerun()
 # ----------------------------------------------------------------
 
 # ------------------ TABS ------------------
