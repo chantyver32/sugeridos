@@ -1,39 +1,3 @@
-import streamlit as st
-import pandas as pd
-from sqlalchemy import text
-from datetime import datetime, timedelta
-import pytz
-import urllib.parse
-import time
-import io
-import re
-import os  # <-- NUEVO: Para leer contraseñas ocultas del servidor
-import streamlit.components.v1 as components
-
-# ------------------ CONFIGURACIÓN GENERAL ------------------
-with st.spinner('Iniciando sistema Champlitte... 🥐'):
-    zona_mx = pytz.timezone('America/Mexico_City')
-    fecha_hoy_mx = datetime.now(zona_mx).date()
-    
-    st.set_page_config(page_title="Sugeridos Champlitte", page_icon="🥐", layout="wide")
-
-# ------------------ CONEXIÓN A SUPABASE ------------------
-conn = st.connection("supabase", type="sql")
-
-# Inicialización de tablas con columna "sucursal"
-with conn.session as s:
-    s.execute(text('''CREATE TABLE IF NOT EXISTS sug_captura_actual 
-                 (id SERIAL PRIMARY KEY, sucursal TEXT, nombre TEXT, fecha_cad DATE, cantidad INTEGER)'''))
-                 
-    s.execute(text('''CREATE TABLE IF NOT EXISTS sug_base_anterior 
-                 (id SERIAL PRIMARY KEY, sucursal TEXT, nombre TEXT, fecha_cad DATE, cantidad INTEGER)'''))
-                 
-    s.execute(text('''CREATE TABLE IF NOT EXISTS sug_historial_ventas 
-                 (id SERIAL PRIMARY KEY, sucursal TEXT, nombre TEXT, fecha_cad DATE, habia INTEGER, quedan INTEGER, vendidos INTEGER, fecha_corte TIMESTAMP)'''))
-    s.commit()
-
-# ------------------ SISTEMA DE USUARIOS EN SUPABASE ------------------
-# 1. Crear la tabla de usuarios si no existe y poner un admin por defecto
 with conn.session as s:
     s.execute(text('''CREATE TABLE IF NOT EXISTS usuarios 
                  (id SERIAL PRIMARY KEY, username TEXT UNIQUE, password TEXT)'''))
