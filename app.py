@@ -208,10 +208,8 @@ def analizar_dictado(texto, fecha_base):
 # ------------------ SIDEBAR & SUCURSALES ------------------
 st.sidebar.header("🏢 Datos de Sesión")
 
-# Mostrar el usuario que inició sesión
 st.sidebar.caption(f"👤 Conectado como: **{st.session_state.get('usuario_actual', 'Usuario')}**")
 
-# --- BOTÓN DE CERRAR SESIÓN ---
 if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True):
     st.session_state.autenticado = False
     if "usuario_actual" in st.session_state:
@@ -254,14 +252,10 @@ datos_sucursales = {
 sucursal_in = st.sidebar.selectbox("📍 Selecciona tu sucursal:", list(datos_sucursales.keys()))
 numero_wa = datos_sucursales[sucursal_in]
 
-# TEXTO WHATSAPP CORREGIDO
 st.sidebar.caption(f"📱 Los reportes de WhatsApp se enviarán al: **{numero_wa}**")
-
 st.sidebar.divider()
-
 st.sidebar.subheader("💾 Respaldo de Base de Datos")
 
-# CAJA INFO CORREGIDA
 st.sidebar.info(f"Restaura pre-conteos (bóveda) específicamente para {sucursal_in}.")
 archivo_csv = st.sidebar.file_uploader("⬆️ Subir Respaldo CSV", type=["csv"])
 
@@ -287,7 +281,6 @@ if archivo_csv is not None:
 
 st.sidebar.divider()
 
-# --- ZONA DE PELIGRO REINTEGRADA Y RESTRINGIDA SOLO A ADMIN ---
 if st.session_state.get('usuario_actual') == 'admin':
     with st.sidebar.expander("🚨 Zona de Peligro (Formatear Nube)", expanded=False):
         st.warning("⚠️ ESTE BOTÓN BORRA TODAS LAS TABLAS PARA ACTUALIZAR LA ESTRUCTURA.")
@@ -302,7 +295,6 @@ if st.session_state.get('usuario_actual') == 'admin':
                 st.success("✅ Base de datos formateada. Reiniciando para aplicar nueva estructura...")
                 time.sleep(2)
                 st.rerun()
-# ----------------------------------------------------------------
 
 # ------------------ TABS ------------------
 tab1, tab2, tab3 = st.tabs(["📝 Conteo", "📦 Inventario y Corte", "📊 Análisis"])
@@ -503,7 +495,7 @@ with tab2:
     if st.button("PROCESAR CORTE AHORA", type="primary", use_container_width=True):
         df_actualizado = conn.query("SELECT * FROM sug_captura_actual WHERE sucursal=:suc", params={"suc": sucursal_in}, ttl=0)
         
-        if df_actualizado.empty:
+        if df_actual_art_vacio := df_actualizado.empty:
             st.warning("⚠️ No hay datos capturados para comparar.")
         else:
             df_anterior = conn.query("SELECT * FROM sug_base_anterior WHERE sucursal=:suc", params={"suc": sucursal_in}, ttl=0)
