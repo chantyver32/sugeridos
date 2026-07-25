@@ -296,8 +296,8 @@ if st.session_state.get('usuario_actual') == 'admin':
                 time.sleep(2)
                 st.rerun()
 
-# ------------------ TABS ------------------
-tab1, tab2, tab3 = st.tabs(["📝 Conteo", "📦 Inventario y Corte", "📊 Análisis"])
+# ------------------ TABS (SOLO 2 PESTAÑAS) ------------------
+tab1, tab2 = st.tabs(["📝 Conteo", "📦 Inventario y Corte"])
 
 # ------------------------------------------------------------
 # TAB 1: CONTEO
@@ -495,7 +495,7 @@ with tab2:
     if st.button("PROCESAR CORTE AHORA", type="primary", use_container_width=True):
         df_actualizado = conn.query("SELECT * FROM sug_captura_actual WHERE sucursal=:suc", params={"suc": sucursal_in}, ttl=0)
         
-        if df_actual_art_vacio := df_actualizado.empty:
+        if df_actualizado.empty:
             st.warning("⚠️ No hay datos capturados para comparar.")
         else:
             df_anterior = conn.query("SELECT * FROM sug_base_anterior WHERE sucursal=:suc", params={"suc": sucursal_in}, ttl=0)
@@ -518,35 +518,6 @@ with tab2:
                 s.execute(text("DELETE FROM sug_captura_actual WHERE sucursal = :suc"), {"suc": sucursal_in})
                 s.commit()
                 
-            st.balloons()
             st.success("✅ ¡Corte procesado con éxito!")
             time.sleep(2)
             st.rerun()
-
-# ------------------------------------------------------------
-# TAB 3: ANÁLISIS
-# ------------------------------------------------------------
-with tab3:
-    df_hist = conn.query("SELECT nombre as Producto, vendidos as Vendidos, fecha_corte as Fecha, fecha_cad as Caducidad FROM sug_historial_ventas WHERE sucursal=:suc", params={"suc": sucursal_in}, ttl=0)
-    
-    if df_hist.empty:
-        st.info("Aún no hay historial de ventas en esta sucursal.")
-    else:
-        df_hist['Fecha'] = pd.to_datetime(df_hist['Fecha']).dt.date
-        buscar_h = st.text_input("Buscar producto en historial").upper()
-        fecha_filtro = st.date_input("Filtrar por día de corte", value=None)
-            
-        if buscar_h: df_hist = df_hist[df_hist["Producto"].str.contains(buscar_h, na=False)]
-        if fecha_filtro: df_hist = df_hist[df_hist["Fecha"] == fecha_filtro]
-            
-        st.dataframe(df_hist, use_container_width=True, hide_index=True)
-        st.divider()
-        
-        ventas_dia = df_hist.groupby("Fecha")["Vendidos"].sum().reset_index()
-        st.line_chart(ventas_dia, x="Fecha", y="Vendidos")
-        top = df_hist.groupby("Producto")["Vendidos"].sum().sort_values(ascending=False)
-        
-        if not top.empty:
-            st.subheader("🏆 Producto Estrella")
-            st.metric(top.index[0], f"{int(top.iloc[0])} vendidos")
-            st.bar_chart(top)
