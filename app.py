@@ -17,7 +17,7 @@ with st.spinner('Iniciando sistema Champlitte... 🥐'):
     
     st.set_page_config(page_title="Sugeridos", page_icon="🥐", layout="wide")
 
-# Estilos CSS
+# Estilos CSS (¡Corregido!)
 st.markdown("""
     <style>
     .main { background-color: #f5f7f9; }
@@ -36,6 +36,8 @@ st.markdown("""
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
     .btn-wa:hover { background-color: #128C7E; }
+    </style>
+""", unsafe_allow_html=True)
 
 # ------------------ CONEXIÓN A SUPABASE ------------------
 conn = st.connection("supabase", type="sql")
@@ -337,9 +339,6 @@ with st.sidebar:
                     st.success("✅ Base de datos formateada. Reiniciando para aplicar nueva estructura...")
                     time.sleep(2)
                     st.rerun()
-
-    
-    
 
 # ==========================================
 # TABS PRINCIPALES
