@@ -205,25 +205,26 @@ def analizar_dictado(texto, fecha_base):
     producto = re.sub(r'\s+', ' ', texto).strip().upper()
     return producto, cantidad, fecha_calc
 
+
 # ==========================================
-# BARRA LATERAL (SIDEBAR) INTEGRADA
+# BARRA LATERAL (SIDEBAR) 
 # ==========================================
-
-# 1. Datos de Sesión
-st.sidebar.markdown("### 🏢 Datos de Sesión")
-usuario_actual = st.session_state.get('usuario_actual', 'Usuario')
-st.sidebar.write(f"👤 Conectado como: **{usuario_actual}**")
-
-if st.sidebar.button("🚪 Cerrar Sesión"):
-    st.session_state.autenticado = False
-    if "usuario_actual" in st.session_state:
-        del st.session_state["usuario_actual"]
-    st.rerun()
-
-st.sidebar.markdown("---")
-
-# 2. Selección de Sucursal
-datos_sucursales = {
+with st.sidebar:
+    st.markdown("### 🏢 Datos de Sesión")
+    
+    # Mostrar usuario y botón de cerrar sesión
+    usuario_actual = st.session_state.get('usuario_actual', 'Usuario')
+    st.caption(f"👤 Conectado como: **{usuario_actual}**")
+    
+    if st.button("🚪 Cerrar Sesión", use_container_width=True):
+        st.session_state.autenticado = False
+        if "usuario_actual" in st.session_state:
+            del st.session_state["usuario_actual"]
+        st.rerun()
+        
+    st.divider()
+    
+    datos_sucursales = {
         "URANO": "522299272100", "COSTA DE ORO": "522299272100", "COSTA VERDE": "522299359597",
         "DÍAZ MIRÓN": "522291302759", "EJÉRCITO MEXICANO": "522299272107", "PLAZA RÍO": "522299864120",
         "PLAYAS DEL CONCHAL": "522291794020", "COYOL": "522299398334", "LA PLACITA": "522299208481",
@@ -234,62 +235,66 @@ datos_sucursales = {
         "LAS VEGAS": "522291932980", "PUENTE MORENO": "522296893999", "CONDESA": "522299863464",
         "MURILLO VIDAL": "522286886443", "ARAUCARIAS": "522281177133", "ÁVILA CAMACHO": "522288170989",
         "EMILIANO ZAPATA": "522969628525"
-}
+    }
+    
+    sucursal_in = st.selectbox("📍 Selecciona tu sucursal:", list(datos_sucursales.keys()))
+    
+    # Nombre en automático usando el usuario logueado
+    elabora_in = st.session_state.get('usuario_actual', 'USUARIO').upper()
+    
+    numero_wa = datos_sucursales[sucursal_in]
+    st.caption(f"📱 Los reportes de WhatsApp se enviarán al: **{numero_wa}**")
 
-sucursal = st.sidebar.selectbox(
-    "📍 Selecciona tu sucursal:",
-    list(datos_sucursales.keys())
-)
-numero_wa = datos_sucursales[sucursal]
-st.sidebar.caption(f"📱 WhatsApp enlazado: **{numero_wa}**")
-
-st.sidebar.markdown("---")
-
-# 3. Respaldo de Base de Datos
-st.sidebar.markdown("### 💾 Respaldo de Base de Datos")
-st.sidebar.info(f"Restaura pre-conteos (bóveda) específicamente para {sucursal}.")
-
-archivo_respaldo = st.sidebar.file_uploader("⬆️ Subir Respaldo CSV", type=["csv"], help="Limit 200MB per file • CSV")
-
-if archivo_respaldo is not None:
-    if st.sidebar.button("🔄 Restaurar Preconteos"):
-        try:
-            df_restaurar = pd.read_csv(archivo_respaldo)
-            if 'Producto' in df_restaurar.columns:
-                df_restaurar = df_restaurar.rename(columns={'Producto': 'nombre', 'Caducidad': 'fecha_cad', 'Existencia': 'cantidad'})
-            
-            with conn.session as s:
-                s.execute(text("DELETE FROM sug_base_anterior WHERE sucursal = :suc"), {"suc": sucursal})
-                for _, fila in df_restaurar.iterrows():
-                    s.execute(text("INSERT INTO sug_base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fc, :cant)"), 
-                              {"suc": sucursal, "nom": str(fila['nombre']).upper(), "fc": str(fila['fecha_cad']), "cant": int(fila['cantidad'])})
-                s.commit()
-            
-            st.sidebar.success(f"✅ Inventario restaurado para {sucursal}")
-            time.sleep(1.5)
-            st.rerun()
-        except Exception as e:
-            st.sidebar.error(f"⚠️ Error al restaurar: {e}")
-
-st.sidebar.markdown("---")
-
-# 4. Zona de Peligro (Expander)
-if st.session_state.get('usuario_actual') == 'admin':
-    with st.sidebar.expander("🚨 Zona de Peligro (Formatear Nube)"):
-        st.warning("⚠️ ESTE BOTÓN BORRA TODAS LAS TABLAS PARA ACTUALIZAR LA ESTRUCTURA.")
+    st.divider()
+    
+    st.markdown("### 💾 Respaldo de Base de Datos")
+    st.info(f"Restaura el stock (bóveda) específicamente para {sucursal_in}.")
+    
+    with st.form("form_restaurar_boveda"):
+        archivo_respaldo = st.file_uploader("⬆️ Subir Respaldo CSV", type=["csv"], help="Limit 200MB per file • CSV")
+        btn_restaurar = st.form_submit_button("🔄 Restaurar Stock", use_container_width=True)
         
-        confirmar_formateo = st.checkbox("Confirmar el formateo total")
-        
-        if st.button("⚠️ EJECUTAR REINICIO Y ACTUALIZACIÓN"):
-            if confirmar_formateo:
-                with conn.session as s:
-                    s.execute(text("DROP TABLE IF EXISTS sug_captura_actual, sug_base_anterior, sug_historial_ventas CASCADE"))
-                    s.commit()
-                st.success("✅ Base de datos formateada. Reiniciando para aplicar nueva estructura...")
-                time.sleep(2)
-                st.rerun()
+        if btn_restaurar:
+            if archivo_respaldo is not None:
+                try:
+                    df_restaurar = pd.read_csv(archivo_respaldo)
+                    if 'Producto' in df_restaurar.columns:
+                        df_restaurar = df_restaurar.rename(columns={'Producto': 'nombre', 'Caducidad': 'fecha_cad', 'Existencia': 'cantidad'})
+                    
+                    with conn.session as s:
+                        s.execute(text("DELETE FROM sug_base_anterior WHERE sucursal = :suc"), {"suc": sucursal_in})
+                        for _, fila in df_restaurar.iterrows():
+                            s.execute(text("INSERT INTO sug_base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fc, :cant)"), 
+                                      {"suc": sucursal_in, "nom": str(fila['nombre']).upper(), "fc": str(fila['fecha_cad']), "cant": int(fila['cantidad'])})
+                        s.commit()
+                    
+                    st.success(f"✅ Inventario restaurado para {sucursal_in}")
+                    time.sleep(1.5)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"⚠️ Error al restaurar: {e}")
             else:
-                st.error("Debes marcar la casilla de confirmación primero.")
+                st.warning("⚠️ Primero selecciona un archivo CSV.")
+
+    st.divider()
+    
+    # 4. Zona de Peligro (Expander)
+    if st.session_state.get('usuario_actual') == 'admin':
+        with st.expander("🚨 Zona de Peligro (Formatear Nube)", expanded=False):
+            st.warning("⚠️ ESTE BOTÓN BORRA TODAS LAS TABLAS PARA ACTUALIZAR LA ESTRUCTURA.")
+            
+            confirmar_formateo = st.checkbox("Confirmar el formateo total")
+            
+            if st.button("⚠️ EJECUTAR REINICIO Y ACTUALIZACIÓN", use_container_width=True):
+                if confirmar_formateo:
+                    with conn.session as s:
+                        s.execute(text("DROP TABLE IF EXISTS sug_captura_actual, sug_base_anterior, sug_historial_ventas CASCADE"))
+                        s.commit()
+                    st.success("✅ Base de datos formateada. Reiniciando para aplicar nueva estructura...")
+                    time.sleep(2)
+                    st.rerun()
+                else:
+                    st.error("Debes marcar la casilla de confirmación primero.")
 
 # ==========================================
 # TABS PRINCIPALES
@@ -351,13 +356,13 @@ with tab1:
                 if edit_prod.strip():
                     with conn.session as s:
                         existe = conn.query("SELECT cantidad FROM sug_captura_actual WHERE sucursal=:suc AND nombre=:nom AND fecha_cad=:fc", 
-                                            params={"suc": sucursal, "nom": edit_prod.strip(), "fc": str(edit_fech)}, ttl=0)
+                                            params={"suc": sucursal_in, "nom": edit_prod.strip(), "fc": str(edit_fech)}, ttl=0)
                         if not existe.empty:
                             s.execute(text("UPDATE sug_captura_actual SET cantidad=cantidad+:c WHERE sucursal=:suc AND nombre=:nom AND fecha_cad=:fc"), 
-                                      {"c": int(edit_cant), "suc": sucursal, "nom": edit_prod.strip(), "fc": str(edit_fech)})
+                                      {"c": int(edit_cant), "suc": sucursal_in, "nom": edit_prod.strip(), "fc": str(edit_fech)})
                         else:
                             s.execute(text("INSERT INTO sug_captura_actual (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fc, :c)"), 
-                                      {"suc": sucursal, "nom": edit_prod.strip(), "fc": str(edit_fech), "c": int(edit_cant)})
+                                      {"suc": sucursal_in, "nom": edit_prod.strip(), "fc": str(edit_fech), "c": int(edit_cant)})
                         s.commit()
                     st.success(f"✅ Añadido a Conteo.")
                     st.session_state.confirmacion_voz = None
@@ -369,13 +374,13 @@ with tab1:
                 if edit_prod.strip():
                     with conn.session as s:
                         existe = conn.query("SELECT cantidad FROM sug_base_anterior WHERE sucursal=:suc AND nombre=:nom AND fecha_cad=:fc", 
-                                            params={"suc": sucursal, "nom": edit_prod.strip(), "fc": str(edit_fech)}, ttl=0)
+                                            params={"suc": sucursal_in, "nom": edit_prod.strip(), "fc": str(edit_fech)}, ttl=0)
                         if not existe.empty:
                             s.execute(text("UPDATE sug_base_anterior SET cantidad=cantidad+:c WHERE sucursal=:suc AND nombre=:nom AND fecha_cad=:fc"), 
-                                      {"c": int(edit_cant), "suc": sucursal, "nom": edit_prod.strip(), "fc": str(edit_fech)})
+                                      {"c": int(edit_cant), "suc": sucursal_in, "nom": edit_prod.strip(), "fc": str(edit_fech)})
                         else:
                             s.execute(text("INSERT INTO sug_base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fc, :c)"), 
-                                      {"suc": sucursal, "nom": edit_prod.strip(), "fc": str(edit_fech), "c": int(edit_cant)})
+                                      {"suc": sucursal_in, "nom": edit_prod.strip(), "fc": str(edit_fech), "c": int(edit_cant)})
                         s.commit()
                     st.success(f"✅ Sumado al inventario activo.")
                     st.session_state.confirmacion_voz = None
@@ -387,7 +392,7 @@ with tab1:
             st.rerun()
         st.divider()
 
-    df_nombres = conn.query("SELECT nombre FROM sug_base_anterior WHERE sucursal=:suc UNION SELECT nombre FROM sug_captura_actual WHERE sucursal=:suc", params={"suc": sucursal}, ttl=0)
+    df_nombres = conn.query("SELECT nombre FROM sug_base_anterior WHERE sucursal=:suc UNION SELECT nombre FROM sug_captura_actual WHERE sucursal=:suc", params={"suc": sucursal_in}, ttl=0)
     nombres_prev = df_nombres['nombre'].tolist() if not df_nombres.empty else []
     
     sugerencias = [p for p in nombres_prev if buscar in p] if buscar else nombres_prev
@@ -412,16 +417,16 @@ with tab1:
             if nombre_input and st.session_state.conteo_temp > 0:
                 with conn.session as s:
                     existe = conn.query("SELECT cantidad FROM sug_captura_actual WHERE sucursal=:suc AND nombre=:nom AND fecha_cad=:fc", 
-                                        params={"suc": sucursal, "nom": nombre_input.strip().upper(), "fc": str(f_cad)}, ttl=0)
+                                        params={"suc": sucursal_in, "nom": nombre_input.strip().upper(), "fc": str(f_cad)}, ttl=0)
                     if not existe.empty:
                         s.execute(text("UPDATE sug_captura_actual SET cantidad=cantidad+:c WHERE sucursal=:suc AND nombre=:nom AND fecha_cad=:fc"), 
-                                  {"c": st.session_state.conteo_temp, "suc": sucursal, "nom": nombre_input.strip().upper(), "fc": str(f_cad)})
+                                  {"c": st.session_state.conteo_temp, "suc": sucursal_in, "nom": nombre_input.strip().upper(), "fc": str(f_cad)})
                     else:
                         s.execute(text("INSERT INTO sug_captura_actual (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fc, :c)"), 
-                                  {"suc": sucursal, "nom": nombre_input.strip().upper(), "fc": str(f_cad), "c": st.session_state.conteo_temp})
+                                  {"suc": sucursal_in, "nom": nombre_input.strip().upper(), "fc": str(f_cad), "c": st.session_state.conteo_temp})
                     s.commit()
                 st.session_state.conteo_temp = 0
-                st.success(f"✅ Registrado para {sucursal}.")
+                st.success(f"✅ Registrado para {sucursal_in}.")
                 time.sleep(1)
                 st.rerun()
 
@@ -430,13 +435,13 @@ with tab1:
             if nombre_input and st.session_state.conteo_temp > 0:
                 with conn.session as s:
                     existe = conn.query("SELECT cantidad FROM sug_base_anterior WHERE sucursal=:suc AND nombre=:nom AND fecha_cad=:fc", 
-                                        params={"suc": sucursal, "nom": nombre_input.strip().upper(), "fc": str(f_cad)}, ttl=0)
+                                        params={"suc": sucursal_in, "nom": nombre_input.strip().upper(), "fc": str(f_cad)}, ttl=0)
                     if not existe.empty:
                         s.execute(text("UPDATE sug_base_anterior SET cantidad=cantidad+:c WHERE sucursal=:suc AND nombre=:nom AND fecha_cad=:fc"), 
-                                  {"c": st.session_state.conteo_temp, "suc": sucursal, "nom": nombre_input.strip().upper(), "fc": str(f_cad)})
+                                  {"c": st.session_state.conteo_temp, "suc": sucursal_in, "nom": nombre_input.strip().upper(), "fc": str(f_cad)})
                     else:
                         s.execute(text("INSERT INTO sug_base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fc, :c)"), 
-                                  {"suc": sucursal, "nom": nombre_input.strip().upper(), "fc": str(f_cad), "c": st.session_state.conteo_temp})
+                                  {"suc": sucursal_in, "nom": nombre_input.strip().upper(), "fc": str(f_cad), "c": st.session_state.conteo_temp})
                     s.commit()
                 st.session_state.conteo_temp = 0
                 st.success("✅ Sumado al inventario activo.")
@@ -444,17 +449,17 @@ with tab1:
                 st.rerun()
 
     st.divider()
-    st.subheader(f"🛒 Captura Actual de {sucursal}")
-    df_hoy_captura = conn.query("SELECT id, nombre, fecha_cad, cantidad FROM sug_captura_actual WHERE sucursal=:suc", params={"suc": sucursal}, ttl=0)
+    st.subheader(f"🛒 Captura Actual de {sucursal_in}")
+    df_hoy_captura = conn.query("SELECT id, nombre, fecha_cad, cantidad FROM sug_captura_actual WHERE sucursal=:suc", params={"suc": sucursal_in}, ttl=0)
     df_editado = st.data_editor(df_hoy_captura, column_config={"id": None}, num_rows="dynamic", use_container_width=True, hide_index=True, key="editor_conteo")
 
     if st.button("💾 Guardar Cambios en Tabla", use_container_width=True):
         with conn.session as s:
-            s.execute(text("DELETE FROM sug_captura_actual WHERE sucursal = :suc"), {"suc": sucursal})
+            s.execute(text("DELETE FROM sug_captura_actual WHERE sucursal = :suc"), {"suc": sucursal_in})
             for _, fila in df_editado.iterrows():
                 if pd.notna(fila["nombre"]) and str(fila["nombre"]).strip() != "":
                     s.execute(text("INSERT INTO sug_captura_actual (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fc, :c)"), 
-                              {"suc": sucursal, "nom": str(fila["nombre"]).upper(), "fc": str(fila["fecha_cad"]), "c": int(fila["cantidad"])})
+                              {"suc": sucursal_in, "nom": str(fila["nombre"]).upper(), "fc": str(fila["fecha_cad"]), "c": int(fila["cantidad"])})
             s.commit()
         st.success("✅ Tabla guardada.")
         time.sleep(1)
@@ -463,8 +468,8 @@ with tab1:
 # TAB 2: INVENTARIO Y CORTE
 # ------------------------------------------------------------
 with tab2:
-    st.header(f"📦 Stock en {sucursal}")
-    df_stock = conn.query("SELECT nombre as Producto, fecha_cad as Caducidad, cantidad as Existencia FROM sug_base_anterior WHERE sucursal=:suc", params={"suc": sucursal}, ttl=0)
+    st.header(f"📦 Stock en {sucursal_in}")
+    df_stock = conn.query("SELECT nombre as Producto, fecha_cad as Caducidad, cantidad as Existencia FROM sug_base_anterior WHERE sucursal=:suc", params={"suc": sucursal_in}, ttl=0)
     
     if df_stock.empty:
         st.info("No hay stock registrado para esta sucursal.")
@@ -476,43 +481,42 @@ with tab2:
         
         st.divider()
         st.subheader("📥 Exportar Reportes")
-        elabora_input = st.text_input("👨‍🍳 Elaborado por:", value="PEDRO ANTONIO GARCÍA TRUJILLO").upper()
-        msg_stock = f"🍞 *SUGERIDOS - CHAMPLITTE ({sucursal})*\n\nAdjunto archivo de Excel.\n\n"
+        msg_stock = f"🍞 *SUGERIDOS - CHAMPLITTE ({sucursal_in})*\n\nAdjunto archivo de Excel.\n\n"
         link_st = f"https://wa.me/{numero_wa}?text={urllib.parse.quote(msg_stock)}"
-        excel_stock = generar_excel_formato(df_stock_filt, sucursal=sucursal, elabora=elabora_input)
+        excel_stock = generar_excel_formato(df_stock_filt, sucursal=sucursal_in, elabora=elabora_in)
         
         col_down1, col_down2 = st.columns(2)
         with col_down1:
-            st.download_button("📗 Descargar Excel", data=excel_stock, file_name=f"Sugeridos_{sucursal.replace(' ', '_')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+            st.download_button("📗 Descargar Excel", data=excel_stock, file_name=f"Sugeridos_{sucursal_in.replace(' ', '_')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
         with col_down2:
             st.link_button("💬 Abrir WhatsApp", link_st, use_container_width=True, type="primary")
 
     st.divider()
     st.header("🚀 Realizar Corte de Ventas")
     if st.button("PROCESAR CORTE AHORA", type="primary", use_container_width=True):
-        df_actualizado = conn.query("SELECT * FROM sug_captura_actual WHERE sucursal=:suc", params={"suc": sucursal}, ttl=0)
+        df_actualizado = conn.query("SELECT * FROM sug_captura_actual WHERE sucursal=:suc", params={"suc": sucursal_in}, ttl=0)
         
         if df_actualizado.empty:
             st.warning("⚠️ No hay datos capturados para comparar.")
         else:
-            df_anterior = conn.query("SELECT * FROM sug_base_anterior WHERE sucursal=:suc", params={"suc": sucursal}, ttl=0)
+            df_anterior = conn.query("SELECT * FROM sug_base_anterior WHERE sucursal=:suc", params={"suc": sucursal_in}, ttl=0)
             ts_mx = datetime.now(zona_mx).strftime("%Y-%m-%d %H:%M:%S")
             
             with conn.session as s:
                 if not df_anterior.empty:
                     for _, fila_ant in df_anterior.iterrows():
                         res_hoy = conn.query("SELECT cantidad FROM sug_captura_actual WHERE sucursal=:suc AND nombre=:nom AND fecha_cad=:fc", 
-                                             params={"suc": sucursal, "nom": fila_ant['nombre'], "fc": fila_ant['fecha_cad']}, ttl=0)
+                                             params={"suc": sucursal_in, "nom": fila_ant['nombre'], "fc": fila_ant['fecha_cad']}, ttl=0)
                         cant_hoy = res_hoy.iloc[0]['cantidad'] if not res_hoy.empty else 0
                         diferencia = fila_ant['cantidad'] - cant_hoy
                         
                         if diferencia > 0:
                             s.execute(text("INSERT INTO sug_historial_ventas (sucursal, nombre, fecha_cad, habia, quedan, vendidos, fecha_corte) VALUES (:suc, :nom, :fc, :hab, :qued, :vend, :fcor)"), 
-                                      {"suc": sucursal, "nom": fila_ant['nombre'], "fc": str(fila_ant['fecha_cad']), "hab": int(fila_ant['cantidad']), "qued": int(cant_hoy), "vend": int(diferencia), "fcor": ts_mx})
+                                      {"suc": sucursal_in, "nom": fila_ant['nombre'], "fc": str(fila_ant['fecha_cad']), "hab": int(fila_ant['cantidad']), "qued": int(cant_hoy), "vend": int(diferencia), "fcor": ts_mx})
                 
-                s.execute(text("DELETE FROM sug_base_anterior WHERE sucursal = :suc"), {"suc": sucursal})
-                s.execute(text("INSERT INTO sug_base_anterior (sucursal, nombre, fecha_cad, cantidad) SELECT sucursal, nombre, fecha_cad, cantidad FROM sug_captura_actual WHERE sucursal = :suc"), {"suc": sucursal})
-                s.execute(text("DELETE FROM sug_captura_actual WHERE sucursal = :suc"), {"suc": sucursal})
+                s.execute(text("DELETE FROM sug_base_anterior WHERE sucursal = :suc"), {"suc": sucursal_in})
+                s.execute(text("INSERT INTO sug_base_anterior (sucursal, nombre, fecha_cad, cantidad) SELECT sucursal, nombre, fecha_cad, cantidad FROM sug_captura_actual WHERE sucursal = :suc"), {"suc": sucursal_in})
+                s.execute(text("DELETE FROM sug_captura_actual WHERE sucursal = :suc"), {"suc": sucursal_in})
                 s.commit()
                 
             st.balloons()
@@ -524,7 +528,7 @@ with tab2:
 # TAB 3: ANÁLISIS
 # ------------------------------------------------------------
 with tab3:
-    df_hist = conn.query("SELECT nombre as Producto, vendidos as Vendidos, fecha_corte as Fecha, fecha_cad as Caducidad FROM sug_historial_ventas WHERE sucursal=:suc", params={"suc": sucursal}, ttl=0)
+    df_hist = conn.query("SELECT nombre as Producto, vendidos as Vendidos, fecha_corte as Fecha, fecha_cad as Caducidad FROM sug_historial_ventas WHERE sucursal=:suc", params={"suc": sucursal_in}, ttl=0)
     
     if df_hist.empty:
         st.info("Aún no hay historial de ventas en esta sucursal.")
