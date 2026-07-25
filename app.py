@@ -207,7 +207,6 @@ def analizar_dictado(texto, fecha_base):
 
 # ------------------ SIDEBAR & SUCURSALES ------------------
 st.sidebar.header("🏢 Datos de Sesión")
-
 st.sidebar.caption(f"👤 Conectado como: **{st.session_state.get('usuario_actual', 'Usuario')}**")
 
 if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True):
@@ -219,33 +218,15 @@ if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True):
 st.sidebar.divider()
 
 datos_sucursales = {
-        "URANO": "522299272100",
-        "COSTA DE ORO": "522299272100",
-        "COSTA VERDE": "522299359597",
-        "DÍAZ MIRÓN": "522291302759",
-        "EJÉRCITO MEXICANO": "522299272107",
-        "PLAZA RÍO": "522299864120",
-        "PLAYAS DEL CONCHAL": "522291794020",
-        "COYOL": "522299398334",
-        "LA PLACITA": "522299208481",
-        "CUAUHTÉMOC": "522291651340",
-        "MARIO MOLINA": "522291780851",
-        "RAFAEL CUERVO": "522291980229",
-        "RÍO MEDIO": "522291005852",
-        "DIVERPLAZA": "522293763180",
-        "BOLÍVAR": "522291002947",
-        "CIRCUNVALACIÓN": "522299393726",
-        "J.B. LOBOS": "522299201956",
-        "YÁÑEZ": "522293764940",
-        "PALACIO DE HIERRO": "522299272100",
-        "CIUDAD INDUSTRIAL": "522299200278",
-        "DONATO CASAS": "522291653833",
-        "LAS VEGAS": "522291932980",
-        "PUENTE MORENO": "522296893999",
-        "CONDESA": "522299863464",
-        "MURILLO VIDAL": "522286886443",
-        "ARAUCARIAS": "522281177133",
-        "ÁVILA CAMACHO": "522288170989",
+        "URANO": "522299272100", "COSTA DE ORO": "522299272100", "COSTA VERDE": "522299359597",
+        "DÍAZ MIRÓN": "522291302759", "EJÉRCITO MEXICANO": "522299272107", "PLAZA RÍO": "522299864120",
+        "PLAYAS DEL CONCHAL": "522291794020", "COYOL": "522299398334", "LA PLACITA": "522299208481",
+        "CUAUHTÉMOC": "522291651340", "MARIO MOLINA": "522291780851", "RAFAEL CUERVO": "522291980229",
+        "RÍO MEDIO": "522291005852", "DIVERPLAZA": "522293763180", "BOLÍVAR": "522291002947",
+        "CIRCUNVALACIÓN": "522299393726", "J.B. LOBOS": "522299201956", "YÁÑEZ": "522293764940",
+        "PALACIO DE HIERRO": "522299272100", "CIUDAD INDUSTRIAL": "522299200278", "DONATO CASAS": "522291653833",
+        "LAS VEGAS": "522291932980", "PUENTE MORENO": "522296893999", "CONDESA": "522299863464",
+        "MURILLO VIDAL": "522286886443", "ARAUCARIAS": "522281177133", "ÁVILA CAMACHO": "522288170989",
         "EMILIANO ZAPATA": "522969628525"
 }
 
@@ -256,9 +237,7 @@ st.sidebar.caption(f"📱 Los reportes de WhatsApp se enviarán al: **{numero_wa
 st.sidebar.divider()
 st.sidebar.subheader("💾 Respaldo de Base de Datos")
 
-st.sidebar.info(f"Restaura pre-conteos (bóveda) específicamente para {sucursal_in}.")
 archivo_csv = st.sidebar.file_uploader("⬆️ Subir Respaldo CSV", type=["csv"])
-
 if archivo_csv is not None:
     if st.sidebar.button("🔄 Restaurar Stock", use_container_width=True):
         try:
@@ -278,23 +257,6 @@ if archivo_csv is not None:
             st.rerun()
         except Exception as e:
             st.sidebar.error(f"⚠️ Error al restaurar: {e}")
-
-st.sidebar.divider()
-
-if st.session_state.get('usuario_actual') == 'admin':
-    with st.sidebar.expander("🚨 Zona de Peligro (Formatear Nube)", expanded=False):
-        st.warning("⚠️ ESTE BOTÓN BORRA TODAS LAS TABLAS PARA ACTUALIZAR LA ESTRUCTURA.")
-        confirmar_borrado = st.checkbox("Confirmar el formateo total")
-        if st.button("⚠️ EJECUTAR REINICIO Y ACTUALIZACIÓN", use_container_width=True):
-            if not confirmar_borrado:
-                st.error("Debes confirmar primero")
-            else:
-                with conn.session as s:
-                    s.execute(text("DROP TABLE IF EXISTS sug_captura_actual, sug_base_anterior, sug_historial_ventas CASCADE"))
-                    s.commit()
-                st.success("✅ Base de datos formateada. Reiniciando para aplicar nueva estructura...")
-                time.sleep(2)
-                st.rerun()
 
 # ------------------ TABS (SOLO 2 PESTAÑAS) ------------------
 tab1, tab2 = st.tabs(["📝 Conteo", "📦 Inventario y Corte"])
@@ -479,6 +441,8 @@ with tab2:
         fechas_stock = sorted(df_stock['Caducidad'].unique())
         filtro_st_fecha = st.multiselect("Filtrar stock por Caducidad:", fechas_stock, default=fechas_stock)
         df_stock_filt = df_stock[df_stock['Caducidad'].isin(filtro_st_fecha)]
+        
+        # VISUALIZACIÓN INMEDIATA EN LISTADOS
         st.dataframe(df_stock_filt, use_container_width=True, hide_index=True)
         
         st.divider()
@@ -487,12 +451,18 @@ with tab2:
         msg_stock = f"🍞 *SUGERIDOS - CHAMPLITTE ({sucursal_in})*\n\nAdjunto archivo de Excel.\n\n"
         link_st = f"https://wa.me/{numero_wa}?text={urllib.parse.quote(msg_stock)}"
         
-        # Generación directa del Excel listo para descargar
+        # GENERACIÓN AUTOMÁTICA DEL EXCEL LISTO PARA DESCARGAR
         excel_stock = generar_excel_formato(df_stock_filt, sucursal=sucursal_in, elabora=elabora_input)
         
         col_down1, col_down2 = st.columns(2)
         with col_down1:
-            st.download_button("📗 Descargar Excel", data=excel_stock, file_name=f"Sugeridos_{sucursal_in.replace(' ', '_')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+            st.download_button(
+                "📗 Descargar Excel", 
+                data=excel_stock, 
+                file_name=f"Sugeridos_{sucursal_in.replace(' ', '_')}.xlsx", 
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
+                use_container_width=True
+            )
         with col_down2:
             st.link_button("💬 Abrir WhatsApp", link_st, use_container_width=True, type="primary")
 
@@ -500,23 +470,20 @@ with tab2:
     st.header("🚀 Realizar Corte de Ventas")
     
     if st.button("PROCESAR CORTE AHORA", type="primary", use_container_width=True):
-        # 1. Obtenemos lo que está en la captura actual
         df_captura = conn.query("SELECT * FROM sug_captura_actual WHERE sucursal=:suc", params={"suc": sucursal_in}, ttl=0)
         
         if df_captura.empty:
             st.warning("⚠️ No hay datos en la captura actual para procesar el corte.")
         else:
-            ts_mx = datetime.now(zona_mx).strftime("%Y-%m-%d %H:%M:%S")
-            
             with conn.session as s:
-                # 2. Pasamos la captura actual directamente como el nuevo stock base (reemplaza al anterior)
+                # 1. Reemplazamos el stock base anterior con la nueva captura actual
                 s.execute(text("DELETE FROM sug_base_anterior WHERE sucursal = :suc"), {"suc": sucursal_in})
                 s.execute(text("INSERT INTO sug_base_anterior (sucursal, nombre, fecha_cad, cantidad) SELECT sucursal, nombre, fecha_cad, cantidad FROM sug_captura_actual WHERE sucursal = :suc"), {"suc": sucursal_in})
                 
-                # 3. Limpiamos la captura actual para empezar de cero
+                # 2. Vaciamos la captura actual para dejarla lista para el siguiente ciclo
                 s.execute(text("DELETE FROM sug_captura_actual WHERE sucursal = :suc"), {"suc": sucursal_in})
                 s.commit()
                 
-            st.success("✅ ¡Corte procesado con éxito! El inventario ha sido actualizado.")
-            time.sleep(1.5)
+            st.success("✅ ¡Corte procesado con éxito! El inventario ha sido actualizado y reflejado abajo.")
+            time.sleep(1.2)
             st.rerun()
