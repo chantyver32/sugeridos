@@ -463,12 +463,11 @@ with tab1:
         time.sleep(1)
 
 # ------------------------------------------------------------
-# TAB 2: INVENTARIO Y CORTE (CON VALIDACIÓN DE SEGURIDAD)
+# TAB 2: INVENTARIO Y CORTE
 # ------------------------------------------------------------
 with tab2:
     st.header(f"📦 Stock en {sucursal_in}")
     
-    # Consulta robusta y segura
     try:
         df_stock = conn.query("SELECT nombre as Producto, fecha_cad as Caducidad, cantidad as Existencia FROM sug_base_anterior WHERE sucursal=:suc", params={"suc": sucursal_in}, ttl=0)
     except Exception:
@@ -487,6 +486,8 @@ with tab2:
         elabora_input = st.text_input("👨‍🍳 Elaborado por:", value="PEDRO ANTONIO GARCÍA TRUJILLO").upper()
         msg_stock = f"🍞 *SUGERIDOS - CHAMPLITTE ({sucursal_in})*\n\nAdjunto archivo de Excel.\n\n"
         link_st = f"https://wa.me/{numero_wa}?text={urllib.parse.quote(msg_stock)}"
+        
+        # Generación directa del Excel listo para descargar
         excel_stock = generar_excel_formato(df_stock_filt, sucursal=sucursal_in, elabora=elabora_input)
         
         col_down1, col_down2 = st.columns(2)
@@ -497,32 +498,25 @@ with tab2:
 
     st.divider()
     st.header("🚀 Realizar Corte de Ventas")
+    
     if st.button("PROCESAR CORTE AHORA", type="primary", use_container_width=True):
-        df_actualizado = conn.query("SELECT * FROM sug_captura_actual WHERE sucursal=:suc", params={"suc": sucursal_in}, ttl=0)
+        # 1. Obtenemos lo que está en la captura actual
+        df_captura = conn.query("SELECT * FROM sug_captura_actual WHERE sucursal=:suc", params={"suc": sucursal_in}, ttl=0)
         
-        if df_actualizado.empty:
-            st.warning("⚠️ No hay datos capturados para comparar.")
+        if df_captura.empty:
+            st.warning("⚠️ No hay datos en la captura actual para procesar el corte.")
         else:
-            df_anterior = conn.query("SELECT * FROM sug_base_anterior WHERE sucursal=:suc", params={"suc": sucursal_in}, ttl=0)
             ts_mx = datetime.now(zona_mx).strftime("%Y-%m-%d %H:%M:%S")
             
             with conn.session as s:
-                if not df_anterior.empty:
-                    for _, fila_ant in df_anterior.iterrows():
-                        res_hoy = conn.query("SELECT cantidad FROM sug_captura_actual WHERE sucursal=:suc AND nombre=:nom AND fecha_cad=:fc", 
-                                             params={"suc": sucursal_in, "nom": fila_ant['nombre'], "fc": fila_ant['fecha_cad']}, ttl=0)
-                        cant_hoy = res_hoy.iloc[0]['cantidad'] if not res_hoy.empty else 0
-                        diferencia = fila_ant['cantidad'] - cant_hoy
-                        
-                        if diferencia > 0:
-                            s.execute(text("INSERT INTO sug_historial_ventas (sucursal, nombre, fecha_cad, habia, quedan, vendidos, fecha_corte) VALUES (:suc, :nom, :fc, :hab, :qued, :vend, :fcor)"), 
-                                      {"suc": sucursal_in, "nom": fila_ant['nombre'], "fc": str(fila_ant['fecha_cad']), "hab": int(fila_ant['cantidad']), "qued": int(cant_hoy), "vend": int(diferencia), "fcor": ts_mx})
-                
+                # 2. Pasamos la captura actual directamente como el nuevo stock base (reemplaza al anterior)
                 s.execute(text("DELETE FROM sug_base_anterior WHERE sucursal = :suc"), {"suc": sucursal_in})
                 s.execute(text("INSERT INTO sug_base_anterior (sucursal, nombre, fecha_cad, cantidad) SELECT sucursal, nombre, fecha_cad, cantidad FROM sug_captura_actual WHERE sucursal = :suc"), {"suc": sucursal_in})
+                
+                # 3. Limpiamos la captura actual para empezar de cero
                 s.execute(text("DELETE FROM sug_captura_actual WHERE sucursal = :suc"), {"suc": sucursal_in})
                 s.commit()
                 
-            st.success("✅ ¡Corte procesado con éxito!")
-            time.sleep(2)
+            st.success("✅ ¡Corte procesado con éxito! El inventario ha sido actualizado.")
+            time.sleep(1.5)
             st.rerun()
