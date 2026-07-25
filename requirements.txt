@@ -5,3 +5,7 @@ python-docx
 pytz
 SQLAlchemy
 psycopg2-binary
+sqlite3-bro  # O la librería que utilices para sqlite, si aplica
+openpyxl
+XlsxWriter
+
