@@ -7,6 +7,7 @@ import urllib.parse
 import time
 import io
 import re
+import os  # <-- NUEVO: Para leer contraseñas ocultas del servidor
 import streamlit.components.v1 as components
 
 # ------------------ CONFIGURACIÓN GENERAL ------------------
@@ -30,6 +31,57 @@ with conn.session as s:
     s.execute(text('''CREATE TABLE IF NOT EXISTS sug_historial_ventas 
                  (id SERIAL PRIMARY KEY, sucursal TEXT, nombre TEXT, fecha_cad DATE, habia INTEGER, quedan INTEGER, vendidos INTEGER, fecha_corte TIMESTAMP)'''))
     s.commit()
+
+# ------------------ SISTEMA DE USUARIOS EN SUPABASE ------------------
+# 1. Crear la tabla de usuarios si no existe y poner un admin por defecto
+with conn.session as s:
+    s.execute(text('''CREATE TABLE IF NOT EXISTS usuarios 
+                 (id SERIAL PRIMARY KEY, username TEXT UNIQUE, password TEXT)'''))
+    
+    # Verificamos si la tabla está vacía para crear un usuario maestro inicial
+    res = s.execute(text("SELECT COUNT(*) FROM usuarios")).fetchone()
+    if res[0] == 0:
+        # <-- NUEVO: Lee la contraseña secreta de Render, si no existe usa 'Temp123*'
+        clave_secreta = os.getenv("PASS_ADMIN", "Temp123*")
+        s.execute(text("INSERT INTO usuarios (username, password) VALUES ('admin', :pass)"), {"pass": clave_secreta})
+    s.commit()
+
+# 2. Pantalla de Login
+def verificar_login():
+    if "autenticado" not in st.session_state:
+        st.session_state.autenticado = False
+
+    if not st.session_state.autenticado:
+        st.markdown("<h2 style='text-align: center;'>🥐 Pastelería Champlitte</h2>", unsafe_allow_html=True)
+        st.markdown("<h4 style='text-align: center; color: gray;'>Control de Acceso</h4>", unsafe_allow_html=True)
+        
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            with st.form("form_login"):
+                usuario_input = st.text_input("👤 Usuario:")
+                password_input = st.text_input("🔑 Contraseña:", type="password")
+                btn_login = st.form_submit_button("Iniciar Sesión", use_container_width=True, type="primary")
+                
+                if btn_login:
+                    # Consultamos a Supabase si el usuario y contraseña coinciden
+                    df_check = conn.query("SELECT * FROM usuarios WHERE username = :u AND password = :p", 
+                                          params={"u": usuario_input.strip(), "p": password_input}, ttl=0)
+                    
+                    if not df_check.empty:
+                        st.session_state.autenticado = True
+                        st.session_state.usuario_actual = usuario_input.strip()
+                        st.success("✅ ¡Bienvenido!")
+                        time.sleep(0.8)
+                        st.rerun()
+                    else:
+                        st.error("❌ Usuario o contraseña incorrectos.")
+        return False
+    return True
+
+# Si no ha iniciado sesión, detenemos la app aquí y mostramos el login
+if not verificar_login():
+    st.stop()
+# ---------------------------------------------------------------------
 
 # ------------------ FUNCIONES ------------------
 def sonido_click():
@@ -163,6 +215,10 @@ def analizar_dictado(texto, fecha_base):
 # ------------------ SIDEBAR & SUCURSALES ------------------
 st.sidebar.header("⚙️ Configuración")
 
+# Mostrar el usuario que inició sesión
+st.sidebar.caption(f"👤 Conectado como: **{st.session_state.get('usuario_actual', 'Usuario')}**")
+st.sidebar.divider()
+
 datos_sucursales = {
         "URANO": "522299272100",
         "COSTA DE ORO": "522299272100",
@@ -226,7 +282,6 @@ if archivo_csv is not None:
 
 st.sidebar.divider()
 
-# --- ZONA DE PELIGRO ACTUALIZADA (GLOBAL Y CON DISEÑO EXACTO) ---
 with st.sidebar.expander("🚨 Zona de Peligro (Formatear Nube)", expanded=False):
     st.warning("⚠️ ESTE BOTÓN BORRA TODAS LAS TABLAS PARA ACTUALIZAR LA ESTRUCTURA.")
     confirmar_borrado = st.checkbox("Confirmar el formateo total")
@@ -235,7 +290,6 @@ with st.sidebar.expander("🚨 Zona de Peligro (Formatear Nube)", expanded=False
             st.error("Debes confirmar primero")
         else:
             with conn.session as s:
-                # Este comando formatea por completo las tres tablas de los Sugeridos
                 s.execute(text("DROP TABLE IF EXISTS sug_captura_actual, sug_base_anterior, sug_historial_ventas CASCADE"))
                 s.commit()
             st.success("✅ Base de datos formateada. Reiniciando para aplicar nueva estructura...")
