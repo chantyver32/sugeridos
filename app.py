@@ -17,6 +17,26 @@ with st.spinner('Iniciando sistema Champlitte... 🥐'):
     
     st.set_page_config(page_title="Sugeridos", page_icon="🥐", layout="wide")
 
+# Estilos CSS
+st.markdown("""
+    <style>
+    .main { background-color: #f5f7f9; }
+    .stButton>button { width: 100%; border-radius: 8px; font-weight: bold; }
+    .btn-wa {
+        background-color: #25D366;
+        color: white !important;
+        padding: 10px 20px;
+        text-align: center;
+        text-decoration: none !important;
+        display: block;
+        font-size: 14px;
+        font-weight: bold;
+        border-radius: 8px;
+        margin: 10px 0;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .btn-wa:hover { background-color: #128C7E; }
+
 # ------------------ CONEXIÓN A SUPABASE ------------------
 conn = st.connection("supabase", type="sql")
 
