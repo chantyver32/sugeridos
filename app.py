@@ -258,8 +258,8 @@ if archivo_csv is not None:
         except Exception as e:
             st.sidebar.error(f"⚠️ Error al restaurar: {e}")
 
-# ------------------ TABS (SOLO 2 PESTAÑAS) ------------------
-tab1, tab2 = st.tabs(["📝 Conteo", "📦 Inventario y Corte"])
+# ------------------ TABS RESTAURADOS (3 PESTAÑAS) ------------------
+tab1, tab2, tab3 = st.tabs(["📝 Conteo", "📦 Inventario y Corte", "📊 Historial de Ventas"])
 
 # ------------------------------------------------------------
 # TAB 1: CONTEO
@@ -442,7 +442,7 @@ with tab2:
         filtro_st_fecha = st.multiselect("Filtrar stock por Caducidad:", fechas_stock, default=fechas_stock)
         df_stock_filt = df_stock[df_stock['Caducidad'].isin(filtro_st_fecha)]
         
-        # VISUALIZACIÓN INMEDIATA EN LISTADOS
+        # Visualización inmediata en listados
         st.dataframe(df_stock_filt, use_container_width=True, hide_index=True)
         
         st.divider()
@@ -451,7 +451,7 @@ with tab2:
         msg_stock = f"🍞 *SUGERIDOS - CHAMPLITTE ({sucursal_in})*\n\nAdjunto archivo de Excel.\n\n"
         link_st = f"https://wa.me/{numero_wa}?text={urllib.parse.quote(msg_stock)}"
         
-        # GENERACIÓN AUTOMÁTICA DEL EXCEL LISTO PARA DESCARGAR
+        # Generación automática de Excel
         excel_stock = generar_excel_formato(df_stock_filt, sucursal=sucursal_in, elabora=elabora_input)
         
         col_down1, col_down2 = st.columns(2)
@@ -470,20 +470,64 @@ with tab2:
     st.header("🚀 Realizar Corte de Ventas")
     
     if st.button("PROCESAR CORTE AHORA", type="primary", use_container_width=True):
+        df_base_ant = conn.query("SELECT * FROM sug_base_anterior WHERE sucursal=:suc", params={"suc": sucursal_in}, ttl=0)
         df_captura = conn.query("SELECT * FROM sug_captura_actual WHERE sucursal=:suc", params={"suc": sucursal_in}, ttl=0)
         
         if df_captura.empty:
             st.warning("⚠️ No hay datos en la captura actual para procesar el corte.")
         else:
+            ts_mx = datetime.now(zona_mx).strftime("%Y-%m-%d %H:%M:%S")
+            
             with conn.session as s:
-                # 1. Reemplazamos el stock base anterior con la nueva captura actual
+                # 1. Registrar histórico de ventas comparando lo que había vs lo que queda en la captura
+                productos_map = {}
+                for _, r in df_base_ant.iterrows():
+                    productos_map[(r['nombre'], str(r['fecha_cad']))] = r['cantidad']
+                
+                for _, r in df_captura.iterrows():
+                    key = (r['nombre'], str(r['fecha_cad']))
+                    habia = productos_map.get(key, 0)
+                    quedan = r['cantidad']
+                    vendidos = max(0, habia - quedan)
+                    
+                    s.execute(text('''INSERT INTO sug_historial_ventas 
+                                 (sucursal, nombre, fecha_cad, habia, quedan, vendidos, fecha_corte) 
+                                 VALUES (:suc, :nom, :fc, :hab, :qued, :vend, :ts)'''),
+                              {"suc": sucursal_in, "nom": r['nombre'], "fc": r['fecha_cad'], 
+                               "hab": habia, "qued": quedan, "vend": vendidos, "ts": ts_mx})
+
+                # 2. Actualizar stock base con la nueva captura actual
                 s.execute(text("DELETE FROM sug_base_anterior WHERE sucursal = :suc"), {"suc": sucursal_in})
                 s.execute(text("INSERT INTO sug_base_anterior (sucursal, nombre, fecha_cad, cantidad) SELECT sucursal, nombre, fecha_cad, cantidad FROM sug_captura_actual WHERE sucursal = :suc"), {"suc": sucursal_in})
                 
-                # 2. Vaciamos la captura actual para dejarla lista para el siguiente ciclo
+                # 3. Limpiar captura actual
                 s.execute(text("DELETE FROM sug_captura_actual WHERE sucursal = :suc"), {"suc": sucursal_in})
                 s.commit()
                 
-            st.success("✅ ¡Corte procesado con éxito! El inventario ha sido actualizado y reflejado abajo.")
+            st.success("✅ ¡Corte procesado con éxito! Historial guardado, inventario actualizado y reflejado abajo.")
             time.sleep(1.2)
+            st.rerun()
+
+# ------------------------------------------------------------
+# TAB 3: HISTORIAL DE VENTAS (RESTAURADA)
+# ------------------------------------------------------------
+with tab3:
+    st.header(f"📊 Historial de Cortes y Ventas - {sucursal_in}")
+    
+    try:
+        df_historial = conn.query("SELECT nombre as Producto, fecha_cad as Caducidad, habia as Había, quedan as Quedan, vendidos as Vendidos, fecha_corte as Fecha_Corte FROM sug_historial_ventas WHERE sucursal=:suc ORDER BY fecha_corte DESC", params={"suc": sucursal_in}, ttl=0)
+    except Exception:
+        df_historial = pd.DataFrame()
+
+    if df_historial is None or df_historial.empty:
+        st.info("Aún no hay registros en el historial de ventas para esta sucursal.")
+    else:
+        st.dataframe(df_historial, use_container_width=True, hide_index=True)
+        
+        if st.button("🗑️ Limpiar Historial de esta Sucursal", use_container_width=True):
+            with conn.session as s:
+                s.execute(text("DELETE FROM sug_historial_ventas WHERE sucursal = :suc"), {"suc": sucursal_in})
+                s.commit()
+            st.success("✅ Historial limpiado correctamente.")
+            time.sleep(1)
             st.rerun()
