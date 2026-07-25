@@ -205,7 +205,7 @@ def analizar_dictado(texto, fecha_base):
     producto = re.sub(r'\s+', ' ', texto).strip().upper()
     return producto, cantidad, fecha_calc
 
-# ------------------ SIDEBAR & SUCURSALES (CORREGIDO AL MOLDE 94332.jpg) ------------------
+# ------------------ SIDEBAR & SUCURSALES ------------------
 st.sidebar.header("🏢 Datos de Sesión")
 
 # Mostrar el usuario que inició sesión
@@ -285,21 +285,23 @@ if archivo_csv is not None:
         except Exception as e:
             st.sidebar.error(f"⚠️ Error al restaurar: {e}")
 
-# ZONA DE PELIGRO COMENTADA PARA IGUALAR EL MOLDE VISUAL
-# if st.session_state.get('usuario_actual') == 'admin':
-#     with st.sidebar.expander("🚨 Zona de Peligro (Formatear Nube)", expanded=False):
-#         st.warning("⚠️ ESTE BOTÓN BORRA TODAS LAS TABLAS PARA ACTUALIZAR LA ESTRUCTURA.")
-#         confirmar_borrado = st.checkbox("Confirmar el formateo total")
-#         if st.button("⚠️ EJECUTAR REINICIO Y ACTUALIZACIÓN", use_container_width=True):
-#             if not confirmar_borrado:
-#                 st.error("Debes confirmar primero")
-#             else:
-#                 with conn.session as s:
-#                     s.execute(text("DROP TABLE IF EXISTS sug_captura_actual, sug_base_anterior, sug_historial_ventas CASCADE"))
-#                     s.commit()
-#                 st.success("✅ Base de datos formateada. Reiniciando para aplicar nueva estructura...")
-#                 time.sleep(2)
-#                 st.rerun()
+st.sidebar.divider()
+
+# --- ZONA DE PELIGRO REINTEGRADA Y RESTRINGIDA SOLO A ADMIN ---
+if st.session_state.get('usuario_actual') == 'admin':
+    with st.sidebar.expander("🚨 Zona de Peligro (Formatear Nube)", expanded=False):
+        st.warning("⚠️ ESTE BOTÓN BORRA TODAS LAS TABLAS PARA ACTUALIZAR LA ESTRUCTURA.")
+        confirmar_borrado = st.checkbox("Confirmar el formateo total")
+        if st.button("⚠️ EJECUTAR REINICIO Y ACTUALIZACIÓN", use_container_width=True):
+            if not confirmar_borrado:
+                st.error("Debes confirmar primero")
+            else:
+                with conn.session as s:
+                    s.execute(text("DROP TABLE IF EXISTS sug_captura_actual, sug_base_anterior, sug_historial_ventas CASCADE"))
+                    s.commit()
+                st.success("✅ Base de datos formateada. Reiniciando para aplicar nueva estructura...")
+                time.sleep(2)
+                st.rerun()
 # ----------------------------------------------------------------
 
 # ------------------ TABS ------------------
