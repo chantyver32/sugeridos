@@ -121,6 +121,12 @@ if "show_warning" in st.session_state:
 
 # ------------------ BASE DE DATOS (SUPABASE) ------------------
 db_url = os.environ.get("DATABASE_URL")
+if not db_url:
+    try:
+        db_url = st.secrets["DATABASE_URL"]
+    except:
+        pass
+        
 conn = st.connection("supabase", type="sql", url=db_url)
 
 with conn.session as s:
@@ -389,6 +395,49 @@ if st.session_state.get('usuario_actual', '').lower() == 'admin':
 
 
 # ------------------------------------------------------------
+# LÓGICA DE CALLBACKS PARA POPUP VOZ (Evita Bugs y Ghosting)
+# ------------------------------------------------------------
+def guardar_datos_voz(modo, sucursal):
+    # Leemos directamente desde el st.session_state para no interrumpir el flujo
+    cant = st.session_state.voz_input_cant
+    prod = st.session_state.voz_input_prod.strip().upper()
+    fech = st.session_state.voz_input_fech
+    
+    if not prod:
+        st.session_state.show_error = "El nombre no puede estar vacío."
+        return
+        
+    with conn.session as s:
+        if modo == "guardar":
+            existe = s.execute(text("SELECT cantidad FROM captura_actual WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                               {"nom": prod, "fec": str(fech), "suc": sucursal}).fetchone()
+            if existe:
+                s.execute(text("UPDATE captura_actual SET cantidad=cantidad+:can WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                          {"can": int(cant), "nom": prod, "fec": str(fech), "suc": sucursal})
+            else:
+                s.execute(text("INSERT INTO captura_actual (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
+                          {"suc": sucursal, "nom": prod, "fec": str(fech), "can": int(cant)})
+            mensaje_toast = f"✅ Guardado: {int(cant)} {prod}"
+            
+        elif modo == "ingreso":
+            existe_stock = s.execute(text("SELECT cantidad FROM base_anterior WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                                     {"nom": prod, "fec": str(fech), "suc": sucursal}).fetchone()
+            if existe_stock:
+                s.execute(text("UPDATE base_anterior SET cantidad=cantidad+:can WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                          {"can": int(cant), "nom": prod, "fec": str(fech), "suc": sucursal})
+            else:
+                s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
+                          {"suc": sucursal, "nom": prod, "fec": str(fech), "can": int(cant)})
+            mensaje_toast = f"✅ Ingreso directo: {int(cant)} {prod}"
+        s.commit()
+        
+    # Limpiar estado cierra el pop-up de un chingadazo 
+    st.session_state.confirmacion_voz = None
+    st.session_state.audio_leido = False
+    st.session_state.buscar_prod = ""
+    st.session_state.show_toast = mensaje_toast
+
+# ------------------------------------------------------------
 # DEFINICIÓN DE POP-UPS (st.dialog)
 # ------------------------------------------------------------
 
@@ -416,63 +465,19 @@ def popup_voz():
         
     st.success(f"**Escuché:** '{datos['original']}'")
     
-    # NUEVO: Uso de st.form para evitar la "carrera" de pérdida de enfoque vs reinicio (ghosting)
-    with st.form("form_voz", clear_on_submit=True):
-        edit_cant = st.number_input("Cantidad", value=int(datos['cant']), min_value=1, key="voz_input_cant")
-        edit_prod = st.text_input("Producto", value=datos['prod'], key="voz_input_prod").upper()
-        edit_fech = st.date_input("Fecha", value=datos['fecha'], key="voz_input_fech")
-        
-        col_voz_1, col_voz_2 = st.columns(2)
-        
-        with col_voz_1:
-            btn_guardar = st.form_submit_button("📝 Guardar", use_container_width=True, type="primary")
-        with col_voz_2:
-            btn_ingreso = st.form_submit_button("🥖 Ingreso directo", use_container_width=True)
-            
-    # La lógica de procesado se dispara solo si se presionó algún botón del form
-    if btn_guardar:
-        if edit_prod and edit_prod.strip() != "":
-            prod_final = edit_prod.strip()
-            with conn.session as s:
-                existe = s.execute(text("SELECT cantidad FROM captura_actual WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
-                                   {"nom": prod_final, "fec": str(edit_fech), "suc": seleccion_wa}).fetchone()
-                if existe:
-                    s.execute(text("UPDATE captura_actual SET cantidad=cantidad+:can WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
-                              {"can": int(edit_cant), "nom": prod_final, "fec": str(edit_fech), "suc": seleccion_wa})
-                else:
-                    s.execute(text("INSERT INTO captura_actual (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
-                              {"suc": seleccion_wa, "nom": prod_final, "fec": str(edit_fech), "can": int(edit_cant)})
-                s.commit()
-                
-            st.session_state.confirmacion_voz = None
-            st.session_state.audio_leido = False
-            st.session_state.buscar_prod = ""
-            st.session_state.show_toast = f"✅ Guardado: {int(edit_cant)} {prod_final}"
-            st.rerun()
-        else:
-            st.error("El nombre no puede estar vacío.")
-            
-    if btn_ingreso:
-        if edit_prod and edit_prod.strip() != "":
-            prod_final = edit_prod.strip()
-            with conn.session as s:
-                existe_stock = s.execute(text("SELECT cantidad FROM base_anterior WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
-                                         {"nom": prod_final, "fec": str(edit_fech), "suc": seleccion_wa}).fetchone()
-                if existe_stock:
-                    s.execute(text("UPDATE base_anterior SET cantidad=cantidad+:can WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
-                              {"can": int(edit_cant), "nom": prod_final, "fec": str(edit_fech), "suc": seleccion_wa})
-                else:
-                    s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
-                              {"suc": seleccion_wa, "nom": prod_final, "fec": str(edit_fech), "can": int(edit_cant)})
-                s.commit()
-                
-            st.session_state.confirmacion_voz = None
-            st.session_state.audio_leido = False
-            st.session_state.buscar_prod = ""
-            st.session_state.show_toast = f"✅ Ingreso directo: {int(edit_cant)} {prod_final}"
-            st.rerun()
-        else:
-            st.error("El nombre no puede estar vacío.")
+    # Inputs sin form, pero conectados al session_state mediante sus 'keys'
+    st.number_input("Cantidad", value=int(datos['cant']), min_value=1, key="voz_input_cant")
+    st.text_input("Producto", value=datos['prod'], key="voz_input_prod")
+    st.date_input("Fecha", value=datos['fecha'], key="voz_input_fech")
+    
+    col_voz_1, col_voz_2 = st.columns(2)
+    
+    # Los botones ahora usan "on_click", lo que previene el duplicado visual al 100%
+    with col_voz_1:
+        st.button("📝 Guardar", use_container_width=True, type="primary", on_click=guardar_datos_voz, args=("guardar", seleccion_wa))
+    with col_voz_2:
+        st.button("🥖 Ingreso directo", use_container_width=True, on_click=guardar_datos_voz, args=("ingreso", seleccion_wa))
+
 
 @st.dialog("✏️")
 def popup_manual(nombre_final):
