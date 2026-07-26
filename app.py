@@ -140,19 +140,6 @@ with conn.session as s:
     s.commit()
 
 # ------------------ SISTEMA DE LOGIN ------------------
-def cb_login():
-    u = st.session_state.login_usr.strip()
-    p = st.session_state.login_pwd
-    df_check = conn.query("SELECT * FROM usuarios WHERE username = :u AND password = :p", 
-                          params={"u": u, "p": p}, ttl=0)
-    
-    if not df_check.empty:
-        st.session_state.autenticado = True
-        st.session_state.usuario_actual = u
-        st.session_state.show_toast = "✅ ¡Bienvenid@!"
-    else:
-        st.session_state.show_error = "❌ Usuario o contraseña incorrectos."
-
 def verificar_login():
     if "autenticado" not in st.session_state:
         st.session_state.autenticado = False
@@ -164,9 +151,20 @@ def verificar_login():
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             with st.form("form_login"):
-                st.text_input("👤 Usuario:", key="login_usr")
-                st.text_input("🔑 Contraseña:", type="password", key="login_pwd")
-                st.form_submit_button("Iniciar Sesión", on_click=cb_login, use_container_width=True, type="primary")
+                usuario_input = st.text_input("👤 Usuario:", key="login_usr")
+                password_input = st.text_input("🔑 Contraseña:", type="password", key="login_pwd")
+                btn_login = st.form_submit_button("Iniciar Sesión", use_container_width=True, type="primary")
+                
+                if btn_login:
+                    df_check = conn.query("SELECT * FROM usuarios WHERE username = :u AND password = :p", 
+                                          params={"u": usuario_input.strip(), "p": password_input}, ttl=0)
+                    if not df_check.empty:
+                        st.session_state.autenticado = True
+                        st.session_state.usuario_actual = usuario_input.strip()
+                        st.session_state.show_toast = "✅ ¡Bienvenid@!"
+                        st.rerun()
+                    else:
+                        st.error("❌ Usuario o contraseña incorrectos.")
         return False
     return True
 
@@ -317,39 +315,14 @@ def analizar_dictado(texto, fecha_base):
     producto = re.sub(r'\s+', ' ', texto).strip().upper()
     return producto, cantidad, fecha_calc
 
-# ------------------ SIDEBAR CALLBACKS ------------------
-def cb_cerrar_sesion():
-    st.session_state.autenticado = False
-    if "usuario_actual" in st.session_state:
-        del st.session_state["usuario_actual"]
-
-def cb_restaurar_stock(df_restaurar, suc):
-    try:
-        with conn.session as s:
-            s.execute(text("DELETE FROM base_anterior WHERE sucursal = :suc"), {"suc": suc})
-            for _, fila in df_restaurar.iterrows():
-                s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"),
-                          {"suc": suc, "nom": str(fila['nombre']).upper(), "fec": str(fila['fecha_cad']), "can": int(fila['cantidad'])})
-            s.commit()
-        st.session_state.show_toast = "✅ Inventario restaurado correctamente para " + suc
-    except Exception as e:
-        st.session_state.show_error = f"⚠️ Error al restaurar: {e}"
-
-def cb_reset_total():
-    if st.session_state.get("check_reset"):
-        with conn.session as s:
-            s.execute(text("TRUNCATE TABLE captura_actual RESTART IDENTITY"))
-            s.execute(text("TRUNCATE TABLE base_anterior RESTART IDENTITY"))
-            s.execute(text("TRUNCATE TABLE historial_ventas RESTART IDENTITY"))
-            s.commit()
-        st.session_state.show_toast = "✅ Base de datos limpiada por completo."
-    else:
-        st.session_state.show_error = "Debes confirmar primero seleccionando la casilla."
-
 # ------------------ SIDEBAR ------------------
 st.sidebar.markdown("### 🏢 Datos de Sesión")
 st.sidebar.caption(f"👤 Conectado como: **{st.session_state.get('usuario_actual', 'Usuario')}**")
-st.sidebar.button("🚪 Cerrar Sesión", on_click=cb_cerrar_sesion, use_container_width=True)
+if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True):
+    st.session_state.autenticado = False
+    if "usuario_actual" in st.session_state:
+        del st.session_state["usuario_actual"]
+    st.rerun()
 
 st.sidebar.divider()
 
@@ -376,18 +349,43 @@ st.sidebar.info(f"Guarda o restaura tu stock específicamente para {seleccion_wa
 archivo_csv = st.sidebar.file_uploader("⬆️ Subir Respaldo CSV", type=["csv"])
 
 if archivo_csv is not None:
-    df_restaurar_cargar = pd.read_csv(archivo_csv)
-    if 'Producto' in df_restaurar_cargar.columns:
-        df_restaurar_cargar = df_restaurar_cargar.rename(columns={'Producto': 'nombre', 'Caducidad': 'fecha_cad', 'Fecha': 'fecha_cad', 'Existencia': 'cantidad'})
-    st.sidebar.button("🔄 Cargar y Restaurar Stock", on_click=cb_restaurar_stock, args=(df_restaurar_cargar, seleccion_wa), use_container_width=True)
+    if st.sidebar.button("🔄 Cargar y Restaurar Stock", use_container_width=True):
+        try:
+            df_restaurar = pd.read_csv(archivo_csv)
+            if 'Producto' in df_restaurar.columns:
+                df_restaurar = df_restaurar.rename(columns={'Producto': 'nombre', 'Caducidad': 'fecha_cad', 'Fecha': 'fecha_cad', 'Existencia': 'cantidad'})
+            
+            with conn.session as s:
+                s.execute(text("DELETE FROM base_anterior WHERE sucursal = :suc"), {"suc": seleccion_wa})
+                for _, fila in df_restaurar.iterrows():
+                    s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"),
+                              {"suc": seleccion_wa, "nom": str(fila['nombre']).upper(), "fec": str(fila['fecha_cad']), "can": int(fila['cantidad'])})
+                s.commit()
+            
+            st.session_state.show_toast = "✅ Inventario restaurado correctamente para " + seleccion_wa
+            st.rerun()
+        except Exception as e:
+            st.sidebar.error(f"⚠️ Error al restaurar: {e}")
 
 st.sidebar.divider()
 
 if st.session_state.get('usuario_actual', '').lower() == 'admin':
     with st.sidebar.expander("🚨 Zona de Peligro"):
         st.warning("¡ATENCIÓN! Esto borrará el inventario de TODAS las sucursales.")
-        st.checkbox("Confirmar que deseo borrar toda la base de datos", key="check_reset")
-        st.button("⚠️ EJECUTAR RESET TOTAL", on_click=cb_reset_total, use_container_width=True)
+        confirmar_reset = st.checkbox("Confirmar que deseo borrar toda la base de datos", key="check_reset")
+        
+        if st.button("⚠️ EJECUTAR RESET TOTAL", use_container_width=True):
+            if confirmar_reset:
+                with conn.session as s:
+                    s.execute(text("TRUNCATE TABLE captura_actual RESTART IDENTITY"))
+                    s.execute(text("TRUNCATE TABLE base_anterior RESTART IDENTITY"))
+                    s.execute(text("TRUNCATE TABLE historial_ventas RESTART IDENTITY"))
+                    s.commit()
+                    
+                st.session_state.show_toast = "✅ Base de datos limpiada por completo."
+                st.rerun()
+            else:
+                st.sidebar.error("Debes confirmar primero seleccionando la casilla.")
 
 
 # ------------------------------------------------------------
@@ -442,7 +440,8 @@ def popup_voz():
                 st.session_state.confirmacion_voz = None
                 st.session_state.audio_leido = False
                 st.session_state.buscar_prod = ""
-                st.rerun()  # Cierra inmediatamente el diálogo
+                st.session_state.show_toast = f"✅ Guardado: {int(edit_cant)} {prod_final}"
+                st.rerun()
             else:
                 st.error("El nombre no puede estar vacío.")
                 
@@ -464,7 +463,8 @@ def popup_voz():
                 st.session_state.confirmacion_voz = None
                 st.session_state.audio_leido = False
                 st.session_state.buscar_prod = ""
-                st.rerun()  # Cierra inmediatamente el diálogo
+                st.session_state.show_toast = f"✅ Ingreso directo: {int(edit_cant)} {prod_final}"
+                st.rerun()
             else:
                 st.error("El nombre no puede estar vacío.")
 
@@ -484,12 +484,23 @@ def popup_manual(nombre_final):
 
     st.write("")
     col_sum1, col_sum2, col_sum3 = st.columns(3)
+    # Estos botones mantienen callback porque NO cierran el dialog, solo suman.
     with col_sum1: st.button("+1", use_container_width=True, on_click=sumar, args=(1,))
     with col_sum2: st.button("+2", use_container_width=True, on_click=sumar, args=(2,))
     with col_sum3: st.button("Borrar", use_container_width=True, on_click=resetear)
 
     st.write("") 
-    st.metric("Total a registrar", st.session_state.conteo_temp)
+    
+    # REEMPLAZO DEL ST.METRIC POR TEXTO ESTÁTICO PARA EVITAR EL PARPADEO
+    st.markdown(
+        f"""
+        <div style="margin-bottom: 15px;">
+            <span style="color: gray; font-size: 14px;">Total a registrar</span><br>
+            <span style="font-size: 28px; color: #1f77b4; font-weight: bold;">{st.session_state.conteo_temp}</span>
+        </div>
+        """, 
+        unsafe_allow_html=True
+    )
 
     col1, col2 = st.columns(2)
     
@@ -510,7 +521,8 @@ def popup_manual(nombre_final):
                     
                 st.session_state.conteo_temp = 0
                 st.session_state.buscar_prod = ""
-                st.rerun()  # Cierra inmediatamente el diálogo
+                st.session_state.show_toast = f"✅ Guardado: {int(cant)} {nombre_final}"
+                st.rerun()
             else:
                 st.warning("Agrega una cantidad mayor a 0.")
 
@@ -531,50 +543,10 @@ def popup_manual(nombre_final):
                     
                 st.session_state.conteo_temp = 0
                 st.session_state.buscar_prod = ""
-                st.rerun()  # Cierra inmediatamente el diálogo
+                st.session_state.show_toast = f"✅ Ingreso directo: {int(cant)} {nombre_final}"
+                st.rerun()
             else:
                 st.warning("Agrega una cantidad mayor a 0.")
-
-# ------------------ CALLBACKS TAB 1 Y TAB 2 ------------------
-def cb_guardar_editor(df_ed, suc):
-    with conn.session as s:
-        s.execute(text("DELETE FROM captura_actual WHERE sucursal = :suc"), {"suc": suc})
-        for _, fila in df_ed.iterrows():
-            if pd.notna(fila["nombre"]) and str(fila["nombre"]).strip() != "":
-                s.execute(text("INSERT INTO captura_actual (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
-                          {"suc": suc, "nom": str(fila["nombre"]).upper(), "fec": str(fila["Fecha"]), "can": int(fila["cantidad"])})
-        s.commit()
-    st.session_state.show_toast = "✅ Cambios guardados."
-
-def cb_generar_archivo(suc):
-    df_actualizado = conn.query("SELECT * FROM captura_actual WHERE sucursal=:svc", params={"svc": suc}, ttl=0)
-    
-    if df_actualizado.empty:
-        st.session_state.show_warning = "⚠️ No hay datos en la tabla de registro."
-        return
-        
-    df_anterior = conn.query("SELECT * FROM base_anterior WHERE sucursal=:suc", params={"suc": suc}, ttl=0)
-    ts_mx = datetime.now(zona_mx).strftime("%Y-%m-%d %H:%M:%S")
-    
-    with conn.session as s:
-        if not df_anterior.empty:
-            for _, fila_ant in df_anterior.iterrows():
-                res_hoy = s.execute(text("SELECT cantidad FROM captura_actual WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
-                                    {"nom": fila_ant['nombre'], "fec": fila_ant['fecha_cad'], "suc": suc}).fetchone()
-                
-                cant_hoy = res_hoy[0] if res_hoy else 0
-                diferencia = fila_ant['cantidad']- cant_hoy
-                
-                if diferencia > 0:
-                    s.execute(text("INSERT INTO historial_ventas (sucursal, nombre, fecha_cad, habia, quedan, vendidos, fecha_corte) VALUES (:suc, :nom, :fec, :hab, :qued, :ven, :fc)"), 
-                              {"suc": suc, "nom": fila_ant['nombre'], "fec": fila_ant['fecha_cad'], "hab": int(fila_ant['cantidad']), "qued": int(cant_hoy), "ven": int(diferencia), "fc": ts_mx})
-                    
-        s.execute(text("DELETE FROM base_anterior WHERE sucursal = :suc"), {"suc": suc})
-        s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) SELECT sucursal, nombre, fecha_cad, cantidad FROM captura_actual WHERE sucursal = :suc"), {"suc": suc})
-        s.execute(text("DELETE FROM captura_actual WHERE sucursal = :suc"), {"suc": suc})
-        s.commit()
-    
-    st.session_state.show_toast = "✅ Archivo creado con éxito"
 
 # ------------------ TABS ------------------
 tab1, tab2 = st.tabs(["📝 Registro", "📦 Archivo"])
@@ -667,8 +639,17 @@ with tab1:
                 hide_index=True, 
                 key="editor_conteo"
             )
-
-            st.button("💾 Guardar Cambios", on_click=cb_guardar_editor, args=(df_editado, seleccion_wa), use_container_width=True)
+            
+            if st.button("💾 Guardar Cambios", use_container_width=True):
+                with conn.session as s:
+                    s.execute(text("DELETE FROM captura_actual WHERE sucursal = :suc"), {"suc": seleccion_wa})
+                    for _, fila in df_editado.iterrows():
+                        if pd.notna(fila["nombre"]) and str(fila["nombre"]).strip() != "":
+                            s.execute(text("INSERT INTO captura_actual (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
+                                      {"suc": seleccion_wa, "nom": str(fila["nombre"]).upper(), "fec": str(fila["Fecha"]), "can": int(fila["cantidad"])})
+                    s.commit()
+                st.session_state.show_toast = "✅ Cambios guardados."
+                st.rerun()
 
 # ------------------------------------------------------------
 # TAB 2: INVENTARIO Y CORTE
@@ -705,4 +686,33 @@ with tab2:
     st.divider()
     st.markdown("### 🚀 Generar archivo")
     
-    st.button("Aceptar", on_click=cb_generar_archivo, args=(seleccion_wa,), type="primary", use_container_width=True)
+    if st.button("Aceptar", type="primary", use_container_width=True):
+        df_actualizado = conn.query("SELECT * FROM captura_actual WHERE sucursal=:svc", params={"svc": seleccion_wa}, ttl=0)
+        
+        if df_actualizado.empty:
+            st.session_state.show_warning = "⚠️ No hay datos en la tabla de registro."
+            st.rerun()
+        else:
+            df_anterior = conn.query("SELECT * FROM base_anterior WHERE sucursal=:suc", params={"suc": seleccion_wa}, ttl=0)
+            ts_mx = datetime.now(zona_mx).strftime("%Y-%m-%d %H:%M:%S")
+            
+            with conn.session as s:
+                if not df_anterior.empty:
+                    for _, fila_ant in df_anterior.iterrows():
+                        res_hoy = s.execute(text("SELECT cantidad FROM captura_actual WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                                            {"nom": fila_ant['nombre'], "fec": fila_ant['fecha_cad'], "suc": seleccion_wa}).fetchone()
+                        
+                        cant_hoy = res_hoy[0] if res_hoy else 0
+                        diferencia = fila_ant['cantidad']- cant_hoy
+                        
+                        if diferencia > 0:
+                            s.execute(text("INSERT INTO historial_ventas (sucursal, nombre, fecha_cad, habia, quedan, vendidos, fecha_corte) VALUES (:suc, :nom, :fec, :hab, :qued, :ven, :fc)"), 
+                                      {"suc": seleccion_wa, "nom": fila_ant['nombre'], "fec": fila_ant['fecha_cad'], "hab": int(fila_ant['cantidad']), "qued": int(cant_hoy), "ven": int(diferencia), "fc": ts_mx})
+                            
+                s.execute(text("DELETE FROM base_anterior WHERE sucursal = :suc"), {"suc": seleccion_wa})
+                s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) SELECT sucursal, nombre, fecha_cad, cantidad FROM captura_actual WHERE sucursal = :suc"), {"suc": seleccion_wa})
+                s.execute(text("DELETE FROM captura_actual WHERE sucursal = :suc"), {"suc": seleccion_wa})
+                s.commit()
+            
+            st.session_state.show_toast = "✅ Archivo creado con éxito"
+            st.rerun()
