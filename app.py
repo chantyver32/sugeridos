@@ -1,4 +1,4 @@
-import streamlit as st
+Import streamlit as st
 import pandas as pd
 from sqlalchemy import text
 from datetime import datetime, timedelta
@@ -526,7 +526,7 @@ with tab1:
 # ------------------------------------------------------------
 with tab2:
     st.header(f"📦 Stock Actual en Estantes - {seleccion_wa}")
-    df_stock = conn.query("SELECT nombre as Producto, fecha_cad as Caducidad, cantidad as Existencia FROM base_anterior WHERE sucursal=:suc", params={"suc": seleccion_wa}, ttl=0)
+    df_stock = conn.query('SELECT nombre as "Producto", fecha_cad as "Caducidad", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc', params={"suc": seleccion_wa}, ttl=0)
     
     if df_stock.empty:
         st.info("No hay stock registrado. Realiza un corte inicial o usa el botón de sumar al stock en la pestaña de Conteo.")
