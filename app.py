@@ -27,6 +27,90 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# Estilos CSS
+st.markdown("""
+    <style>
+    /* Ajuste equilibrado del espacio superior para no tapar las pestañas */
+    .block-container { padding-top: 3rem; padding-bottom: 1rem; }
+    
+    .main { background-color: #f5f7f9; }
+    .stButton>button { width: 100%; border-radius: 8px; font-weight: bold; }
+    .btn-wa {
+        background-color: #25D366;
+        color: white !important;
+        padding: 10px 20px;
+        text-align: center;
+        text-decoration: none !important;
+        display: block;
+        font-size: 14px;
+        font-weight: bold;
+        border-radius: 8px;
+        margin: 10px 0;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .btn-wa:hover { background-color: #128C7E; }
+    
+    /* Tamaño del total azul */
+    div[data-testid="stMetricValue"] { font-size: 28px; color: #1f77b4; }
+    
+    /* Tamaño gigante para la diferencia (verde/roja) y su flecha */
+    div[data-testid="stMetricDelta"] { font-size: 30px !important; font-weight: bold !important; }
+    div[data-testid="stMetricDelta"] svg { width: 35px !important; height: 35px !important; }
+
+    /* ESTILO OSCURO PARA LISTAS DESPLEGABLES (FONDO NEGRO) */
+    
+    /* 1. Fondo del menú desplegable (opciones) */
+    div[data-baseweb="popover"] > div {
+        background-color: #1a1a1c !important; /* Fondo oscuro suavizado (tipo panel) */
+        border-radius: 8px !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.8) !important;
+    }
+    div[data-baseweb="popover"] ul {
+        background-color: transparent !important; 
+    }
+    div[data-baseweb="popover"] li {
+        background-color: transparent !important;
+        color: #FFFFFF !important;
+        font-size: 14px !important;
+        padding-top: 10px !important;
+        padding-bottom: 10px !important;
+    }
+    div[data-baseweb="popover"] li:hover {
+        background-color: #2d2d30 !important; /* Efecto hover sutil */
+    }
+    
+    /* --> NUEVO: Sombreado de la opción PREVIAMENTE SELECCIONADA <-- */
+    div[data-baseweb="popover"] li[aria-selected="true"] {
+        background-color: #3a3b3e !important; /* Color gris resaltado tipo 94389.jpg */
+        font-weight: bold !important;
+    }
+
+    /* 2. Caja principal del Selectbox (antes de abrir) */
+    div[data-baseweb="select"] > div {
+        background-color: #1a1a1c !important; 
+        border-radius: 8px !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    }
+
+    /* 3. Efecto Focus */
+    div[data-baseweb="select"] > div:focus-within {
+        border-color: #ff4b4b !important; 
+        box-shadow: 0 0 0 1px #ff4b4b !important;
+    }
+
+    /* 4. Color del texto seleccionado y el ícono de la flecha */
+    div[data-baseweb="select"] div {
+        color: #FFFFFF !important;
+    }
+    div[data-baseweb="select"] svg {
+        fill: #FFFFFF !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+
+
 # ------------------ BASE DE DATOS (SUPABASE) ------------------
 db_url = os.environ.get("DATABASE_URL")
 conn = st.connection("supabase", type="sql", url=db_url)
