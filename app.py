@@ -307,7 +307,7 @@ if st.session_state.get('usuario_actual', '').lower() == 'admin':
 # DEFINICIÓN DE POP-UPS (st.dialog)
 # ------------------------------------------------------------
 
-@st.dialog("🗣️ Confirmar Ingreso por Voz")
+@st.dialog
 def popup_voz():
     datos = st.session_state.confirmacion_voz
     
@@ -326,7 +326,7 @@ def popup_voz():
         components.html(js_tts, height=0)
         st.session_state.audio_leido = True
         
-    st.success(f"🗣️ **Confirmado:** '{datos['original']}'")
+    
     
     edit_cant = st.number_input("Cantidad", value=int(datos['cant']), min_value=1)
     edit_prod = st.text_input("Producto", value=datos['prod']).upper()
@@ -382,13 +382,10 @@ def popup_voz():
             else:
                 st.error("El nombre no puede estar vacío.")
 
-    if st.button("❌ Cancelar / Reintentar", use_container_width=True):
-        st.session_state.confirmacion_voz = None
-        st.session_state.audio_leido = False
-        st.rerun()
+    
 
 
-@st.dialog("⚙️ Configurar Registro Manual")
+@st.dialog
 def popup_manual(nombre_final):
     st.markdown(f"### 📦 {nombre_final}")
     fecha_sugerido = fecha_hoy_mx + timedelta(days=1)
