@@ -620,32 +620,71 @@ with tab1:
 # TAB 2: INVENTARIO Y CORTE
 # ------------------------------------------------------------
 with tab2:
-    # Consultar datos de stock para usar en la descarga y en la vista final
-    df_stock = conn.query('SELECT nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc', params={"suc": seleccion_wa}, ttl=0)
+    st.markdown("### 📦 Gestión de Sugeridos")
+    
+    # Consultar datos de stock con ID oculto para permitir edición de filas dinámicas
+    df_stock = conn.query('SELECT id, nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc', params={"suc": seleccion_wa}, ttl=0)
+    
+    with st.expander(f"✏️ Editar Sugeridos de {seleccion_wa}", expanded=True):
+        if df_stock.empty:
+            st.info("No hay stock registrado. Realiza un ingreso directo en la pestaña de Registro.")
+        else:
+            # Tabla editable interactiva
+            df_editado_stock = st.data_editor(
+                df_stock, 
+                column_config={"id": None}, # Ocultamos el ID en la interfaz
+                num_rows="dynamic", # Permite añadir y eliminar filas
+                use_container_width=True, 
+                hide_index=True, 
+                key="editor_sugeridos"
+            )
+            
+            # Botón para confirmar y guardar los cambios en la base de datos
+            if st.button("💾 Confirmar Cambios", use_container_width=True, type="primary"):
+                with conn.session as s:
+                    # Limpiamos los registros de la sucursal actual
+                    s.execute(text("DELETE FROM base_anterior WHERE sucursal = :suc"), {"suc": seleccion_wa})
+                    # Insertamos los datos modificados del editor
+                    for _, fila in df_editado_stock.iterrows():
+                        if pd.notna(fila["Producto"]) and str(fila["Producto"]).strip() != "":
+                            s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
+                                      {
+                                          "suc": seleccion_wa, 
+                                          "nom": str(fila["Producto"]).upper(), 
+                                          "fec": str(fila["Fecha"]), 
+                                          "can": int(fila["Existencia"])
+                                      })
+                    s.commit()
+                # Notificamos el éxito y recargamos para regenerar el Excel
+                st.session_state.show_toast = "✅ Sugeridos actualizados correctamente."
+                st.rerun()
 
+    st.divider()
+    
     # 1. DESCARGAR
-    st.markdown("### 📥 Descargar")
-    if df_stock.empty:
-        st.info("No hay stock registrado. Realiza un ingreso directo en la pestaña de Registro.")
+    st.markdown("### 📥 Descargar Excel Actualizado")
+    
+    # Volvemos a consultar la base (ya sin el id) para pasarla al generador de Excel
+    df_stock_final = conn.query('SELECT nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc', params={"suc": seleccion_wa}, ttl=0)
+    
+    if df_stock_final.empty:
+        st.warning("No hay datos para generar el Excel.")
     else:
         elabora_input = st.text_input("👨‍🍳 Nombre de quien Elabora", value=st.session_state.get('usuario_actual', 'PEDRO GARCÍA')).upper()
         msg_stock = f""
         link_st = f"https://wa.me/{numero_whatsapp.strip()}?text={urllib.parse.quote(msg_stock)}"
         
-        excel_stock = generar_excel_formato(df_stock, sucursal=seleccion_wa, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.", elabora=elabora_input)
+        # Generar el Excel con el DataFrame validado tras las ediciones
+        excel_stock = generar_excel_formato(df_stock_final, sucursal=seleccion_wa, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.", elabora=elabora_input)
         
         col_down1, col_down2 = st.columns(2)
         with col_down1:
-            st.download_button("📗 1. Descargar Excel", data=excel_stock, file_name=f"Sugeridos_{seleccion_wa}_{fecha_hoy_mx}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+            st.download_button(
+                "📗 1. Descargar Excel", 
+                data=excel_stock, 
+                file_name=f"Sugeridos_{seleccion_wa}_{fecha_hoy_mx}.xlsx", 
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
+                use_container_width=True
+            )
         with col_down2:
             st.link_button("💬 2. Abrir WhatsApp", link_st, use_container_width=True, type="primary")
-
-        st.divider()
-        
-        # 2. LISTA DESPLEGABLE (Sugeridos de la sucursal)
-        with st.expander(f"📦 Ver Sugeridos de {seleccion_wa}", expanded=False):
-            fechas_stock = sorted(df_stock['Fecha'].unique())
-            filtro_st_fecha = st.multiselect("Filtrar stock por Fecha:", fechas_stock, default=fechas_stock)
-                
-            df_stock_filt = df_stock[df_stock['Fecha'].isin(filtro_st_fecha)]
-            st.dataframe(df_stock_filt, use_container_width=True, hide_index=True)
