@@ -523,24 +523,25 @@ with tab1:
             popup_manual(nombre_input.strip().upper())
 
     st.divider()
-    st.subheader(f"")
     
+    # --- AQUI ESTA LA TABLA MODIFICADA EN UN EXPANDER ---
     df_hoy_captura = conn.query("SELECT id, nombre, fecha_cad AS \"Fecha\", cantidad FROM captura_actual WHERE sucursal=:suc", params={"suc": seleccion_wa}, ttl=0)
     
     if not df_hoy_captura.empty:
-        df_editado = st.data_editor(df_hoy_captura, column_config={"id": None}, num_rows="dynamic", height=300, use_container_width=True, hide_index=True, key="editor_conteo")
-
-        if st.button("💾 Guardar Cambios", use_container_width=True):
-            with conn.session as s:
-                s.execute(text("DELETE FROM captura_actual WHERE sucursal = :suc"), {"suc": seleccion_wa})
-                for _, fila in df_editado.iterrows():
-                    if pd.notna(fila["nombre"]) and str(fila["nombre"]).strip() != "":
-                        s.execute(text("INSERT INTO captura_actual (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
-                                  {"suc": seleccion_wa, "nom": str(fila["nombre"]).upper(), "fec": str(fila["Fecha"]), "can": int(fila["cantidad"])})
-                s.commit()
-            st.success("✅ Cambios guardados. ")
-            time.sleep(1)
-            st.rerun()
+        with st.expander(f"📋 Resumen de productos de {seleccion_wa}", expanded=False):
+            df_editado = st.data_editor(df_hoy_captura, column_config={"id": None}, num_rows="dynamic", height=300, use_container_width=True, hide_index=True, key="editor_conteo")
+    
+            if st.button("💾 Guardar Cambios", use_container_width=True):
+                with conn.session as s:
+                    s.execute(text("DELETE FROM captura_actual WHERE sucursal = :suc"), {"suc": seleccion_wa})
+                    for _, fila in df_editado.iterrows():
+                        if pd.notna(fila["nombre"]) and str(fila["nombre"]).strip() != "":
+                            s.execute(text("INSERT INTO captura_actual (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
+                                      {"suc": seleccion_wa, "nom": str(fila["nombre"]).upper(), "fec": str(fila["Fecha"]), "can": int(fila["cantidad"])})
+                    s.commit()
+                st.success("✅ Cambios guardados. ")
+                time.sleep(1)
+                st.rerun()
     
 
 # ------------------------------------------------------------
