@@ -326,7 +326,7 @@ def popup_voz():
         components.html(js_tts, height=0)
         st.session_state.audio_leido = True
         
-    st.success(f"🗣️ **Confirmado:** '{datos['original']}'")
+    st.success(f"**Escuché:** '{datos['original']}'")
     
     edit_cant = st.number_input("Cantidad", value=int(datos['cant']), min_value=1)
     edit_prod = st.text_input("Producto", value=datos['prod']).upper()
