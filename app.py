@@ -156,8 +156,8 @@ def verificar_login():
         st.session_state.autenticado = False
 
     if not st.session_state.autenticado:
-        st.markdown("<h3 style='text-align: center;'>🥐 Sugeridos</h3>", unsafe_allow_html=True)
-        st.markdown("<h3 style='text-align: center;'>Control de Acceso</h3>", unsafe_allow_html=True)
+        st.markdown("### 🥐 Sugeridos")
+        st.markdown("### Control de Acceso")
         
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
