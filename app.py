@@ -307,7 +307,8 @@ if st.session_state.get('usuario_actual', '').lower() == 'admin':
 # DEFINICIÓN DE POP-UPS (st.dialog)
 # ------------------------------------------------------------
 
-def popup_voz():
+@st.dialog("")
+def popup_voz(seleccion_wa, conn):
     datos = st.session_state.confirmacion_voz
     
     if not st.session_state.get("audio_leido", False):
@@ -381,9 +382,14 @@ def popup_voz():
             else:
                 st.error("El nombre no puede estar vacío.")
 
+    if st.button("❌ Cancelar / Reintentar", use_container_width=True):
+        st.session_state.confirmacion_voz = None
+        st.session_state.audio_leido = False
+        st.rerun()
 
-@st.dialog("⚙️ Configurar Registro Manual")
-def popup_manual(nombre_final):
+
+@st.dialog("")
+def popup_manual(nombre_final, seleccion_wa, conn):
     st.markdown(f"### 📦 {nombre_final}")
     fecha_sugerido = fecha_hoy_mx + timedelta(days=1)
     fecha_dia_mas = fecha_hoy_mx + timedelta(days=2)
@@ -492,7 +498,7 @@ with tab1:
 
     # Disparador del pop-up de voz
     if st.session_state.get("confirmacion_voz"):
-        popup_voz()
+        popup_voz(seleccion_wa, conn)
         
     st.divider()
 
@@ -518,8 +524,8 @@ with tab1:
 
     # Botón para abrir el pop-up manual cuando se escribe un producto
     if nombre_input and nombre_input.strip() != "":
-        if st.button(f"⚙️ Configurar Cantidades para: {nombre_input.strip()}", type="primary", use_container_width=True):
-            popup_manual(nombre_input.strip().upper())
+        if st.button(f"⚙️ Continuar con: {nombre_input.strip()}", type="primary", use_container_width=True):
+            popup_manual(nombre_input.strip().upper(), seleccion_wa, conn)
 
     st.divider()
     st.subheader(f"")
@@ -600,7 +606,7 @@ with tab2:
                                       {"suc": seleccion_wa, "nom": fila_ant['nombre'], "fec": fila_ant['fecha_cad'], "hab": int(fila_ant['cantidad']), "qued": int(cant_hoy), "ven": int(diferencia), "fc": ts_mx})
                             
                 s.execute(text("DELETE FROM base_anterior WHERE sucursal = :suc"), {"suc": seleccion_wa})
-                s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) SELECT sucursal, nombre, fecha_cad, cantidad FROM captura_actual WHERE sucursal = :suc"), {"suc": seleccion_wa})
+                s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) SELECT sucursal, nombre, fecha_cad, cantidad FROM captura_actual WHERE sucursal = :suc"}, {"suc": seleccion_wa})
                 s.execute(text("DELETE FROM captura_actual WHERE sucursal = :suc"), {"suc": seleccion_wa})
                 s.commit()
             
