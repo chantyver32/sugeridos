@@ -17,6 +17,15 @@ with st.spinner('Iniciando sistema Champlitte... 🥐'):
     
     st.set_page_config(page_title="Sugeridos", page_icon="🥐", layout="wide")
 
+# CSS personalizado para quitar el sombreado gris de las opciones seleccionadas en las listas desplegables
+st.markdown("""
+    <style>
+    ul[role="listbox"] li[aria-selected="true"] {
+        background-color: transparent !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 # ------------------ BASE DE DATOS (SUPABASE) ------------------
 db_url = os.environ.get("DATABASE_URL")
 conn = st.connection("supabase", type="sql", url=db_url)
@@ -135,13 +144,13 @@ def generar_excel_formato(df, sucursal, titulo="PASTELERÍA CHAMPLITTE, S.A. DE 
     sheet.write('A6', '', fmt_valor)
     sheet.write('B6', 'DESCRIPCIÓN', fmt_header_tabla)
     sheet.write('C6', 'CANTIDAD', fmt_header_tabla)
-    sheet.write('D6', 'FECHA DE CADUCIDAD', fmt_header_tabla)
+    sheet.write('D6', 'FECHA', fmt_header_tabla)
 
     row = 6
     if not df.empty:
         col_nombre = 'Producto' if 'Producto' in df.columns else 'nombre'
         col_cant = 'Existencia' if 'Existencia' in df.columns else 'cantidad'
-        col_fecha = 'Caducidad' if 'Caducidad' in df.columns else 'fecha_cad'
+        col_fecha = 'Fecha' if 'Fecha' in df.columns else 'fecha_cad'
 
         df = df.sort_values(by=col_fecha).reset_index(drop=True)
         fecha_proxima_vencer = df[col_fecha].min()
@@ -255,7 +264,7 @@ if archivo_csv is not None:
         try:
             df_restaurar = pd.read_csv(archivo_csv)
             if 'Producto' in df_restaurar.columns:
-                df_restaurar = df_restaurar.rename(columns={'Producto': 'nombre', 'Caducidad': 'fecha_cad', 'Existencia': 'cantidad'})
+                df_restaurar = df_restaurar.rename(columns={'Producto': 'nombre', 'Caducidad': 'fecha_cad', 'Fecha': 'fecha_cad', 'Existencia': 'cantidad'})
             
             with conn.session as s:
                 s.execute(text("DELETE FROM base_anterior WHERE sucursal = :suc"), {"suc": seleccion_wa})
@@ -273,27 +282,29 @@ if archivo_csv is not None:
 st.sidebar.divider()
 
 # ------------------ ZONA DE PELIGRO ACTUALIZADA ------------------
-with st.sidebar.expander("🚨 Zona de Peligro"):
-    st.warning("¡ATENCIÓN! Esto borrará el inventario de TODAS las sucursales.")
-    confirmar_reset = st.checkbox("Confirmar que deseo borrar toda la base de datos", key="check_reset")
-    
-    if st.button("⚠️ EJECUTAR RESET TOTAL", use_container_width=True):
-        if confirmar_reset:
-            with conn.session as s:
-                s.execute(text("TRUNCATE TABLE captura_actual RESTART IDENTITY"))
-                s.execute(text("TRUNCATE TABLE base_anterior RESTART IDENTITY"))
-                s.execute(text("TRUNCATE TABLE historial_ventas RESTART IDENTITY"))
-                
-                # ADVERTENCIA: Si también quieres borrar los usuarios, descomenta la siguiente línea:
-                # s.execute(text("TRUNCATE TABLE usuarios RESTART IDENTITY"))
-                
-                s.commit()
-                
-            st.sidebar.success("✅ Base de datos limpiada por completo.")
-            time.sleep(1.5)
-            st.rerun()
-        else:
-            st.sidebar.error("Debes confirmar primero seleccionando la casilla.")
+# Mostrar la zona de peligro SOLAMENTE si el usuario conectado es "admin"
+if st.session_state.get('usuario_actual', '').lower() == 'admin':
+    with st.sidebar.expander("🚨 Zona de Peligro"):
+        st.warning("¡ATENCIÓN! Esto borrará el inventario de TODAS las sucursales.")
+        confirmar_reset = st.checkbox("Confirmar que deseo borrar toda la base de datos", key="check_reset")
+        
+        if st.button("⚠️ EJECUTAR RESET TOTAL", use_container_width=True):
+            if confirmar_reset:
+                with conn.session as s:
+                    s.execute(text("TRUNCATE TABLE captura_actual RESTART IDENTITY"))
+                    s.execute(text("TRUNCATE TABLE base_anterior RESTART IDENTITY"))
+                    s.execute(text("TRUNCATE TABLE historial_ventas RESTART IDENTITY"))
+                    
+                    # ADVERTENCIA: Si también quieres borrar los usuarios, descomenta la siguiente línea:
+                    # s.execute(text("TRUNCATE TABLE usuarios RESTART IDENTITY"))
+                    
+                    s.commit()
+                    
+                st.sidebar.success("✅ Base de datos limpiada por completo.")
+                time.sleep(1.5)
+                st.rerun()
+            else:
+                st.sidebar.error("Debes confirmar primero seleccionando la casilla.")
 
 # ------------------ TABS ------------------
 tab1, tab2 = st.tabs(["📝 Registro", "📦 Archivo"])
@@ -361,7 +372,7 @@ with tab1:
         
         edit_cant = st.number_input("Cantidad", value=int(datos['cant']), min_value=1)
         edit_prod = st.text_input("Producto", value=datos['prod']).upper()
-        edit_fech = st.date_input("Caducidad", value=datos['fecha'])
+        edit_fech = st.date_input("Fecha", value=datos['fecha'])
         
         col_voz_1, col_voz_2 = st.columns(2)
         
@@ -431,7 +442,7 @@ with tab1:
     fecha_dia_mas = fecha_hoy_mx + timedelta(days=2)
     
     opcion_fecha = st.radio(
-        "📅 Fecha de Caducidad:",
+        "📅 Fecha:",
         options=["Sugerido (Mañana)", "Día Más (Pasado Mañana)"],
         horizontal=True
     )
@@ -502,7 +513,7 @@ with tab1:
     st.divider()
     st.subheader(f"🛒 Captura de Conteo Actual ({seleccion_wa})")
     
-    df_hoy_captura = conn.query("SELECT id, nombre, fecha_cad, cantidad FROM captura_actual WHERE sucursal=:suc", params={"suc": seleccion_wa}, ttl=0)
+    df_hoy_captura = conn.query("SELECT id, nombre, fecha_cad AS \"Fecha\", cantidad FROM captura_actual WHERE sucursal=:suc", params={"suc": seleccion_wa}, ttl=0)
     
     if not df_hoy_captura.empty:
         df_editado = st.data_editor(df_hoy_captura, column_config={"id": None}, num_rows="dynamic", height=300, use_container_width=True, hide_index=True, key="editor_conteo")
@@ -513,7 +524,7 @@ with tab1:
                 for _, fila in df_editado.iterrows():
                     if pd.notna(fila["nombre"]) and str(fila["nombre"]).strip() != "":
                         s.execute(text("INSERT INTO captura_actual (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
-                                  {"suc": seleccion_wa, "nom": str(fila["nombre"]).upper(), "fec": str(fila["fecha_cad"]), "can": int(fila["cantidad"])})
+                                  {"suc": seleccion_wa, "nom": str(fila["nombre"]).upper(), "fec": str(fila["Fecha"]), "can": int(fila["cantidad"])})
                 s.commit()
             st.success("✅ Tabla de conteo guardada y actualizada")
             time.sleep(1.5)
@@ -526,16 +537,16 @@ with tab1:
 # ------------------------------------------------------------
 with tab2:
     st.header(f"📦 Stock Actual en Estantes - {seleccion_wa}")
-    df_stock = conn.query('SELECT nombre as "Producto", fecha_cad as "Caducidad", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc', params={"suc": seleccion_wa}, ttl=0)
+    df_stock = conn.query('SELECT nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc', params={"suc": seleccion_wa}, ttl=0)
     
     if df_stock.empty:
         st.info("No hay stock registrado. Realiza un corte inicial o usa el botón de sumar al stock en la pestaña de Conteo.")
     else:
-        fechas_stock = sorted(df_stock['Caducidad'].unique())
+        fechas_stock = sorted(df_stock['Fecha'].unique())
         
-        filtro_st_fecha = st.multiselect("Filtrar stock por Caducidad:", fechas_stock, default=fechas_stock)
+        filtro_st_fecha = st.multiselect("Filtrar stock por Fecha:", fechas_stock, default=fechas_stock)
             
-        df_stock_filt = df_stock[df_stock['Caducidad'].isin(filtro_st_fecha)]
+        df_stock_filt = df_stock[df_stock['Fecha'].isin(filtro_st_fecha)]
         st.dataframe(df_stock_filt, use_container_width=True, hide_index=True)
         
         st.divider()
