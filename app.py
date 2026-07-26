@@ -391,87 +391,6 @@ if st.session_state.get('usuario_actual', '').lower() == 'admin':
 
 
 # ------------------------------------------------------------
-# CALLBACKS DE POP-UPS
-# ------------------------------------------------------------
-def cb_voz_guardar(suc):
-    edit_cant = st.session_state.voz_input_cant
-    edit_prod = st.session_state.voz_input_prod.strip().upper()
-    edit_fech = st.session_state.voz_input_fech
-    if edit_prod:
-        with conn.session as s:
-            existe = s.execute(text("SELECT cantidad FROM captura_actual WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
-                               {"nom": edit_prod, "fec": str(edit_fech), "suc": suc}).fetchone()
-            if existe:
-                s.execute(text("UPDATE captura_actual SET cantidad=cantidad+:can WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
-                          {"can": int(edit_cant), "nom": edit_prod, "fec": str(edit_fech), "suc": suc})
-            else:
-                s.execute(text("INSERT INTO captura_actual (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
-                          {"suc": suc, "nom": edit_prod, "fec": str(edit_fech), "can": int(edit_cant)})
-            s.commit()
-        st.session_state.confirmacion_voz = None
-        st.session_state.audio_leido = False
-        st.session_state.buscar_prod = ""
-    else:
-        st.session_state.show_error = "El nombre no puede estar vacío."
-
-def cb_voz_ingreso(suc):
-    edit_cant = st.session_state.voz_input_cant
-    edit_prod = st.session_state.voz_input_prod.strip().upper()
-    edit_fech = st.session_state.voz_input_fech
-    if edit_prod:
-        with conn.session as s:
-            existe_stock = s.execute(text("SELECT cantidad FROM base_anterior WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
-                                     {"nom": edit_prod, "fec": str(edit_fech), "suc": suc}).fetchone()
-            if existe_stock:
-                s.execute(text("UPDATE base_anterior SET cantidad=cantidad+:can WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
-                          {"can": int(edit_cant), "nom": edit_prod, "fec": str(edit_fech), "suc": suc})
-            else:
-                s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
-                          {"suc": suc, "nom": edit_prod, "fec": str(edit_fech), "can": int(edit_cant)})
-            s.commit()
-        st.session_state.confirmacion_voz = None
-        st.session_state.audio_leido = False
-        st.session_state.buscar_prod = ""
-    else:
-        st.session_state.show_error = "El nombre no puede estar vacío."
-
-def cb_manual_guardar(nom, fec, suc):
-    cant = st.session_state.conteo_temp
-    if cant > 0:
-        with conn.session as s:
-            existe = s.execute(text("SELECT cantidad FROM captura_actual WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
-                               {"nom": nom, "fec": str(fec), "suc": suc}).fetchone()
-            if existe:
-                s.execute(text("UPDATE captura_actual SET cantidad=cantidad+:can WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
-                          {"can": int(cant), "nom": nom, "fec": str(fec), "suc": suc})
-            else:
-                s.execute(text("INSERT INTO captura_actual (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
-                          {"suc": suc, "nom": nom, "fec": str(fec), "can": int(cant)})
-            s.commit()
-        st.session_state.conteo_temp = 0
-        st.session_state.buscar_prod = ""
-    else:
-        st.session_state.show_warning = "Agrega una cantidad mayor a 0."
-
-def cb_manual_ingreso(nom, fec, suc):
-    cant = st.session_state.conteo_temp
-    if cant > 0:
-        with conn.session as s:
-            existe_stock = s.execute(text("SELECT cantidad FROM base_anterior WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
-                                     {"nom": nom, "fec": str(fec), "suc": suc}).fetchone()
-            if existe_stock:
-                s.execute(text("UPDATE base_anterior SET cantidad=cantidad+:can WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
-                          {"can": int(cant), "nom": nom, "fec": str(fec), "suc": suc})
-            else:
-                s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
-                          {"suc": suc, "nom": nom, "fec": str(fec), "can": int(cant)})
-            s.commit()
-        st.session_state.conteo_temp = 0
-        st.session_state.buscar_prod = ""
-    else:
-        st.session_state.show_warning = "Agrega una cantidad mayor a 0."
-
-# ------------------------------------------------------------
 # DEFINICIÓN DE POP-UPS (st.dialog)
 # ------------------------------------------------------------
 
@@ -479,6 +398,7 @@ def cb_manual_ingreso(nom, fec, suc):
 def popup_voz():
     datos = st.session_state.get("confirmacion_voz")
     if not datos:
+        st.rerun()
         return
         
     if not st.session_state.get("audio_leido", False):
@@ -498,15 +418,55 @@ def popup_voz():
         
     st.success(f"**Escuché:** '{datos['original']}'")
     
-    st.number_input("Cantidad", value=int(datos['cant']), min_value=1, key="voz_input_cant")
-    st.text_input("Producto", value=datos['prod'], key="voz_input_prod")
-    st.date_input("Fecha", value=datos['fecha'], key="voz_input_fech")
+    edit_cant = st.number_input("Cantidad", value=int(datos['cant']), min_value=1, key="voz_input_cant")
+    edit_prod = st.text_input("Producto", value=datos['prod'], key="voz_input_prod").upper()
+    edit_fech = st.date_input("Fecha", value=datos['fecha'], key="voz_input_fech")
     
     col_voz_1, col_voz_2 = st.columns(2)
+    
     with col_voz_1:
-        st.button("📝 Guardar", on_click=cb_voz_guardar, args=(seleccion_wa,), use_container_width=True, type="primary", key="voz_btn_guardar")
+        if st.button("📝 Guardar", use_container_width=True, type="primary"):
+            if edit_prod and edit_prod.strip() != "":
+                prod_final = edit_prod.strip()
+                with conn.session as s:
+                    existe = s.execute(text("SELECT cantidad FROM captura_actual WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                                       {"nom": prod_final, "fec": str(edit_fech), "suc": seleccion_wa}).fetchone()
+                    if existe:
+                        s.execute(text("UPDATE captura_actual SET cantidad=cantidad+:can WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                                  {"can": int(edit_cant), "nom": prod_final, "fec": str(edit_fech), "suc": seleccion_wa})
+                    else:
+                        s.execute(text("INSERT INTO captura_actual (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
+                                  {"suc": seleccion_wa, "nom": prod_final, "fec": str(edit_fech), "can": int(edit_cant)})
+                    s.commit()
+                    
+                st.session_state.confirmacion_voz = None
+                st.session_state.audio_leido = False
+                st.session_state.buscar_prod = ""
+                st.rerun()  # Cierra inmediatamente el diálogo
+            else:
+                st.error("El nombre no puede estar vacío.")
+                
     with col_voz_2:
-        st.button("🥖 Ingreso directo", on_click=cb_voz_ingreso, args=(seleccion_wa,), use_container_width=True, key="voz_btn_ingreso")
+        if st.button("🥖 Ingreso directo", use_container_width=True):
+            if edit_prod and edit_prod.strip() != "":
+                prod_final = edit_prod.strip()
+                with conn.session as s:
+                    existe_stock = s.execute(text("SELECT cantidad FROM base_anterior WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                                             {"nom": prod_final, "fec": str(edit_fech), "suc": seleccion_wa}).fetchone()
+                    if existe_stock:
+                        s.execute(text("UPDATE base_anterior SET cantidad=cantidad+:can WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                                  {"can": int(edit_cant), "nom": prod_final, "fec": str(edit_fech), "suc": seleccion_wa})
+                    else:
+                        s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
+                                  {"suc": seleccion_wa, "nom": prod_final, "fec": str(edit_fech), "can": int(edit_cant)})
+                    s.commit()
+                    
+                st.session_state.confirmacion_voz = None
+                st.session_state.audio_leido = False
+                st.session_state.buscar_prod = ""
+                st.rerun()  # Cierra inmediatamente el diálogo
+            else:
+                st.error("El nombre no puede estar vacío.")
 
 @st.dialog("✏️")
 def popup_manual(nombre_final):
@@ -532,10 +492,48 @@ def popup_manual(nombre_final):
     st.metric("Total a registrar", st.session_state.conteo_temp)
 
     col1, col2 = st.columns(2)
+    
     with col1:
-        st.button("📝 Guardar", on_click=cb_manual_guardar, args=(nombre_final, f_cad, seleccion_wa), use_container_width=True, type="primary")
+        if st.button("📝 Guardar", use_container_width=True, type="primary"):
+            cant = st.session_state.conteo_temp
+            if cant > 0:
+                with conn.session as s:
+                    existe = s.execute(text("SELECT cantidad FROM captura_actual WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                                       {"nom": nombre_final, "fec": str(f_cad), "suc": seleccion_wa}).fetchone()
+                    if existe:
+                        s.execute(text("UPDATE captura_actual SET cantidad=cantidad+:can WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                                  {"can": int(cant), "nom": nombre_final, "fec": str(f_cad), "suc": seleccion_wa})
+                    else:
+                        s.execute(text("INSERT INTO captura_actual (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
+                                  {"suc": seleccion_wa, "nom": nombre_final, "fec": str(f_cad), "can": int(cant)})
+                    s.commit()
+                    
+                st.session_state.conteo_temp = 0
+                st.session_state.buscar_prod = ""
+                st.rerun()  # Cierra inmediatamente el diálogo
+            else:
+                st.warning("Agrega una cantidad mayor a 0.")
+
     with col2:
-        st.button("🥖 Ingreso directo", on_click=cb_manual_ingreso, args=(nombre_final, f_cad, seleccion_wa), use_container_width=True)
+        if st.button("🥖 Ingreso directo", use_container_width=True):
+            cant = st.session_state.conteo_temp
+            if cant > 0:
+                with conn.session as s:
+                    existe_stock = s.execute(text("SELECT cantidad FROM base_anterior WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                                             {"nom": nombre_final, "fec": str(f_cad), "suc": seleccion_wa}).fetchone()
+                    if existe_stock:
+                        s.execute(text("UPDATE base_anterior SET cantidad=cantidad+:can WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                                  {"can": int(cant), "nom": nombre_final, "fec": str(f_cad), "suc": seleccion_wa})
+                    else:
+                        s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
+                                  {"suc": seleccion_wa, "nom": nombre_final, "fec": str(f_cad), "can": int(cant)})
+                    s.commit()
+                    
+                st.session_state.conteo_temp = 0
+                st.session_state.buscar_prod = ""
+                st.rerun()  # Cierra inmediatamente el diálogo
+            else:
+                st.warning("Agrega una cantidad mayor a 0.")
 
 # ------------------ CALLBACKS TAB 1 Y TAB 2 ------------------
 def cb_guardar_editor(df_ed, suc):
@@ -611,7 +609,7 @@ with tab1:
                             prod, cant, fech = analizar_dictado(texto_voz, fecha_hoy_mx)
                             st.session_state.confirmacion_voz = {"prod": prod, "cant": cant, "fecha": fech, "original": texto_voz}
                             st.session_state.audio_leido = False  
-                            # Trigger update implicitly managed via state check below
+                            st.rerun()
                 except ImportError:
                     st.error("⚠️ Faltan dependencias. Asegúrate de tener SpeechRecognition en tu requirements.txt")
                 except Exception as e:
