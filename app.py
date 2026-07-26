@@ -522,7 +522,7 @@ with tab1:
             popup_manual(nombre_input.strip().upper())
 
     st.divider()
-    st.subheader(f"🛒 Sugeridos de ({seleccion_wa})")
+    st.subheader(f"")
     
     df_hoy_captura = conn.query("SELECT id, nombre, fecha_cad AS \"Fecha\", cantidad FROM captura_actual WHERE sucursal=:suc", params={"suc": seleccion_wa}, ttl=0)
     
@@ -540,8 +540,7 @@ with tab1:
             st.success("✅ Cambios guardados. ")
             time.sleep(1)
             st.rerun()
-    else:
-        st.info("Identifica sugeridos, por favor.")
+    
 
 # ------------------------------------------------------------
 # TAB 2: INVENTARIO Y CORTE
