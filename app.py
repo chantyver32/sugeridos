@@ -524,13 +524,22 @@ with tab1:
 
     st.divider()
     
-    # --- AQUI ESTA LA TABLA MODIFICADA EN UN EXPANDER ---
+    # Consultar productos registrados al momento
     df_hoy_captura = conn.query("SELECT id, nombre, fecha_cad AS \"Fecha\", cantidad FROM captura_actual WHERE sucursal=:suc", params={"suc": seleccion_wa}, ttl=0)
     
+    # Mostrar tabla dentro de un expander (lista desplegable) si hay datos
     if not df_hoy_captura.empty:
-        with st.expander(f"📋 Resumen de productos de {seleccion_wa}", expanded=False):
-            df_editado = st.data_editor(df_hoy_captura, column_config={"id": None}, num_rows="dynamic", height=300, use_container_width=True, hide_index=True, key="editor_conteo")
-    
+        with st.expander("📋 Productos registrados al momento", expanded=False):
+            df_editado = st.data_editor(
+                df_hoy_captura, 
+                column_config={"id": None}, 
+                num_rows="dynamic", 
+                height=300, 
+                use_container_width=True, 
+                hide_index=True, 
+                key="editor_conteo"
+            )
+
             if st.button("💾 Guardar Cambios", use_container_width=True):
                 with conn.session as s:
                     s.execute(text("DELETE FROM captura_actual WHERE sucursal = :suc"), {"suc": seleccion_wa})
@@ -539,10 +548,9 @@ with tab1:
                             s.execute(text("INSERT INTO captura_actual (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
                                       {"suc": seleccion_wa, "nom": str(fila["nombre"]).upper(), "fec": str(fila["Fecha"]), "can": int(fila["cantidad"])})
                     s.commit()
-                st.success("✅ Cambios guardados. ")
+                st.success("✅ Cambios guardados.")
                 time.sleep(1)
                 st.rerun()
-    
 
 # ------------------------------------------------------------
 # TAB 2: INVENTARIO Y CORTE
