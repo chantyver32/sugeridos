@@ -668,40 +668,12 @@ with tab1:
                 st.rerun()
 
 # ------------------------------------------------------------
-# TAB 2: INVENTARIO Y CORTE
+# TAB 2: INVENTARIO Y CORTE (ORDEN MODIFICADO)
 # ------------------------------------------------------------
 with tab2:
-    st.markdown(f"### 📦 Sugeridos de {seleccion_wa}")
-    df_stock = conn.query('SELECT nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc', params={"suc": seleccion_wa}, ttl=0)
     
-    if df_stock.empty:
-        st.info("No hay stock registrado. Realiza un corte inicial o usa el botón de sumar al stock en la pestaña de Conteo.")
-    else:
-        fechas_stock = sorted(df_stock['Fecha'].unique())
-        
-        filtro_st_fecha = st.multiselect("Filtrar stock por Fecha:", fechas_stock, default=fechas_stock)
-            
-        df_stock_filt = df_stock[df_stock['Fecha'].isin(filtro_st_fecha)]
-        st.dataframe(df_stock_filt, use_container_width=True, hide_index=True)
-        
-        st.divider()
-        st.markdown("### 📥 Descargar")
-        
-        elabora_input = st.text_input("👨‍🍳 Nombre de quien Elabora", value=st.session_state.get('usuario_actual', 'PEDRO GARCÍA')).upper()
-        msg_stock = f""
-        link_st = f"https://wa.me/{numero_whatsapp.strip()}?text={urllib.parse.quote(msg_stock)}"
-        
-        excel_stock = generar_excel_formato(df_stock_filt, sucursal=seleccion_wa, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.", elabora=elabora_input)
-        
-        col_down1, col_down2 = st.columns(2)
-        with col_down1:
-            st.download_button("📗 1. Descargar Excel", data=excel_stock, file_name=f"Sugeridos_{seleccion_wa}_{fecha_hoy_mx}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
-        with col_down2:
-            st.link_button("💬 2. Abrir WhatsApp", link_st, use_container_width=True, type="primary")
-
-    st.divider()
+    # 1. GENERAR ARCHIVO
     st.markdown("### 🚀 Generar archivo")
-    
     if st.button("Aceptar", type="primary", use_container_width=True):
         df_actualizado = conn.query("SELECT * FROM captura_actual WHERE sucursal=:svc", params={"svc": seleccion_wa}, ttl=0)
         
@@ -732,3 +704,36 @@ with tab2:
             
             st.session_state.show_toast = "✅ Archivo creado con éxito"
             st.rerun()
+
+    st.divider()
+
+    # Consultar datos de stock para usar en la descarga y en la vista final
+    df_stock = conn.query('SELECT nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc', params={"suc": seleccion_wa}, ttl=0)
+
+    # 2. DESCARGAR
+    st.markdown("### 📥 Descargar")
+    if df_stock.empty:
+        st.info("No hay stock registrado. Realiza un corte inicial o usa el botón de sumar al stock en la pestaña de Conteo.")
+    else:
+        elabora_input = st.text_input("👨‍🍳 Nombre de quien Elabora", value=st.session_state.get('usuario_actual', 'PEDRO GARCÍA')).upper()
+        msg_stock = f""
+        link_st = f"https://wa.me/{numero_whatsapp.strip()}?text={urllib.parse.quote(msg_stock)}"
+        
+        # Generar Excel con el stock completo (el formato aplica los autofiltros internamente)
+        excel_stock = generar_excel_formato(df_stock, sucursal=seleccion_wa, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.", elabora=elabora_input)
+        
+        col_down1, col_down2 = st.columns(2)
+        with col_down1:
+            st.download_button("📗 1. Descargar Excel", data=excel_stock, file_name=f"Sugeridos_{seleccion_wa}_{fecha_hoy_mx}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+        with col_down2:
+            st.link_button("💬 2. Abrir WhatsApp", link_st, use_container_width=True, type="primary")
+
+        st.divider()
+        
+        # 3. LISTA DESPLEGABLE (Sugeridos de la sucursal)
+        with st.expander(f"📦 Ver Sugeridos de {seleccion_wa}", expanded=False):
+            fechas_stock = sorted(df_stock['Fecha'].unique())
+            filtro_st_fecha = st.multiselect("Filtrar stock por Fecha:", fechas_stock, default=fechas_stock)
+                
+            df_stock_filt = df_stock[df_stock['Fecha'].isin(filtro_st_fecha)]
+            st.dataframe(df_stock_filt, use_container_width=True, hide_index=True)
