@@ -349,11 +349,10 @@ def popup_voz():
                                   {"suc": seleccion_wa, "nom": prod_final, "fec": str(edit_fech), "can": int(edit_cant)})
                     s.commit()
                     
-                st.success(f"✅ {edit_cant} {prod_final} a Conteo.")
+                # Limpiar variables y recargar de inmediato para cerrar el pop-up sin delay
                 st.session_state.confirmacion_voz = None
                 st.session_state.audio_leido = False
                 limpiar_buscador() 
-                time.sleep(1.5)
                 st.rerun()
             else:
                 st.error("El nombre no puede estar vacío.")
@@ -373,11 +372,10 @@ def popup_voz():
                                   {"suc": seleccion_wa, "nom": prod_final, "fec": str(edit_fech), "can": int(edit_cant)})
                     s.commit()
                     
-                st.success(f"✅ {edit_cant} {prod_final} añadidos al inventario.")
+                # Limpiar variables y recargar de inmediato para cerrar el pop-up sin delay
                 st.session_state.confirmacion_voz = None
                 st.session_state.audio_leido = False
                 limpiar_buscador()
-                time.sleep(1.5)
                 st.rerun()
             else:
                 st.error("El nombre no puede estar vacío.")
@@ -423,10 +421,9 @@ def popup_manual(nombre_final):
                                   {"suc": seleccion_wa, "nom": nombre_final, "fec": str(f_cad), "can": int(cant)})
                     s.commit()
                     
+                # Reiniciar estado y cerrar inmediatamente sin delay ni mensaje de éxito
                 st.session_state.conteo_temp = 0
                 limpiar_buscador() 
-                st.success(f"✅ {nombre_final} registrado.")
-                time.sleep(1)
                 st.rerun()
             else:
                 st.warning("Agrega una cantidad mayor a 0.")
@@ -446,10 +443,9 @@ def popup_manual(nombre_final):
                                   {"suc": seleccion_wa, "nom": nombre_final, "fec": str(f_cad), "can": int(cant)})
                     s.commit()
                     
+                # Reiniciar estado y cerrar inmediatamente sin delay ni mensaje de éxito
                 st.session_state.conteo_temp = 0
                 limpiar_buscador() 
-                st.success(f"✅ {cant} de {nombre_final} registrado.")
-                time.sleep(1)
                 st.rerun()
             else:
                 st.warning("Agrega una cantidad mayor a 0.")
