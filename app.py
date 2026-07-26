@@ -17,24 +17,26 @@ with st.spinner('Iniciando sistema Champlitte... 🥐'):
     
     st.set_page_config(page_title="Sugeridos", page_icon="🥐", layout="wide")
 
-# CSS personalizado para quitar el sombreado gris y poner en NEGRITAS la sucursal seleccionada
+# CSS personalizado 
 st.markdown("""
     <style>
     ul[role="listbox"] li[aria-selected="true"] {
         background-color: transparent !important;
         font-weight: bold !important;
     }
-    </style>
-""", unsafe_allow_html=True)
-
-# Estilos CSS
-st.markdown("""
-    <style>
-    /* Ajuste equilibrado del espacio superior para no tapar las pestañas */
+    
+    /* Ajuste equilibrado del espacio superior */
     .block-container { padding-top: 3rem; padding-bottom: 1rem; }
     
     .main { background-color: #f5f7f9; }
     .stButton>button { width: 100%; border-radius: 8px; font-weight: bold; }
+    
+    /* FIX: Remover sombras (ghosting) en los botones al hacer clic o focus */
+    .stButton > button:focus, .stButton > button:active {
+        box-shadow: none !important;
+        outline: none !important;
+    }
+    
     .btn-wa {
         background-color: #25D366;
         color: white !important;
@@ -50,25 +52,18 @@ st.markdown("""
     }
     .btn-wa:hover { background-color: #128C7E; }
     
-    /* Tamaño del total azul */
     div[data-testid="stMetricValue"] { font-size: 28px; color: #1f77b4; }
-    
-    /* Tamaño gigante para la diferencia (verde/roja) y su flecha */
     div[data-testid="stMetricDelta"] { font-size: 30px !important; font-weight: bold !important; }
     div[data-testid="stMetricDelta"] svg { width: 35px !important; height: 35px !important; }
 
-    /* ESTILO OSCURO PARA LISTAS DESPLEGABLES (FONDO NEGRO) */
-    
-    /* 1. Fondo del menú desplegable (opciones) */
+    /* ESTILO OSCURO PARA LISTAS DESPLEGABLES */
     div[data-baseweb="popover"] > div {
-        background-color: #1a1a1c !important; /* Fondo oscuro suavizado (tipo panel) */
+        background-color: #1a1a1c !important; 
         border-radius: 8px !important;
         border: 1px solid rgba(255, 255, 255, 0.1) !important;
         box-shadow: 0 4px 12px rgba(0,0,0,0.8) !important;
     }
-    div[data-baseweb="popover"] ul {
-        background-color: transparent !important; 
-    }
+    div[data-baseweb="popover"] ul { background-color: transparent !important; }
     div[data-baseweb="popover"] li {
         background-color: transparent !important;
         color: #FFFFFF !important;
@@ -76,51 +71,37 @@ st.markdown("""
         padding-top: 10px !important;
         padding-bottom: 10px !important;
     }
-    div[data-baseweb="popover"] li:hover {
-        background-color: #2d2d30 !important; /* Efecto hover sutil */
-    }
+    div[data-baseweb="popover"] li:hover { background-color: #2d2d30 !important; }
     
-    /* --> NUEVO: Sombreado de la opción PREVIAMENTE SELECCIONADA <-- */
     div[data-baseweb="popover"] li[aria-selected="true"] {
-        background-color: #3a3b3e !important; /* Color gris resaltado tipo 94389.jpg */
+        background-color: #3a3b3e !important; 
         font-weight: bold !important;
     }
 
-    /* 2. Caja principal del Selectbox (antes de abrir) */
     div[data-baseweb="select"] > div {
         background-color: #1a1a1c !important; 
         border-radius: 8px !important;
         border: 1px solid rgba(255, 255, 255, 0.2) !important;
     }
 
-    /* 3. Efecto Focus */
     div[data-baseweb="select"] > div:focus-within {
         border-color: #ff4b4b !important; 
         box-shadow: 0 0 0 1px #ff4b4b !important;
     }
 
-    /* 4. Color del texto seleccionado y el ícono de la flecha */
-    div[data-baseweb="select"] div {
-        color: #FFFFFF !important;
-    }
-    div[data-baseweb="select"] svg {
-        fill: #FFFFFF !important;
-    }
+    div[data-baseweb="select"] div { color: #FFFFFF !important; }
+    div[data-baseweb="select"] svg { fill: #FFFFFF !important; }
     </style>
 """, unsafe_allow_html=True)
-
-
 
 # ------------------ BASE DE DATOS (SUPABASE) ------------------
 db_url = os.environ.get("DATABASE_URL")
 conn = st.connection("supabase", type="sql", url=db_url)
 
 with conn.session as s:
-    # Tabla de Usuarios
     s.execute(text('''CREATE TABLE IF NOT EXISTS usuarios (
         id SERIAL PRIMARY KEY, username TEXT UNIQUE, password TEXT
     )'''))
-    # Tablas de Inventario con columna 'sucursal'
     s.execute(text('''CREATE TABLE IF NOT EXISTS captura_actual (
         id SERIAL PRIMARY KEY, sucursal TEXT, nombre TEXT, fecha_cad DATE, cantidad INTEGER
     )'''))
@@ -366,7 +347,6 @@ if archivo_csv is not None:
 
 st.sidebar.divider()
 
-# ------------------ ZONA DE PELIGRO ------------------
 if st.session_state.get('usuario_actual', '').lower() == 'admin':
     with st.sidebar.expander("🚨 Zona de Peligro"):
         st.warning("¡ATENCIÓN! Esto borrará el inventario de TODAS las sucursales.")
@@ -436,6 +416,7 @@ def popup_voz():
                 st.session_state.confirmacion_voz = None
                 st.session_state.audio_leido = False
                 limpiar_buscador() 
+                time.sleep(0.1) # FIX: Retraso para evitar el error gráfico del sombreado
                 st.rerun()
             else:
                 st.error("El nombre no puede estar vacío.")
@@ -458,6 +439,7 @@ def popup_voz():
                 st.session_state.confirmacion_voz = None
                 st.session_state.audio_leido = False
                 limpiar_buscador()
+                time.sleep(0.1) # FIX
                 st.rerun()
             else:
                 st.error("El nombre no puede estar vacío.")
@@ -503,9 +485,9 @@ def popup_manual(nombre_final):
                                   {"suc": seleccion_wa, "nom": nombre_final, "fec": str(f_cad), "can": int(cant)})
                     s.commit()
                     
-                # Reiniciar estado y cerrar inmediatamente sin delay ni mensaje de éxito
                 st.session_state.conteo_temp = 0
                 limpiar_buscador() 
+                time.sleep(0.1) # FIX
                 st.rerun()
             else:
                 st.warning("Agrega una cantidad mayor a 0.")
@@ -525,9 +507,9 @@ def popup_manual(nombre_final):
                                   {"suc": seleccion_wa, "nom": nombre_final, "fec": str(f_cad), "can": int(cant)})
                     s.commit()
                     
-                # Reiniciar estado y cerrar inmediatamente sin delay ni mensaje de éxito
                 st.session_state.conteo_temp = 0
                 limpiar_buscador() 
+                time.sleep(0.1) # FIX
                 st.rerun()
             else:
                 st.warning("Agrega una cantidad mayor a 0.")
@@ -545,6 +527,9 @@ with tab1:
     if "buscar_prod" not in st.session_state:
         st.session_state.buscar_prod = ""
 
+    # MOSTRAR SUCURSAL ACTUAL
+    st.markdown(f"### 📍 Estás en la sucursal: **{seleccion_wa}**")
+
     # --- 1. INGRESO POR VOZ AL INICIO ---
     with st.expander("🎤 **Ingreso por Voz** (Clic para desplegar)", expanded=False):
         audio_val = st.audio_input("Di algo como: 3 brownies para el 15 de octubre.")
@@ -557,7 +542,7 @@ with tab1:
                     import speech_recognition as sr
                     r = sr.Recognizer()
                     with sr.AudioFile(audio_val) as source:
-                        audio_data = r.restore() if hasattr(r, 'restore') else r.record(source) # safeguard
+                        audio_data = r.restore() if hasattr(r, 'restore') else r.record(source) 
                         texto_voz = r.recognize_google(audio_data, language="es-MX")
                         if texto_voz:
                             prod, cant, fech = analizar_dictado(texto_voz, fecha_hoy_mx)
@@ -569,14 +554,25 @@ with tab1:
                 except Exception as e:
                     st.toast("❌ No pude entender el audio o hubo mucho ruido de fondo.")
 
-    # Disparador del pop-up de voz
     if st.session_state.get("confirmacion_voz"):
         popup_voz()
         
     st.divider()
 
     # --- 2. AÑADIR PRODUCTO (TEXT INPUT) ---
-    nombre_input = st.text_input("Añadir producto", placeholder="🔎 AÑADIR PRODUCTO...", key="buscar_prod", label_visibility="collapsed").upper()
+    def on_buscar_prod_change():
+        texto = st.session_state.buscar_prod.strip().upper()
+        if texto:
+            popup_manual(texto)
+
+    # El callback de "on_change" permite que el modal se lance justo al darle "Enter"
+    st.text_input(
+        "Añadir producto", 
+        placeholder="🔎 AÑADIR PRODUCTO (Presiona Enter para agregar)...", 
+        key="buscar_prod", 
+        label_visibility="collapsed",
+        on_change=on_buscar_prod_change
+    )
     
     if st.session_state.get('enfocar_buscador', False):
         components.html(
@@ -595,17 +591,10 @@ with tab1:
         )
         st.session_state.enfocar_buscador = False
 
-    # Botón para abrir el pop-up manual cuando se escribe un producto
-    if nombre_input and nombre_input.strip() != "":
-        if st.button(f"⚙️ Continuar con: {nombre_input.strip()}", type="primary", use_container_width=True):
-            popup_manual(nombre_input.strip().upper())
-
     st.divider()
     
-    # Consultar productos registrados al momento
     df_hoy_captura = conn.query("SELECT id, nombre, fecha_cad AS \"Fecha\", cantidad FROM captura_actual WHERE sucursal=:suc", params={"suc": seleccion_wa}, ttl=0)
     
-    # Mostrar tabla dentro de un expander (lista desplegable) si hay datos
     if not df_hoy_captura.empty:
         with st.expander("📋 Productos registrados al momento", expanded=False):
             df_editado = st.data_editor(
