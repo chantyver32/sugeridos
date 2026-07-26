@@ -29,8 +29,9 @@ st.markdown("""
     
     .main { background-color: #f5f7f9; }
     
-    /* FIX: Remover sombras (ghosting) y duplicados en los botones al hacer clic o focus */
-    .stButton > button { 
+    /* FIX: Remover sombras (ghosting) y duplicados en los botones normales y de formulario */
+    .stButton > button, 
+    .stFormSubmitButton > button { 
         width: 100%; 
         border-radius: 8px; 
         font-weight: bold; 
@@ -38,14 +39,18 @@ st.markdown("""
         -webkit-transition: none !important;
     }
     
-    .stButton > button:focus, .stButton > button:active {
+    .stButton > button:focus, .stButton > button:active,
+    .stFormSubmitButton > button:focus, .stFormSubmitButton > button:active {
         box-shadow: none !important;
         outline: none !important;
         transform: none !important;
     }
 
-    [data-testid="stElementContainer"] {
+    /* Eliminar transiciones de renderizado en los contenedores y formularios */
+    [data-testid="stElementContainer"], 
+    [data-testid="stForm"] {
         transition: none !important;
+        animation: none !important;
     }
     
     .btn-wa {
