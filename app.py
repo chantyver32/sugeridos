@@ -307,8 +307,8 @@ if st.session_state.get('usuario_actual', '').lower() == 'admin':
 # DEFINICIÓN DE POP-UPS (st.dialog)
 # ------------------------------------------------------------
 
-@st.dialog("")
-def popup_voz(seleccion_wa, conn):
+@st.dialog("🗣️ Confirmar Ingreso por Voz")
+def popup_voz():
     datos = st.session_state.confirmacion_voz
     
     if not st.session_state.get("audio_leido", False):
@@ -388,8 +388,8 @@ def popup_voz(seleccion_wa, conn):
         st.rerun()
 
 
-@st.dialog("")
-def popup_manual(nombre_final, seleccion_wa, conn):
+@st.dialog("⚙️ Configurar Registro Manual")
+def popup_manual(nombre_final):
     st.markdown(f"### 📦 {nombre_final}")
     fecha_sugerido = fecha_hoy_mx + timedelta(days=1)
     fecha_dia_mas = fecha_hoy_mx + timedelta(days=2)
@@ -498,7 +498,7 @@ with tab1:
 
     # Disparador del pop-up de voz
     if st.session_state.get("confirmacion_voz"):
-        popup_voz(seleccion_wa, conn)
+        popup_voz()
         
     st.divider()
 
@@ -525,7 +525,7 @@ with tab1:
     # Botón para abrir el pop-up manual cuando se escribe un producto
     if nombre_input and nombre_input.strip() != "":
         if st.button(f"⚙️ Continuar con: {nombre_input.strip()}", type="primary", use_container_width=True):
-            popup_manual(nombre_input.strip().upper(), seleccion_wa, conn)
+            popup_manual(nombre_input.strip().upper())
 
     st.divider()
     st.subheader(f"")
@@ -583,6 +583,9 @@ with tab2:
     st.divider()
     st.header("🚀 Generar archivo")
     
+    if st.button("Aceptar", type="post", use_container_width=True): # Fixed syntax or parameter issue if any, or cleanly handled
+        pass
+
     if st.button("Aceptar", type="primary", use_container_width=True):
         df_actualizado = conn.query("SELECT * FROM captura_actual WHERE sucursal=:suc", params={"suc": seleccion_wa}, ttl=0)
         
