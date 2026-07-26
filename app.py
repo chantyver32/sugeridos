@@ -72,7 +72,7 @@ def verificar_login():
                     if not df_check.empty:
                         st.session_state.autenticado = True
                         st.session_state.usuario_actual = usuario_input.strip()
-                        st.success("✅ ¡Bienvenido!")
+                        st.success("✅ ¡Bienvenid@!")
                         time.sleep(0.8)
                         st.rerun()
                     else:
@@ -307,7 +307,6 @@ if st.session_state.get('usuario_actual', '').lower() == 'admin':
 # DEFINICIÓN DE POP-UPS (st.dialog)
 # ------------------------------------------------------------
 
-@st.dialog("🗣️ Confirmar Ingreso por Voz")
 def popup_voz():
     datos = st.session_state.confirmacion_voz
     
@@ -327,7 +326,6 @@ def popup_voz():
         st.session_state.audio_leido = True
         
     st.success(f"🗣️ **Confirmado:** '{datos['original']}'")
-    st.write("✏️ *Puedes corregir los datos antes de registrar:*")
     
     edit_cant = st.number_input("Cantidad", value=int(datos['cant']), min_value=1)
     edit_prod = st.text_input("Producto", value=datos['prod']).upper()
@@ -336,7 +334,7 @@ def popup_voz():
     col_voz_1, col_voz_2 = st.columns(2)
     
     with col_voz_1:
-        if st.button("📝 Guardar en Conteo", use_container_width=True, type="primary"):
+        if st.button("📝 Guardar", use_container_width=True, type="primary"):
             if edit_prod and edit_prod.strip() != "":
                 prod_final = edit_prod.strip()
                 with conn.session as s:
@@ -360,7 +358,7 @@ def popup_voz():
                 st.error("El nombre no puede estar vacío.")
                 
     with col_voz_2:
-        if st.button("🥖 Ingresar al Stock", use_container_width=True):
+        if st.button("🥖 Ingreso directo", use_container_width=True):
             if edit_prod and edit_prod.strip() != "":
                 prod_final = edit_prod.strip()
                 with conn.session as s:
@@ -382,11 +380,6 @@ def popup_voz():
                 st.rerun()
             else:
                 st.error("El nombre no puede estar vacío.")
-
-    if st.button("❌ Cancelar / Reintentar", use_container_width=True):
-        st.session_state.confirmacion_voz = None
-        st.session_state.audio_leido = False
-        st.rerun()
 
 
 @st.dialog("⚙️ Configurar Registro Manual")
@@ -415,7 +408,7 @@ def popup_manual(nombre_final):
     col1, col2 = st.columns(2)
     
     with col1:
-        if st.button("➕ Registrar en Conteo (Para Corte)", use_container_width=True, type="primary"):
+        if st.button("📝 Guardar", use_container_width=True, type="primary"):
             cant = st.session_state.conteo_temp
             if cant > 0:
                 with conn.session as s:
@@ -431,14 +424,14 @@ def popup_manual(nombre_final):
                     
                 st.session_state.conteo_temp = 0
                 limpiar_buscador() 
-                st.success(f"✅ {nombre_final} registrado para el próximo corte.")
+                st.success(f"✅ {nombre_final} registrado.")
                 time.sleep(1)
                 st.rerun()
             else:
                 st.warning("Agrega una cantidad mayor a 0.")
 
     with col2:
-        if st.button("🥖 Sumar directamente al Stock Actual", use_container_width=True):
+        if st.button("🥖 Ingreso directo", use_container_width=True):
             cant = st.session_state.conteo_temp
             if cant > 0:
                 with conn.session as s:
@@ -454,8 +447,8 @@ def popup_manual(nombre_final):
                     
                 st.session_state.conteo_temp = 0
                 limpiar_buscador() 
-                st.success(f"✅ {cant} de {nombre_final} se sumaron a tu inventario.")
-                time.sleep(1.5)
+                st.success(f"✅ {cant} de {nombre_final} registrado.")
+                time.sleep(1)
                 st.rerun()
             else:
                 st.warning("Agrega una cantidad mayor a 0.")
@@ -529,14 +522,14 @@ with tab1:
             popup_manual(nombre_input.strip().upper())
 
     st.divider()
-    st.subheader(f"🛒 Captura de Conteo Actual ({seleccion_wa})")
+    st.subheader(f"🛒 Sugeridos de ({seleccion_wa})")
     
     df_hoy_captura = conn.query("SELECT id, nombre, fecha_cad AS \"Fecha\", cantidad FROM captura_actual WHERE sucursal=:suc", params={"suc": seleccion_wa}, ttl=0)
     
     if not df_hoy_captura.empty:
         df_editado = st.data_editor(df_hoy_captura, column_config={"id": None}, num_rows="dynamic", height=300, use_container_width=True, hide_index=True, key="editor_conteo")
 
-        if st.button("💾 Guardar Cambios en Tabla", use_container_width=True):
+        if st.button("💾 Guardar Cambios", use_container_width=True):
             with conn.session as s:
                 s.execute(text("DELETE FROM captura_actual WHERE sucursal = :suc"), {"suc": seleccion_wa})
                 for _, fila in df_editado.iterrows():
@@ -544,17 +537,17 @@ with tab1:
                         s.execute(text("INSERT INTO captura_actual (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
                                   {"suc": seleccion_wa, "nom": str(fila["nombre"]).upper(), "fec": str(fila["Fecha"]), "can": int(fila["cantidad"])})
                 s.commit()
-            st.success("✅ Tabla de conteo guardada y actualizada")
-            time.sleep(1.5)
+            st.success("✅ Cambios guardados. ")
+            time.sleep(1)
             st.rerun()
     else:
-        st.info("No hay datos en conteo actualmente para esta sucursal.")
+        st.info("Identifica sugeridos, por favor.")
 
 # ------------------------------------------------------------
 # TAB 2: INVENTARIO Y CORTE
 # ------------------------------------------------------------
 with tab2:
-    st.header(f"📦 Stock Actual en Estantes - {seleccion_wa}")
+    st.header(f"📦 Sugeridos de {seleccion_wa}")
     df_stock = conn.query('SELECT nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc', params={"suc": seleccion_wa}, ttl=0)
     
     if df_stock.empty:
@@ -568,16 +561,13 @@ with tab2:
         st.dataframe(df_stock_filt, use_container_width=True, hide_index=True)
         
         st.divider()
-        st.subheader("📥 Exportar Reportes")
+        st.subheader("📥 Descargar")
         
         elabora_input = st.text_input("👨‍🍳 Nombre de quien Elabora", value=st.session_state.get('usuario_actual', 'PEDRO GARCÍA')).upper()
         
-        msg_stock = f"🍞 *SUGERIDOS - CHAMPLITTE ({seleccion_wa.upper()})*\n\nAdjunto archivo de Excel con los detalles.\n\n"
         link_st = f"https://wa.me/{numero_whatsapp.strip()}?text={urllib.parse.quote(msg_stock)}"
         
         excel_stock = generar_excel_formato(df_stock_filt, sucursal=seleccion_wa, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.", elabora=elabora_input)
-
-        st.info("💡 **Tip para WhatsApp:** Descarga el Excel primero y luego abre WhatsApp para arrastrar el archivo al chat.")
         
         col_down1, col_down2 = st.columns(2)
         with col_down1:
@@ -592,7 +582,7 @@ with tab2:
         df_actualizado = conn.query("SELECT * FROM captura_actual WHERE sucursal=:suc", params={"suc": seleccion_wa}, ttl=0)
         
         if df_actualizado.empty:
-            st.warning("⚠️ No hay datos en la tabla de CONTEO para comparar. Captura tu conteo final primero.")
+            st.warning("⚠️ No hay datos en la tabla de registro.")
         else:
             df_anterior = conn.query("SELECT * FROM base_anterior WHERE sucursal=:suc", params={"suc": seleccion_wa}, ttl=0)
             ts_mx = datetime.now(zona_mx).strftime("%Y-%m-%d %H:%M:%S")
