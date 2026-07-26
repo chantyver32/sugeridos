@@ -272,23 +272,30 @@ if archivo_csv is not None:
 
 st.sidebar.divider()
 
+# ------------------ ZONA DE PELIGRO ACTUALIZADA ------------------
 with st.sidebar.expander("🚨 Zona de Peligro"):
-    confirmar_reset = st.checkbox("Confirmar que deseo borrar todo", key="check_reset")
-    if st.button("⚠️ EJECUTAR RESET DE SUCURSAL", use_container_width=True):
+    st.warning("¡ATENCIÓN! Esto borrará el inventario de TODAS las sucursales.")
+    confirmar_reset = st.checkbox("Confirmar que deseo borrar toda la base de datos", key="check_reset")
+    
+    if st.button("⚠️ EJECUTAR RESET TOTAL", use_container_width=True):
         if confirmar_reset:
             with conn.session as s:
-                s.execute(text("DELETE FROM captura_actual WHERE sucursal = :suc"), {"suc": seleccion_wa})
-                s.execute(text("DELETE FROM base_anterior WHERE sucursal = :suc"), {"suc": seleccion_wa})
-                s.execute(text("DELETE FROM historial_ventas WHERE sucursal = :suc"), {"suc": seleccion_wa})
+                s.execute(text("TRUNCATE TABLE captura_actual RESTART IDENTITY"))
+                s.execute(text("TRUNCATE TABLE base_anterior RESTART IDENTITY"))
+                s.execute(text("TRUNCATE TABLE historial_ventas RESTART IDENTITY"))
+                
+                # ADVERTENCIA: Si también quieres borrar los usuarios, descomenta la siguiente línea:
+                # s.execute(text("TRUNCATE TABLE usuarios RESTART IDENTITY"))
+                
                 s.commit()
-            st.sidebar.success(f"✅ Base de datos limpiada para {seleccion_wa}")
-            time.sleep(1)
+                
+            st.sidebar.success("✅ Base de datos limpiada por completo.")
+            time.sleep(1.5)
             st.rerun()
         else:
-            st.sidebar.error("Debes confirmar primero")
+            st.sidebar.error("Debes confirmar primero seleccionando la casilla.")
 
 # ------------------ TABS ------------------
-# Se eliminó la Pestaña 3 ("Análisis")
 tab1, tab2 = st.tabs(["📝 Conteo", "📦 Inventario y Corte"])
 
 # ------------------------------------------------------------
