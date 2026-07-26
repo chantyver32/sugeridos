@@ -296,7 +296,7 @@ with st.sidebar.expander("🚨 Zona de Peligro"):
             st.sidebar.error("Debes confirmar primero seleccionando la casilla.")
 
 # ------------------ TABS ------------------
-tab1, tab2 = st.tabs(["📝 Conteo", "📦 Inventario y Corte"])
+tab1, tab2 = st.tabs(["📝 Registro", "📦 Archivo"])
 
 # ------------------------------------------------------------
 # TAB 1: CONTEO
@@ -557,10 +557,9 @@ with tab2:
             st.link_button("💬 2. Abrir WhatsApp", link_st, use_container_width=True, type="primary")
 
     st.divider()
-    st.header("🚀 Realizar Corte de Ventas")
-    st.write("Compara el **Conteo de hoy** contra el **Stock actual** para calcular ventas.")
+    st.header("🚀 Generar archivo")
     
-    if st.button("PROCESAR CORTE AHORA", type="primary", use_container_width=True):
+    if st.button("Aceptar", type="primary", use_container_width=True):
         df_actualizado = conn.query("SELECT * FROM captura_actual WHERE sucursal=:suc", params={"suc": seleccion_wa}, ttl=0)
         
         if df_actualizado.empty:
@@ -587,7 +586,6 @@ with tab2:
                 s.execute(text("DELETE FROM captura_actual WHERE sucursal = :suc"), {"suc": seleccion_wa})
                 s.commit()
             
-            st.balloons()
-            st.success("✅ ¡Corte procesado con éxito! El inventario se ha actualizado.")
+            st.success("✅ Archivo creado con éxito")
             time.sleep(2)
             st.rerun()
