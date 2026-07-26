@@ -328,14 +328,14 @@ def popup_voz():
         
     st.success(f"**Escuché:** '{datos['original']}'")
     
-    edit_cant = st.number_input("Cantidad", value=int(datos['cant']), min_value=1)
-    edit_prod = st.text_input("Producto", value=datos['prod']).upper()
-    edit_fech = st.date_input("Fecha", value=datos['fecha'])
+    edit_cant = st.number_input("Cantidad", value=int(datos['cant']), min_value=1, key="voz_input_cant")
+    edit_prod = st.text_input("Producto", value=datos['prod'], key="voz_input_prod").upper()
+    edit_fech = st.date_input("Fecha", value=datos['fecha'], key="voz_input_fech")
     
     col_voz_1, col_voz_2 = st.columns(2)
     
     with col_voz_1:
-        if st.button("📝 Guardar", use_container_width=True, type="primary"):
+        if st.button("📝 Guardar", use_container_width=True, type="primary", key="voz_btn_guardar"):
             if edit_prod and edit_prod.strip() != "":
                 prod_final = edit_prod.strip()
                 with conn.session as s:
@@ -349,7 +349,6 @@ def popup_voz():
                                   {"suc": seleccion_wa, "nom": prod_final, "fec": str(edit_fech), "can": int(edit_cant)})
                     s.commit()
                     
-                # Limpiar variables y recargar de inmediato para cerrar el pop-up sin delay
                 st.session_state.confirmacion_voz = None
                 st.session_state.audio_leido = False
                 limpiar_buscador() 
@@ -358,7 +357,7 @@ def popup_voz():
                 st.error("El nombre no puede estar vacío.")
                 
     with col_voz_2:
-        if st.button("🥖 Ingreso directo", use_container_width=True):
+        if st.button("🥖 Ingreso directo", use_container_width=True, key="voz_btn_ingreso"):
             if edit_prod and edit_prod.strip() != "":
                 prod_final = edit_prod.strip()
                 with conn.session as s:
@@ -372,7 +371,6 @@ def popup_voz():
                                   {"suc": seleccion_wa, "nom": prod_final, "fec": str(edit_fech), "can": int(edit_cant)})
                     s.commit()
                     
-                # Limpiar variables y recargar de inmediato para cerrar el pop-up sin delay
                 st.session_state.confirmacion_voz = None
                 st.session_state.audio_leido = False
                 limpiar_buscador()
