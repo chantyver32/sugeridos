@@ -484,6 +484,7 @@ with tab1:
                     import speech_recognition as sr
                     r = sr.Recognizer()
                     with sr.AudioFile(audio_val) as source:
+                        audio_data = r.restore() if hasattr(r, 'restore') else r.record(source) # safeguard
                         audio_data = r.record(source)
                         texto_voz = r.recognize_google(audio_data, language="es-MX")
                         if texto_voz:
@@ -568,7 +569,7 @@ with tab2:
         st.divider()
         st.subheader("📥 Descargar")
         
-        elabora_input = st.text_input("👨‍🍳 Nombre de quien Elabora", value=st.session_state.get('usuario_actual', 'PEDRO GARCÍA')).upper()
+        elabora_input = st.text_input("👨‍%🍳 Nombre de quien Elabora", value=st.session_state.get('usuario_actual', 'PEDRO GARCÍA')).upper()
         msg_stock = f""
         link_st = f"https://wa.me/{numero_whatsapp.strip()}?text={urllib.parse.quote(msg_stock)}"
         
@@ -583,11 +584,8 @@ with tab2:
     st.divider()
     st.header("🚀 Generar archivo")
     
-    if st.button("Aceptar", type="post", use_container_width=True): # Fixed syntax or parameter issue if any, or cleanly handled
-        pass
-
     if st.button("Aceptar", type="primary", use_container_width=True):
-        df_actualizado = conn.query("SELECT * FROM captura_actual WHERE sucursal=:suc", params={"suc": seleccion_wa}, ttl=0)
+        df_actualizado = conn.query("SELECT * FROM captura_actual WHERE sucursal=:svc", params={"svc": seleccion_wa}, ttl=0)
         
         if df_actualizado.empty:
             st.warning("⚠️ No hay datos en la tabla de registro.")
@@ -602,14 +600,14 @@ with tab2:
                                             {"nom": fila_ant['nombre'], "fec": fila_ant['fecha_cad'], "suc": seleccion_wa}).fetchone()
                         
                         cant_hoy = res_hoy[0] if res_hoy else 0
-                        diferencia = fila_ant['cantidad'] - cant_hoy
+                        diferencia = fila_ant['cantidad']- cant_hoy
                         
                         if diferencia > 0:
                             s.execute(text("INSERT INTO historial_ventas (sucursal, nombre, fecha_cad, habia, quedan, vendidos, fecha_corte) VALUES (:suc, :nom, :fec, :hab, :qued, :ven, :fc)"), 
                                       {"suc": seleccion_wa, "nom": fila_ant['nombre'], "fec": fila_ant['fecha_cad'], "hab": int(fila_ant['cantidad']), "qued": int(cant_hoy), "ven": int(diferencia), "fc": ts_mx})
                             
                 s.execute(text("DELETE FROM base_anterior WHERE sucursal = :suc"), {"suc": seleccion_wa})
-                s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) SELECT sucursal, nombre, fecha_cad, cantidad FROM captura_actual WHERE sucursal = :suc"}, {"suc": seleccion_wa})
+                s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) SELECT sucursal, nombre, fecha_cad, cantidad FROM captura_actual WHERE sucursal = :suc"), {"suc": seleccion_wa})
                 s.execute(text("DELETE FROM captura_actual WHERE sucursal = :suc"), {"suc": seleccion_wa})
                 s.commit()
             
