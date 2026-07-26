@@ -29,12 +29,24 @@ st.markdown("""
     .block-container { padding-top: 3rem; padding-bottom: 1rem; }
     
     .main { background-color: #f5f7f9; }
-    .stButton>button { width: 100%; border-radius: 8px; font-weight: bold; }
     
-    /* FIX: Remover sombras (ghosting) en los botones al hacer clic o focus */
+    /* FIX: Remover sombras (ghosting) y duplicados en los botones al hacer clic o focus */
+    .stButton > button { 
+        width: 100%; 
+        border-radius: 8px; 
+        font-weight: bold; 
+        transition: none !important;
+        -webkit-transition: none !important;
+    }
+    
     .stButton > button:focus, .stButton > button:active {
         box-shadow: none !important;
         outline: none !important;
+        transform: none !important;
+    }
+
+    [data-testid="stElementContainer"] {
+        transition: none !important;
     }
     
     .btn-wa {
@@ -120,8 +132,8 @@ def verificar_login():
         st.session_state.autenticado = False
 
     if not st.session_state.autenticado:
-        st.markdown("<h2 style='text-align: center;'>🥐 Sugeridos</h2>", unsafe_allow_html=True)
-        st.markdown("<h4 style='text-align: center; color: gray;'>Control de Acceso</h4>", unsafe_allow_html=True)
+        st.markdown("<h3 style='text-align: center;'>🥐 Sugeridos</h3>", unsafe_allow_html=True)
+        st.markdown("<h3 style='text-align: center; color: gray;'>Control de Acceso</h3>", unsafe_allow_html=True)
         
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
@@ -137,8 +149,7 @@ def verificar_login():
                     if not df_check.empty:
                         st.session_state.autenticado = True
                         st.session_state.usuario_actual = usuario_input.strip()
-                        st.success("✅ ¡Bienvenid@!")
-                        time.sleep(0.8)
+                        st.toast("✅ ¡Bienvenid@!")
                         st.rerun()
                     else:
                         st.error("❌ Usuario o contraseña incorrectos.")
@@ -204,7 +215,7 @@ def generar_excel_formato(df, sucursal, titulo="PASTELERÍA CHAMPLITTE, S.A. DE 
     
     sheet.write('A4', 'FECHA', fmt_etiqueta)
     fecha_str = datetime.now(pytz.timezone('America/Mexico_City')).strftime("%d/%m/%Y")
-    sheet.merge_range('B4:D4', fecha_str, fmt_valor)
+    sheet.merge_range('B4:D4', fmt_valor)
     
     sheet.write('A5', 'ELABORA', fmt_etiqueta)
     sheet.merge_range('B5:D5', elabora, fmt_valor)
@@ -321,7 +332,7 @@ st.sidebar.caption(f"📱 WhatsApp: **{numero_whatsapp}**")
 
 st.sidebar.divider()
 
-st.sidebar.subheader("💾 Respaldo de Base de Datos")
+st.sidebar.markdown("### 💾 Respaldo de Base de Datos")
 st.sidebar.info(f"Guarda o restaura tu stock específicamente para {seleccion_wa}.")
 archivo_csv = st.sidebar.file_uploader("⬆️ Subir Respaldo CSV", type=["csv"])
 
@@ -339,8 +350,7 @@ if archivo_csv is not None:
                               {"suc": seleccion_wa, "nom": str(fila['nombre']).upper(), "fec": str(fila['fecha_cad']), "can": int(fila['cantidad'])})
                 s.commit()
             
-            st.sidebar.success("✅ Inventario restaurado correctamente para " + seleccion_wa)
-            time.sleep(1.5)
+            st.toast("✅ Inventario restaurado correctamente para " + seleccion_wa)
             st.rerun()
         except Exception as e:
             st.sidebar.error(f"⚠️ Error al restaurar: {e}")
@@ -360,8 +370,7 @@ if st.session_state.get('usuario_actual', '').lower() == 'admin':
                     s.execute(text("TRUNCATE TABLE historial_ventas RESTART IDENTITY"))
                     s.commit()
                     
-                st.sidebar.success("✅ Base de datos limpiada por completo.")
-                time.sleep(1.5)
+                st.toast("✅ Base de datos limpiada por completo.")
                 st.rerun()
             else:
                 st.sidebar.error("Debes confirmar primero seleccionando la casilla.")
@@ -416,7 +425,7 @@ def popup_voz():
                 st.session_state.confirmacion_voz = None
                 st.session_state.audio_leido = False
                 limpiar_buscador() 
-                time.sleep(0.1) # FIX: Retraso para evitar el error gráfico del sombreado
+                # FIX: Retraso para evitar el error gráfico del sombreado
                 st.rerun()
             else:
                 st.error("El nombre no puede estar vacío.")
@@ -439,7 +448,7 @@ def popup_voz():
                 st.session_state.confirmacion_voz = None
                 st.session_state.audio_leido = False
                 limpiar_buscador()
-                time.sleep(0.1) # FIX
+                # FIX
                 st.rerun()
             else:
                 st.error("El nombre no puede estar vacío.")
@@ -487,7 +496,7 @@ def popup_manual(nombre_final):
                     
                 st.session_state.conteo_temp = 0
                 limpiar_buscador() 
-                time.sleep(0.1) # FIX
+                # FIX
                 st.rerun()
             else:
                 st.warning("Agrega una cantidad mayor a 0.")
@@ -509,7 +518,7 @@ def popup_manual(nombre_final):
                     
                 st.session_state.conteo_temp = 0
                 limpiar_buscador() 
-                time.sleep(0.1) # FIX
+                # FIX
                 st.rerun()
             else:
                 st.warning("Agrega una cantidad mayor a 0.")
@@ -615,15 +624,14 @@ with tab1:
                             s.execute(text("INSERT INTO captura_actual (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
                                       {"suc": seleccion_wa, "nom": str(fila["nombre"]).upper(), "fec": str(fila["Fecha"]), "can": int(fila["cantidad"])})
                     s.commit()
-                st.success("✅ Cambios guardados.")
-                time.sleep(1)
+                st.toast("✅ Cambios guardados.")
                 st.rerun()
 
 # ------------------------------------------------------------
 # TAB 2: INVENTARIO Y CORTE
 # ------------------------------------------------------------
 with tab2:
-    st.header(f"📦 Sugeridos de {seleccion_wa}")
+    st.markdown(f"### 📦 Sugeridos de {seleccion_wa}")
     df_stock = conn.query('SELECT nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc', params={"suc": seleccion_wa}, ttl=0)
     
     if df_stock.empty:
@@ -637,7 +645,7 @@ with tab2:
         st.dataframe(df_stock_filt, use_container_width=True, hide_index=True)
         
         st.divider()
-        st.subheader("📥 Descargar")
+        st.markdown("### 📥 Descargar")
         
         elabora_input = st.text_input("👨‍🍳 Nombre de quien Elabora", value=st.session_state.get('usuario_actual', 'PEDRO GARCÍA')).upper()
         msg_stock = f""
@@ -652,7 +660,7 @@ with tab2:
             st.link_button("💬 2. Abrir WhatsApp", link_st, use_container_width=True, type="primary")
 
     st.divider()
-    st.header("🚀 Generar archivo")
+    st.markdown("### 🚀 Generar archivo")
     
     if st.button("Aceptar", type="primary", use_container_width=True):
         df_actualizado = conn.query("SELECT * FROM captura_actual WHERE sucursal=:svc", params={"svc": seleccion_wa}, ttl=0)
@@ -681,6 +689,5 @@ with tab2:
                 s.execute(text("DELETE FROM captura_actual WHERE sucursal = :suc"), {"suc": seleccion_wa})
                 s.commit()
             
-            st.success("✅ Archivo creado con éxito")
-            time.sleep(2)
+            st.toast("✅ Archivo creado con éxito")
             st.rerun()
