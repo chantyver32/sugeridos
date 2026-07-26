@@ -229,7 +229,7 @@ def generar_excel_formato(df, sucursal, titulo="PASTELERÍA CHAMPLITTE, S.A. DE 
     
     sheet.write('A4', 'FECHA', fmt_etiqueta)
     fecha_str = datetime.now(pytz.timezone('America/Mexico_City')).strftime("%d/%m/%Y")
-    sheet.merge_range('B4:D4', fmt_valor)
+    sheet.merge_range('B4:D4', fecha_str, fmt_valor)
     
     sheet.write('A5', 'ELABORA', fmt_etiqueta)
     sheet.merge_range('B5:D5', elabora, fmt_valor)
@@ -477,8 +477,10 @@ def cb_manual_ingreso(nom, fec, suc):
 
 @st.dialog("🗣️")
 def popup_voz():
-    datos = st.session_state.confirmacion_voz
-    
+    datos = st.session_state.get("confirmacion_voz")
+    if not datos:
+        return
+        
     if not st.session_state.get("audio_leido", False):
         js_tts = f"""
         <script>
