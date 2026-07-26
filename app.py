@@ -66,7 +66,6 @@ def verificar_login():
                 btn_login = st.form_submit_button("Iniciar Sesión", use_container_width=True, type="primary")
                 
                 if btn_login:
-                    # Validar usuario en Supabase
                     df_check = conn.query("SELECT * FROM usuarios WHERE username = :u AND password = :p", 
                                           params={"u": usuario_input.strip(), "p": password_input}, ttl=0)
                     
@@ -105,8 +104,6 @@ def resetear():
 
 def limpiar_buscador():
     st.session_state.buscar_prod = ""
-    if "sel_prod" in st.session_state:
-        del st.session_state["sel_prod"]
 
 def generar_excel_formato(df, sucursal, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.", elabora="PEDRO GARCÍA"):
     output = io.BytesIO()
@@ -240,8 +237,6 @@ if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True):
     st.rerun()
 
 st.sidebar.divider()
-
-st.sidebar.header("⚙️ Configuración")
 
 opciones_wa = {
     "URANO": "522281342454", "COSTA DE ORO": "522292780850", "COSTA VERDE": "522299359597",
@@ -508,8 +503,8 @@ with tab1:
         
     st.divider()
 
-    # --- 2. BUSCAR PRODUCTO (SIN BOTÓN LIMPIAR) ---
-    buscar = st.text_input("Buscar", placeholder="🔎 BUSCAR PRODUCTO...", key="buscar_prod", label_visibility="collapsed").upper()
+    # --- 2. AÑADIR PRODUCTO (TEXT INPUT) ---
+    nombre_input = st.text_input("Añadir producto", placeholder="🔎 AÑADIR PRODUCTO...", key="buscar_prod", label_visibility="collapsed").upper()
     
     if st.session_state.get('enfocar_buscador', False):
         components.html(
@@ -528,16 +523,7 @@ with tab1:
         )
         st.session_state.enfocar_buscador = False
 
-    # --- 3. SELECCIONAR PRODUCTO ---
-    nombres_prev_df = conn.query("SELECT nombre FROM base_anterior WHERE sucursal=:suc UNION SELECT nombre FROM captura_actual WHERE sucursal=:suc", 
-                                 params={"suc": seleccion_wa}, ttl=0)
-    nombres_prev = nombres_prev_df['nombre'].tolist() if not nombres_prev_df.empty else []
-    
-    sugerencias = [p for p in nombres_prev if buscar in p] if buscar else nombres_prev
-
-    nombre_input = st.selectbox("Seleccionar producto", sugerencias, key="sel_prod") if sugerencias else buscar
-    
-    # Botón para abrir el pop-up manual cuando ya se tiene un producto
+    # Botón para abrir el pop-up manual cuando se escribe un producto
     if nombre_input and nombre_input.strip() != "":
         if st.button(f"⚙️ Configurar Cantidades para: {nombre_input.strip()}", type="primary", use_container_width=True):
             popup_manual(nombre_input.strip().upper())
@@ -563,14 +549,6 @@ with tab1:
             st.rerun()
     else:
         st.info("No hay datos en conteo actualmente para esta sucursal.")
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    col_up1, col_up2, col_up3 = st.columns([1, 2, 1])
-    with col_up2:
-        if st.button("⬆️ Subir y Buscar Otro", use_container_width=True):
-            limpiar_buscador()
-            st.session_state.enfocar_buscador = True
-            st.rerun()
 
 # ------------------------------------------------------------
 # TAB 2: INVENTARIO Y CORTE
@@ -633,7 +611,7 @@ with tab2:
                                       {"suc": seleccion_wa, "nom": fila_ant['nombre'], "fec": fila_ant['fecha_cad'], "hab": int(fila_ant['cantidad']), "qued": int(cant_hoy), "ven": int(diferencia), "fc": ts_mx})
                             
                 s.execute(text("DELETE FROM base_anterior WHERE sucursal = :suc"), {"suc": seleccion_wa})
-                s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) SELECT sucursal, nombre, fecha_cad, cantidad FROM captura_actual WHERE sucursal = :suc"), {"suc": seleccion_wa})
+                s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) SELECT sucursal, nombre, fecha_cad, cantidad FROM captura_actual WHERE sucursal = :suc"}, {"suc": seleccion_wa})
                 s.execute(text("DELETE FROM captura_actual WHERE sucursal = :suc"), {"suc": seleccion_wa})
                 s.commit()
             
