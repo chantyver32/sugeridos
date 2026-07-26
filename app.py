@@ -564,7 +564,7 @@ with tab2:
         st.subheader("📥 Descargar")
         
         elabora_input = st.text_input("👨‍🍳 Nombre de quien Elabora", value=st.session_state.get('usuario_actual', 'PEDRO GARCÍA')).upper()
-        
+        msg_stock = f""
         link_st = f"https://wa.me/{numero_whatsapp.strip()}?text={urllib.parse.quote(msg_stock)}"
         
         excel_stock = generar_excel_formato(df_stock_filt, sucursal=seleccion_wa, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.", elabora=elabora_input)
