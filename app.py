@@ -17,11 +17,12 @@ with st.spinner('Iniciando sistema Champlitte... 🥐'):
     
     st.set_page_config(page_title="Sugeridos", page_icon="🥐", layout="wide")
 
-# CSS personalizado para quitar el sombreado gris de las opciones seleccionadas en las listas desplegables
+# CSS personalizado para quitar el sombreado gris y poner en NEGRITAS la sucursal seleccionada
 st.markdown("""
     <style>
     ul[role="listbox"] li[aria-selected="true"] {
         background-color: transparent !important;
+        font-weight: bold !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -101,6 +102,11 @@ def sumar(valor):
 def resetear():
     st.session_state.conteo_temp = 0
     sonido_click()
+
+def limpiar_buscador():
+    st.session_state.buscar_prod = ""
+    if "sel_prod" in st.session_state:
+        del st.session_state["sel_prod"]
 
 def generar_excel_formato(df, sucursal, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.", elabora="PEDRO GARCÍA"):
     output = io.BytesIO()
@@ -281,8 +287,7 @@ if archivo_csv is not None:
 
 st.sidebar.divider()
 
-# ------------------ ZONA DE PELIGRO ACTUALIZADA ------------------
-# Mostrar la zona de peligro SOLAMENTE si el usuario conectado es "admin"
+# ------------------ ZONA DE PELIGRO ------------------
 if st.session_state.get('usuario_actual', '').lower() == 'admin':
     with st.sidebar.expander("🚨 Zona de Peligro"):
         st.warning("¡ATENCIÓN! Esto borrará el inventario de TODAS las sucursales.")
@@ -294,10 +299,6 @@ if st.session_state.get('usuario_actual', '').lower() == 'admin':
                     s.execute(text("TRUNCATE TABLE captura_actual RESTART IDENTITY"))
                     s.execute(text("TRUNCATE TABLE base_anterior RESTART IDENTITY"))
                     s.execute(text("TRUNCATE TABLE historial_ventas RESTART IDENTITY"))
-                    
-                    # ADVERTENCIA: Si también quieres borrar los usuarios, descomenta la siguiente línea:
-                    # s.execute(text("TRUNCATE TABLE usuarios RESTART IDENTITY"))
-                    
                     s.commit()
                     
                 st.sidebar.success("✅ Base de datos limpiada por completo.")
@@ -305,6 +306,165 @@ if st.session_state.get('usuario_actual', '').lower() == 'admin':
                 st.rerun()
             else:
                 st.sidebar.error("Debes confirmar primero seleccionando la casilla.")
+
+
+# ------------------------------------------------------------
+# DEFINICIÓN DE POP-UPS (st.dialog)
+# ------------------------------------------------------------
+
+@st.dialog("🗣️ Confirmar Ingreso por Voz")
+def popup_voz():
+    datos = st.session_state.confirmacion_voz
+    
+    if not st.session_state.get("audio_leido", False):
+        js_tts = f"""
+        <script>
+            function speakText() {{
+                const utterance = new SpeechSynthesisUtterance("{datos['original']}");
+                utterance.lang = 'es-MX';
+                utterance.rate = 1.0;
+                window.speechSynthesis.speak(utterance);
+            }}
+            speakText();
+        </script>
+        """
+        components.html(js_tts, height=0)
+        st.session_state.audio_leido = True
+        
+    st.success(f"🗣️ **Confirmado:** '{datos['original']}'")
+    st.write("✏️ *Puedes corregir los datos antes de registrar:*")
+    
+    edit_cant = st.number_input("Cantidad", value=int(datos['cant']), min_value=1)
+    edit_prod = st.text_input("Producto", value=datos['prod']).upper()
+    edit_fech = st.date_input("Fecha", value=datos['fecha'])
+    
+    col_voz_1, col_voz_2 = st.columns(2)
+    
+    with col_voz_1:
+        if st.button("📝 Guardar en Conteo", use_container_width=True, type="primary"):
+            if edit_prod and edit_prod.strip() != "":
+                prod_final = edit_prod.strip()
+                with conn.session as s:
+                    existe = s.execute(text("SELECT cantidad FROM captura_actual WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                                       {"nom": prod_final, "fec": str(edit_fech), "suc": seleccion_wa}).fetchone()
+                    if existe:
+                        s.execute(text("UPDATE captura_actual SET cantidad=cantidad+:can WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                                  {"can": int(edit_cant), "nom": prod_final, "fec": str(edit_fech), "suc": seleccion_wa})
+                    else:
+                        s.execute(text("INSERT INTO captura_actual (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
+                                  {"suc": seleccion_wa, "nom": prod_final, "fec": str(edit_fech), "can": int(edit_cant)})
+                    s.commit()
+                    
+                st.success(f"✅ {edit_cant} {prod_final} a Conteo.")
+                st.session_state.confirmacion_voz = None
+                st.session_state.audio_leido = False
+                limpiar_buscador() 
+                time.sleep(1.5)
+                st.rerun()
+            else:
+                st.error("El nombre no puede estar vacío.")
+                
+    with col_voz_2:
+        if st.button("🥖 Ingresar al Stock", use_container_width=True):
+            if edit_prod and edit_prod.strip() != "":
+                prod_final = edit_prod.strip()
+                with conn.session as s:
+                    existe_stock = s.execute(text("SELECT cantidad FROM base_anterior WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                                             {"nom": prod_final, "fec": str(edit_fech), "suc": seleccion_wa}).fetchone()
+                    if existe_stock:
+                        s.execute(text("UPDATE base_anterior SET cantidad=cantidad+:can WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                                  {"can": int(edit_cant), "nom": prod_final, "fec": str(edit_fech), "suc": seleccion_wa})
+                    else:
+                        s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
+                                  {"suc": seleccion_wa, "nom": prod_final, "fec": str(edit_fech), "can": int(edit_cant)})
+                    s.commit()
+                    
+                st.success(f"✅ {edit_cant} {prod_final} añadidos al inventario.")
+                st.session_state.confirmacion_voz = None
+                st.session_state.audio_leido = False
+                limpiar_buscador()
+                time.sleep(1.5)
+                st.rerun()
+            else:
+                st.error("El nombre no puede estar vacío.")
+
+    if st.button("❌ Cancelar / Reintentar", use_container_width=True):
+        st.session_state.confirmacion_voz = None
+        st.session_state.audio_leido = False
+        st.rerun()
+
+
+@st.dialog("⚙️ Configurar Registro Manual")
+def popup_manual(nombre_final):
+    st.markdown(f"### 📦 {nombre_final}")
+    fecha_sugerido = fecha_hoy_mx + timedelta(days=1)
+    fecha_dia_mas = fecha_hoy_mx + timedelta(days=2)
+    
+    opcion_fecha = st.radio(
+        "📅 Fecha:",
+        options=["Sugerido (Mañana)", "Día Más (Pasado Mañana)"],
+        horizontal=True
+    )
+    
+    f_cad = fecha_sugerido if opcion_fecha == "Sugerido (Mañana)" else fecha_dia_mas
+
+    st.write("")
+    col_sum1, col_sum2, col_sum3 = st.columns(3)
+    with col_sum1: st.button("+1", use_container_width=True, on_click=sumar, args=(1,))
+    with col_sum2: st.button("+2", use_container_width=True, on_click=sumar, args=(2,))
+    with col_sum3: st.button("Borrar", use_container_width=True, on_click=resetear)
+
+    st.write("") 
+    st.metric("Total a registrar", st.session_state.conteo_temp)
+
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("➕ Registrar en Conteo (Para Corte)", use_container_width=True, type="primary"):
+            cant = st.session_state.conteo_temp
+            if cant > 0:
+                with conn.session as s:
+                    existe = s.execute(text("SELECT cantidad FROM captura_actual WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                                       {"nom": nombre_final, "fec": str(f_cad), "suc": seleccion_wa}).fetchone()
+                    if existe:
+                        s.execute(text("UPDATE captura_actual SET cantidad=cantidad+:can WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                                  {"can": int(cant), "nom": nombre_final, "fec": str(f_cad), "suc": seleccion_wa})
+                    else:
+                        s.execute(text("INSERT INTO captura_actual (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
+                                  {"suc": seleccion_wa, "nom": nombre_final, "fec": str(f_cad), "can": int(cant)})
+                    s.commit()
+                    
+                st.session_state.conteo_temp = 0
+                limpiar_buscador() 
+                st.success(f"✅ {nombre_final} registrado para el próximo corte.")
+                time.sleep(1)
+                st.rerun()
+            else:
+                st.warning("Agrega una cantidad mayor a 0.")
+
+    with col2:
+        if st.button("🥖 Sumar directamente al Stock Actual", use_container_width=True):
+            cant = st.session_state.conteo_temp
+            if cant > 0:
+                with conn.session as s:
+                    existe_stock = s.execute(text("SELECT cantidad FROM base_anterior WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                                             {"nom": nombre_final, "fec": str(f_cad), "suc": seleccion_wa}).fetchone()
+                    if existe_stock:
+                        s.execute(text("UPDATE base_anterior SET cantidad=cantidad+:can WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                                  {"can": int(cant), "nom": nombre_final, "fec": str(f_cad), "suc": seleccion_wa})
+                    else:
+                        s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
+                                  {"suc": seleccion_wa, "nom": nombre_final, "fec": str(f_cad), "can": int(cant)})
+                    s.commit()
+                    
+                st.session_state.conteo_temp = 0
+                limpiar_buscador() 
+                st.success(f"✅ {cant} de {nombre_final} se sumaron a tu inventario.")
+                time.sleep(1.5)
+                st.rerun()
+            else:
+                st.warning("Agrega una cantidad mayor a 0.")
+
 
 # ------------------ TABS ------------------
 tab1, tab2 = st.tabs(["📝 Registro", "📦 Archivo"])
@@ -318,14 +478,7 @@ with tab1:
     if "buscar_prod" not in st.session_state:
         st.session_state.buscar_prod = ""
 
-    def limpiar_buscador():
-        st.session_state.buscar_prod = ""
-        if "sel_prod" in st.session_state:
-            del st.session_state["sel_prod"]
-
-    buscar = st.text_input("Buscar", placeholder="🔎 BUSCAR PRODUCTO...", key="buscar_prod", label_visibility="collapsed").upper()
-    st.button("🧹 Limpiar Búsqueda", on_click=limpiar_buscador, use_container_width=True)
-
+    # --- 1. INGRESO POR VOZ AL INICIO ---
     with st.expander("🎤 **Ingreso por Voz** (Clic para desplegar)", expanded=False):
         audio_val = st.audio_input("Di algo como: 3 brownies para el 15 de octubre.")
 
@@ -349,87 +502,33 @@ with tab1:
                 except Exception as e:
                     st.toast("❌ No pude entender el audio o hubo mucho ruido de fondo.")
 
+    # Disparador del pop-up de voz
     if st.session_state.get("confirmacion_voz"):
-        datos = st.session_state.confirmacion_voz
+        popup_voz()
         
-        if not st.session_state.get("audio_leido", False):
-            js_tts = f"""
-            <script>
-                function speakText() {{
-                    const utterance = new SpeechSynthesisUtterance("{datos['original']}");
-                    utterance.lang = 'es-MX';
-                    utterance.rate = 1.0;
-                    window.speechSynthesis.speak(utterance);
-                }}
-                speakText();
-            </script>
+    st.divider()
+
+    # --- 2. BUSCAR PRODUCTO (SIN BOTÓN LIMPIAR) ---
+    buscar = st.text_input("Buscar", placeholder="🔎 BUSCAR PRODUCTO...", key="buscar_prod", label_visibility="collapsed").upper()
+    
+    if st.session_state.get('enfocar_buscador', False):
+        components.html(
             """
-            components.html(js_tts, height=0)
-            st.session_state.audio_leido = True
-            
-        st.success(f"🗣️ **Confirmado:** '{datos['original']}'")
-        st.write("✏️ *Puedes corregir los datos antes de registrar:*")
-        
-        edit_cant = st.number_input("Cantidad", value=int(datos['cant']), min_value=1)
-        edit_prod = st.text_input("Producto", value=datos['prod']).upper()
-        edit_fech = st.date_input("Fecha", value=datos['fecha'])
-        
-        col_voz_1, col_voz_2 = st.columns(2)
-        
-        with col_voz_1:
-            if st.button("📝 Guardar en Conteo (Para Corte)", use_container_width=True, type="primary"):
-                if edit_prod and edit_prod.strip() != "":
-                    prod_final = edit_prod.strip()
-                    with conn.session as s:
-                        existe = s.execute(text("SELECT cantidad FROM captura_actual WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
-                                           {"nom": prod_final, "fec": str(edit_fech), "suc": seleccion_wa}).fetchone()
-                        if existe:
-                            s.execute(text("UPDATE captura_actual SET cantidad=cantidad+:can WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
-                                      {"can": int(edit_cant), "nom": prod_final, "fec": str(edit_fech), "suc": seleccion_wa})
-                        else:
-                            s.execute(text("INSERT INTO captura_actual (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
-                                      {"suc": seleccion_wa, "nom": prod_final, "fec": str(edit_fech), "can": int(edit_cant)})
-                        s.commit()
-                        
-                    st.success(f"✅ {edit_cant} {prod_final} a Conteo.")
-                    st.session_state.confirmacion_voz = None
-                    st.session_state.audio_leido = False
-                    time.sleep(1.5)
-                    st.rerun()
-                else:
-                    st.error("El nombre no puede estar vacío.")
-                    
-        with col_voz_2:
-            if st.button("🥖 Ingresar Producción Directa al Stock", use_container_width=True):
-                if edit_prod and edit_prod.strip() != "":
-                    prod_final = edit_prod.strip()
-                    with conn.session as s:
-                        existe_stock = s.execute(text("SELECT cantidad FROM base_anterior WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
-                                                 {"nom": prod_final, "fec": str(edit_fech), "suc": seleccion_wa}).fetchone()
-                        if existe_stock:
-                            s.execute(text("UPDATE base_anterior SET cantidad=cantidad+:can WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
-                                      {"can": int(edit_cant), "nom": prod_final, "fec": str(edit_fech), "suc": seleccion_wa})
-                        else:
-                            s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
-                                      {"suc": seleccion_wa, "nom": prod_final, "fec": str(edit_fech), "can": int(edit_cant)})
-                        s.commit()
-                        
-                    st.success(f"✅ {edit_cant} {prod_final} añadidos directamente al inventario general.")
-                    st.session_state.confirmacion_voz = None
-                    st.session_state.audio_leido = False
-                    time.sleep(1.5)
-                    st.rerun()
-                else:
-                    st.error("El nombre no puede estar vacío.")
+            <script>
+            setTimeout(function() {
+                const textInputs = window.parent.document.querySelectorAll('input[type="text"]');
+                if (textInputs.length > 0) {
+                    textInputs[0].focus();
+                    window.parent.scrollTo(0,0);
+                }
+            }, 100);
+            </script>
+            """,
+            height=0
+        )
+        st.session_state.enfocar_buscador = False
 
-        if st.button("❌ Cancelar / Reintentar", use_container_width=True):
-            st.session_state.confirmacion_voz = None
-            st.session_state.audio_leido = False
-            st.rerun()
-        
-        st.divider()
-
-    # Obtener sugerencias filtrando por sucursal
+    # --- 3. SELECCIONAR PRODUCTO ---
     nombres_prev_df = conn.query("SELECT nombre FROM base_anterior WHERE sucursal=:suc UNION SELECT nombre FROM captura_actual WHERE sucursal=:suc", 
                                  params={"suc": seleccion_wa}, ttl=0)
     nombres_prev = nombres_prev_df['nombre'].tolist() if not nombres_prev_df.empty else []
@@ -438,77 +537,10 @@ with tab1:
 
     nombre_input = st.selectbox("Seleccionar producto", sugerencias, key="sel_prod") if sugerencias else buscar
     
-    fecha_sugerido = fecha_hoy_mx + timedelta(days=1)
-    fecha_dia_mas = fecha_hoy_mx + timedelta(days=2)
-    
-    opcion_fecha = st.radio(
-        "📅 Fecha:",
-        options=["Sugerido (Mañana)", "Día Más (Pasado Mañana)"],
-        horizontal=True
-    )
-    
-    f_cad = fecha_sugerido if opcion_fecha == "Sugerido (Mañana)" else fecha_dia_mas
-
-    st.write("")
-    
-    col_sum1, col_sum2, col_sum3 = st.columns(3)
-    with col_sum1: st.button("+1", use_container_width=True, on_click=sumar, args=(1,))
-    with col_sum2: st.button("+2", use_container_width=True, on_click=sumar, args=(2,))
-    with col_sum3: st.button("Borrar", use_container_width=True, on_click=resetear)
-
-    st.write("") 
-    
-    st.metric("Total a registrar", st.session_state.conteo_temp)
-
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        if st.button("➕ Registrar en Conteo (Para Corte)", use_container_width=True, type="primary"):
-            if nombre_input and nombre_input.strip() != "":
-                nombre_final = nombre_input.strip().upper()
-                cant = st.session_state.conteo_temp
-                if cant > 0:
-                    with conn.session as s:
-                        existe = s.execute(text("SELECT cantidad FROM captura_actual WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
-                                           {"nom": nombre_final, "fec": str(f_cad), "suc": seleccion_wa}).fetchone()
-                        if existe:
-                            s.execute(text("UPDATE captura_actual SET cantidad=cantidad+:can WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
-                                      {"can": int(cant), "nom": nombre_final, "fec": str(f_cad), "suc": seleccion_wa})
-                        else:
-                            s.execute(text("INSERT INTO captura_actual (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
-                                      {"suc": seleccion_wa, "nom": nombre_final, "fec": str(f_cad), "can": int(cant)})
-                        s.commit()
-                        
-                    st.session_state.conteo_temp = 0
-                    st.success(f"✅ {nombre_final} registrado para el próximo corte.")
-                    time.sleep(1)
-                    st.rerun()
-                else:
-                    st.warning("Agrega una cantidad mayor a 0.")
-
-    with col2:
-        if st.button("🥖 Sumar directamente al Stock Actual", use_container_width=True):
-            if nombre_input and nombre_input.strip() != "":
-                nombre_final = nombre_input.strip().upper()
-                cant = st.session_state.conteo_temp
-                if cant > 0:
-                    with conn.session as s:
-                        existe_stock = s.execute(text("SELECT cantidad FROM base_anterior WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
-                                                 {"nom": nombre_final, "fec": str(f_cad), "suc": seleccion_wa}).fetchone()
-                        if existe_stock:
-                            s.execute(text("UPDATE base_anterior SET cantidad=cantidad+:can WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
-                                      {"can": int(cant), "nom": nombre_final, "fec": str(f_cad), "suc": seleccion_wa})
-                        else:
-                            s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
-                                      {"suc": seleccion_wa, "nom": nombre_final, "fec": str(f_cad), "can": int(cant)})
-                        s.commit()
-                        
-                    st.session_state.conteo_temp = 0
-                    st.success(f"✅ {cant} de {nombre_final} se sumaron directamente a tu inventario activo.")
-                    time.sleep(1.5)
-                    st.rerun()
-                else:
-                    st.warning("Agrega una cantidad mayor a 0.")
+    # Botón para abrir el pop-up manual cuando ya se tiene un producto
+    if nombre_input and nombre_input.strip() != "":
+        if st.button(f"⚙️ Configurar Cantidades para: {nombre_input.strip()}", type="primary", use_container_width=True):
+            popup_manual(nombre_input.strip().upper())
 
     st.divider()
     st.subheader(f"🛒 Captura de Conteo Actual ({seleccion_wa})")
@@ -531,6 +563,14 @@ with tab1:
             st.rerun()
     else:
         st.info("No hay datos en conteo actualmente para esta sucursal.")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    col_up1, col_up2, col_up3 = st.columns([1, 2, 1])
+    with col_up2:
+        if st.button("⬆️ Subir y Buscar Otro", use_container_width=True):
+            limpiar_buscador()
+            st.session_state.enfocar_buscador = True
+            st.rerun()
 
 # ------------------------------------------------------------
 # TAB 2: INVENTARIO Y CORTE
