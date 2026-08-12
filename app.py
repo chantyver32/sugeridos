@@ -8,6 +8,7 @@ import io
 import re
 import os
 import streamlit.components.v1 as components
+from streamlit_mic_recorder import speech_to_text # <-- IMPORTACIÓN DE VOZ AÑADIDA
 
 # ------------------ CONFIGURACIÓN GENERAL ------------------
 with st.spinner('Iniciando sistema Champlitte... 🥐'):
@@ -23,13 +24,9 @@ st.markdown("""
         background-color: transparent !important;
         font-weight: bold !important;
     }
-    
-    /* Ajuste equilibrado del espacio superior */
     .block-container { padding-top: 3rem; padding-bottom: 1rem; }
-    
     .main { background-color: #f5f7f9; }
     
-    /* FIX: Remover sombras (ghosting) y duplicados en los botones normales y de formulario */
     .stButton > button, 
     .stFormSubmitButton > button { 
         width: 100%; 
@@ -46,7 +43,6 @@ st.markdown("""
         transform: none !important;
     }
 
-    /* Eliminar transiciones de renderizado en los contenedores y formularios */
     [data-testid="stElementContainer"], 
     [data-testid="stForm"] {
         transition: none !important;
@@ -72,7 +68,6 @@ st.markdown("""
     div[data-testid="stMetricDelta"] { font-size: 30px !important; font-weight: bold !important; }
     div[data-testid="stMetricDelta"] svg { width: 35px !important; height: 35px !important; }
 
-    /* ESTILO OSCURO PARA LISTAS DESPLEGABLES */
     div[data-baseweb="popover"] > div {
         background-color: #1a1a1c !important; 
         border-radius: 8px !important;
@@ -88,23 +83,19 @@ st.markdown("""
         padding-bottom: 10px !important;
     }
     div[data-baseweb="popover"] li:hover { background-color: #2d2d30 !important; }
-    
     div[data-baseweb="popover"] li[aria-selected="true"] {
         background-color: #3a3b3e !important; 
         font-weight: bold !important;
     }
-
     div[data-baseweb="select"] > div {
         background-color: #1a1a1c !important; 
         border-radius: 8px !important;
         border: 1px solid rgba(255, 255, 255, 0.2) !important;
     }
-
     div[data-baseweb="select"] > div:focus-within {
         border-color: #ff4b4b !important; 
         box-shadow: 0 0 0 1px #ff4b4b !important;
     }
-
     div[data-baseweb="select"] div { color: #FFFFFF !important; }
     div[data-baseweb="select"] svg { fill: #FFFFFF !important; }
     </style>
@@ -193,94 +184,6 @@ def sonido_click():
         unsafe_allow_html=True
     )
 
-def sumar(valor):
-    st.session_state.conteo_temp += valor
-    sonido_click()
-
-def resetear():
-    st.session_state.conteo_temp = 0
-    sonido_click()
-
-def limpiar_buscador():
-    st.session_state.buscar_prod = ""
-
-def generar_excel_formato(df, sucursal, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.", elabora="PEDRO GARCÍA"):
-    output = io.BytesIO()
-    writer = pd.ExcelWriter(output, engine='xlsxwriter')
-    workbook = writer.book
-    sheet = workbook.add_worksheet('SUGERIDOS')
-
-    sheet.hide_gridlines(2)
-
-    color_guinda = '#8C0000'
-    color_sombreado_rojo = '#FCE4D6' 
-    
-    fmt_titulo = workbook.add_format({'bold': True, 'font_color': 'white', 'bg_color': color_guinda, 'align': 'center', 'valign': 'vcenter', 'font_size': 14, 'border': 1})
-    fmt_subtitulo = workbook.add_format({'bold': True, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 11})
-    fmt_etiqueta = workbook.add_format({'bold': True, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10})
-    fmt_valor = workbook.add_format({'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10})
-    fmt_header_tabla = workbook.add_format({'bold': True, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10})
-    
-    fmt_datos_centro = workbook.add_format({'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10})
-    fmt_sombreado = workbook.add_format({'bg_color': color_sombreado_rojo, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10})
-
-    sheet.set_column('A:A', 15)  
-    sheet.set_column('B:B', 35)  
-    sheet.set_column('C:C', 12)  
-    sheet.set_column('D:D', 22)  
-
-    sheet.set_row(0, 30)
-    sheet.merge_range('A1:D1', titulo, fmt_titulo)
-    sheet.merge_range('A2:D2', 'SUGERIDOS DEL DÍA', fmt_subtitulo)
-
-    sheet.write('A3', 'SUCURSAL', fmt_etiqueta)
-    sheet.merge_range('B3:D3', sucursal.upper(), fmt_valor)
-    
-    sheet.write('A4', 'FECHA', fmt_etiqueta)
-    fecha_str = datetime.now(pytz.timezone('America/Mexico_City')).strftime("%d/%m/%Y")
-    sheet.merge_range('B4:D4', fecha_str, fmt_valor)
-    
-    sheet.write('A5', 'ELABORA', fmt_etiqueta)
-    sheet.merge_range('B5:D5', elabora, fmt_valor)
-
-    sheet.write('A6', '', fmt_valor)
-    sheet.write('B6', 'DESCRIPCIÓN', fmt_header_tabla)
-    sheet.write('C6', 'CANTIDAD', fmt_header_tabla)
-    sheet.write('D6', 'FECHA', fmt_header_tabla)
-
-    row = 6
-    if not df.empty:
-        col_nombre = 'Producto' if 'Producto' in df.columns else 'nombre'
-        col_cant = 'Existencia' if 'Existencia' in df.columns else 'cantidad'
-        col_fecha = 'Fecha' if 'Fecha' in df.columns else 'fecha_cad'
-
-        df = df.sort_values(by=col_fecha).reset_index(drop=True)
-        fecha_proxima_vencer = df[col_fecha].min()
-
-        for _, fila in df.iterrows():
-            formato_actual = fmt_sombreado if fila[col_fecha] == fecha_proxima_vencer else fmt_datos_centro
-            
-            fecha_str_out = str(fila[col_fecha])
-            try:
-                if '-' in fecha_str_out:
-                    partes = fecha_str_out.split('-')
-                    if len(partes) == 3:
-                        fecha_str_out = f"{partes[2]}/{partes[1]}/{partes[0]}"
-            except Exception:
-                pass
-            
-            sheet.write(row, 0, '', fmt_valor) 
-            sheet.write(row, 1, str(fila[col_nombre]), formato_actual) 
-            sheet.write(row, 2, fila[col_cant], formato_actual)
-            sheet.write(row, 3, fecha_str_out, formato_actual) 
-            row += 1
-
-    last_row = row - 1 if row > 6 else 6
-    sheet.autofilter(5, 1, last_row, 3)
-
-    writer.close()
-    return output.getvalue()
-
 def analizar_dictado(texto, fecha_base):
     texto = texto.lower()
     
@@ -305,6 +208,10 @@ def analizar_dictado(texto, fecha_base):
         except ValueError:
             pass
         texto = texto.replace(match_fecha.group(0), "")
+    # <-- LÓGICA DE DÍAS ACTUALIZADA AQUÍ -->
+    elif "extra" in texto:
+        fecha_calc = fecha_base + timedelta(days=3)
+        texto = texto.replace("extra", "")
     elif "pasado mañana" in texto or "día más" in texto or "dia mas" in texto:
         fecha_calc = fecha_base + timedelta(days=2)
         texto = texto.replace("pasado mañana", "").replace("día más", "").replace("diamas", "")
@@ -325,6 +232,19 @@ def analizar_dictado(texto, fecha_base):
         
     producto = re.sub(r'\s+', ' ', texto).strip().upper()
     return producto, cantidad, fecha_calc
+
+def guardar_manual(sucursal, prod, cant, fech):
+    with conn.session as s:
+        existe = s.execute(text("SELECT cantidad FROM base_anterior WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                           {"nom": prod, "fec": str(fech), "suc": sucursal}).fetchone()
+        if existe:
+            s.execute(text("UPDATE base_anterior SET cantidad=cantidad+:can WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                      {"can": int(cant), "nom": prod, "fec": str(fech), "suc": sucursal})
+        else:
+            s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
+                      {"suc": sucursal, "nom": prod, "fec": str(fech), "can": int(cant)})
+        s.commit()
+    st.session_state.show_toast = f"✅ Guardado: {cant} {prod}"
 
 # ------------------ SIDEBAR ------------------
 st.sidebar.markdown("### 🏢 Datos de Sesión")
@@ -349,42 +269,20 @@ opciones_wa = {
     "MURILLO VIDAL": "522286886443", "ARAUCARIAS": "522281177133", "ÁVILA CAMACHO": "522288170989",
     "EMILIANO ZAPATA": "522969628525"
 }
-seleccion_wa = st.sidebar.selectbox("📍 Selecciona la Sucursal", list(opciones_wa.keys()))
+
+# Pre-seleccionar Costa Verde si es posible
+lista_tiendas = list(opciones_wa.keys())
+idx_defecto = lista_tiendas.index("COSTA VERDE") if "COSTA VERDE" in lista_tiendas else 0
+seleccion_wa = st.sidebar.selectbox("📍 Selecciona la Sucursal", lista_tiendas, index=idx_defecto)
 numero_whatsapp = opciones_wa[seleccion_wa]
 st.sidebar.caption(f"📱 WhatsApp: **{numero_whatsapp}**")
 
 st.sidebar.divider()
 
-st.sidebar.markdown("### 💾 Respaldo de Base de Datos")
-st.sidebar.info(f"Guarda o restaura tu stock específicamente para {seleccion_wa}.")
-archivo_csv = st.sidebar.file_uploader("⬆️ Subir Respaldo CSV", type=["csv"])
-
-if archivo_csv is not None:
-    if st.sidebar.button("🔄 Cargar y Restaurar Stock", use_container_width=True):
-        try:
-            df_restaurar = pd.read_csv(archivo_csv)
-            if 'Producto' in df_restaurar.columns:
-                df_restaurar = df_restaurar.rename(columns={'Producto': 'nombre', 'Caducidad': 'fecha_cad', 'Fecha': 'fecha_cad', 'Existencia': 'cantidad'})
-            
-            with conn.session as s:
-                s.execute(text("DELETE FROM base_anterior WHERE sucursal = :suc"), {"suc": seleccion_wa})
-                for _, fila in df_restaurar.iterrows():
-                    s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"),
-                              {"suc": seleccion_wa, "nom": str(fila['nombre']).upper(), "fec": str(fila['fecha_cad']), "can": int(fila['cantidad'])})
-                s.commit()
-            
-            st.session_state.show_toast = "✅ Inventario restaurado correctamente para " + seleccion_wa
-            st.rerun()
-        except Exception as e:
-            st.sidebar.error(f"⚠️ Error al restaurar: {e}")
-
-st.sidebar.divider()
-
 if st.session_state.get('usuario_actual', '').lower() == 'admin':
     with st.sidebar.expander("🚨 Zona de Peligro"):
-        st.warning("¡ATENCIÓN! Esto borrará el inventario de TODAS las sucursales.")
-        confirmar_reset = st.checkbox("Confirmar que deseo borrar toda la base de datos", key="check_reset")
-        
+        st.warning("¡ATENCIÓN! Esto borrará el inventario.")
+        confirmar_reset = st.checkbox("Confirmar reseteo", key="check_reset")
         if st.button("⚠️ EJECUTAR RESET TOTAL", use_container_width=True):
             if confirmar_reset:
                 with conn.session as s:
@@ -392,46 +290,24 @@ if st.session_state.get('usuario_actual', '').lower() == 'admin':
                     s.execute(text("TRUNCATE TABLE base_anterior RESTART IDENTITY"))
                     s.execute(text("TRUNCATE TABLE historial_ventas RESTART IDENTITY"))
                     s.commit()
-                    
                 st.session_state.show_toast = "✅ Base de datos limpiada por completo."
                 st.rerun()
-            else:
-                st.sidebar.error("Debes confirmar primero seleccionando la casilla.")
-
 
 # ------------------------------------------------------------
-# LÓGICA DE CALLBACKS PARA POPUP VOZ (Evita Bugs y Ghosting)
+# DEFINICIÓN DE POP-UPS (st.dialog)
 # ------------------------------------------------------------
 def guardar_datos_voz(sucursal):
     cant = st.session_state.voz_input_cant
     prod = st.session_state.voz_input_prod.strip().upper()
     fech = st.session_state.voz_input_fech
-    
     if not prod:
         st.session_state.show_error = "El nombre no puede estar vacío."
         return
-        
-    with conn.session as s:
-        existe_stock = s.execute(text("SELECT cantidad FROM base_anterior WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
-                                 {"nom": prod, "fec": str(fech), "suc": sucursal}).fetchone()
-        if existe_stock:
-            s.execute(text("UPDATE base_anterior SET cantidad=cantidad+:can WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
-                      {"can": int(cant), "nom": prod, "fec": str(fech), "suc": sucursal})
-        else:
-            s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
-                      {"suc": sucursal, "nom": prod, "fec": str(fech), "can": int(cant)})
-        s.commit()
-        
+    guardar_manual(sucursal, prod, cant, fech)
     st.session_state.confirmacion_voz = None
     st.session_state.audio_leido = False
-    st.session_state.buscar_prod = ""
-    st.session_state.show_toast = f"✅ Ingreso directo: {int(cant)} {prod}"
 
-# ------------------------------------------------------------
-# DEFINICIÓN DE POP-UPS (st.dialog)
-# ------------------------------------------------------------
-
-@st.dialog("🗣️")
+@st.dialog("🗣️ Confirmar Dictado")
 def popup_voz():
     datos = st.session_state.get("confirmacion_voz")
     if not datos:
@@ -454,16 +330,77 @@ def popup_voz():
         st.session_state.audio_leido = True
         
     st.success(f"**Escuché:** '{datos['original']}'")
-    
     st.number_input("Cantidad", value=int(datos['cant']), min_value=1, key="voz_input_cant")
     st.text_input("Producto", value=datos['prod'], key="voz_input_prod")
     st.date_input("Fecha", value=datos['fecha'], key="voz_input_fech")
     
     st.button("🥖 Ingreso directo", use_container_width=True, type="primary", on_click=guardar_datos_voz, args=(seleccion_wa,))
 
-
-@st.dialog("✏️")
+@st.dialog("✏️ Entrada Manual")
 def popup_manual(nombre_final):
     st.markdown(f"### 📦 {nombre_final}")
+    
+    # <-- LÓGICA DE DÍAS AÑADIDA AQUÍ -->
     fecha_sugerido = fecha_hoy_mx + timedelta(days=1)
-    fecha_dia_mas = fecha_
+    fecha_dia_mas = fecha_hoy_mx + timedelta(days=2)
+    fecha_extra = fecha_hoy_mx + timedelta(days=3) 
+
+    cant_manual = st.number_input("Cantidad a registrar:", min_value=1, value=1, key="cant_manual_in")
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if st.button(f"Sugerido\n({fecha_sugerido.strftime('%d/%m')})", use_container_width=True):
+            guardar_manual(seleccion_wa, nombre_final, cant_manual, fecha_sugerido)
+            st.rerun()
+    with col2:
+        if st.button(f"Día más\n({fecha_dia_mas.strftime('%d/%m')})", use_container_width=True):
+            guardar_manual(seleccion_wa, nombre_final, cant_manual, fecha_dia_mas)
+            st.rerun()
+    with col3:
+        if st.button(f"Extra\n({fecha_extra.strftime('%d/%m')})", use_container_width=True):
+            guardar_manual(seleccion_wa, nombre_final, cant_manual, fecha_extra)
+            st.rerun()
+
+# ------------------------------------------------------------
+# INTERFAZ PRINCIPAL
+# ------------------------------------------------------------
+st.title("🥐 Sugeridos - Champlitte")
+
+col1, col2 = st.columns([3, 1])
+with col1:
+    producto_buscado = st.text_input("🔍 Buscar o registrar producto manualmente:", placeholder="Ej. Cubiletes")
+    if st.button("Abrir registro manual", type="secondary"):
+        if producto_buscado:
+            popup_manual(producto_buscado.upper())
+        else:
+            st.warning("Escribe un producto primero.")
+
+with col2:
+    # <-- EL BOTÓN CON FORMATO IMPLEMENTADO -->
+    texto_capturado = speech_to_text(
+        language='es-MX',                 
+        start_prompt="🎙️ Dictar Entrada", 
+        stop_prompt="🔴 Grabando...",     
+        use_container_width=True,         
+        just_once=True,                   
+        key='boton_dictado_sugeridos'             
+    )
+
+    if texto_capturado:
+        prod, cant, fech = analizar_dictado(texto_capturado, fecha_hoy_mx)
+        st.session_state.confirmacion_voz = {
+            'original': texto_capturado,
+            'prod': prod,
+            'cant': cant,
+            'fecha': fech
+        }
+        popup_voz()
+
+st.divider()
+st.subheader("📋 Resumen Rápido de Inventario")
+df_resumen = conn.query("SELECT nombre, cantidad, fecha_cad FROM base_anterior WHERE sucursal = :suc", params={"suc": seleccion_wa}, ttl=0)
+
+if not df_resumen.empty:
+    st.dataframe(df_resumen, use_container_width=True)
+else:
+    st.info(f"No hay registros actuales para {seleccion_wa}.")
