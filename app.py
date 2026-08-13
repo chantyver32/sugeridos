@@ -425,6 +425,8 @@ def guardar_datos_voz(sucursal):
     st.session_state.ultimo_audio_procesado = None
     st.session_state.audio_leido = False
     st.session_state.buscar_prod = ""
+    # NUEVO: Preparamos el micrófono en blanco para el siguiente uso
+    st.session_state.mic_key += 1 
     st.session_state.show_toast = f"✅ Ingreso directo: {int(cant)} {prod}"
 
 # ------------------------------------------------------------
@@ -458,7 +460,6 @@ def popup_voz():
     st.text_input("Producto", value=datos['prod'], key="voz_input_prod")
     st.date_input("Fecha", value=datos['fecha'], key="voz_input_fech")
     
-    # ❌ FIX: Se añadio botón de cancelar para que el usuario pueda abortar y el botón no se bloquee
     col1, col2 = st.columns(2)
     with col1:
         st.button("🥖 Ingreso directo", use_container_width=True, type="primary", on_click=guardar_datos_voz, args=(seleccion_wa,))
@@ -467,6 +468,8 @@ def popup_voz():
             st.session_state.confirmacion_voz = None
             st.session_state.ultimo_audio_procesado = None 
             st.session_state.audio_leido = False
+            # NUEVO: Forzamos la destrucción de la grabación anterior
+            st.session_state.mic_key += 1 
             st.rerun()
 
 @st.dialog("✏️")
@@ -536,6 +539,9 @@ with tab1:
         st.session_state.conteo_temp = 0
     if "buscar_prod" not in st.session_state:
         st.session_state.buscar_prod = ""
+    # NUEVO: Inicializador para el caché del micrófono
+    if "mic_key" not in st.session_state:
+        st.session_state.mic_key = 0
 
     st.markdown(f"### 📍 Estás en la sucursal: **{seleccion_wa}**")
 
@@ -547,7 +553,8 @@ with tab1:
             start_prompt="🎙️ Toca para Dictar",
             stop_prompt="🔴 Grabando...",
             use_container_width=True,
-            key='stt_mic_unico'
+            # NUEVO: Llave dinámica que cambiará para forzar un reset
+            key=f"stt_mic_{st.session_state.mic_key}"
         )
 
         if texto_capturado and texto_capturado != st.session_state.get("ultimo_audio_procesado"):
