@@ -8,7 +8,7 @@ import io
 import re
 import os
 import streamlit.components.v1 as components
-from streamlit_mic_recorder import speech_to_text  # <-- LIBRERÍA AGREGADA
+from streamlit_mic_recorder import speech_to_text  
 
 # ------------------ CONFIGURACIÓN GENERAL ------------------
 with st.spinner('Iniciando sistema Champlitte... 🥐'):
@@ -305,6 +305,10 @@ def analizar_dictado(texto, fecha_base):
         except ValueError:
             pass
         texto = texto.replace(match_fecha.group(0), "")
+    # NUEVO: Detección de día extra (3 días)
+    elif "extra" in texto:
+        fecha_calc = fecha_base + timedelta(days=3)
+        texto = texto.replace("día extra", "").replace("dia extra", "").replace("extra", "")
     elif "pasado mañana" in texto or "día más" in texto or "dia mas" in texto:
         fecha_calc = fecha_base + timedelta(days=2)
         texto = texto.replace("pasado mañana", "").replace("día más", "").replace("diamas", "")
@@ -425,7 +429,6 @@ def guardar_datos_voz(sucursal):
     st.session_state.ultimo_audio_procesado = None
     st.session_state.audio_leido = False
     st.session_state.buscar_prod = ""
-    # NUEVO: Preparamos el micrófono en blanco para el siguiente uso
     st.session_state.mic_key += 1 
     st.session_state.show_toast = f"✅ Ingreso directo: {int(cant)} {prod}"
 
@@ -468,7 +471,6 @@ def popup_voz():
             st.session_state.confirmacion_voz = None
             st.session_state.ultimo_audio_procesado = None 
             st.session_state.audio_leido = False
-            # NUEVO: Forzamos la destrucción de la grabación anterior
             st.session_state.mic_key += 1 
             st.rerun()
 
@@ -478,14 +480,22 @@ def popup_manual(nombre_final):
     
     fecha_sugerido = fecha_hoy_mx + timedelta(days=1)
     fecha_dia_mas = fecha_hoy_mx + timedelta(days=2)
+    fecha_extra = fecha_hoy_mx + timedelta(days=3) # NUEVO: Día extra para modo manual
     
     opcion_fecha = st.radio(
         "📅 Fecha:",
-        options=["Sugerido (Mañana)", "Día Más (Pasado Mañana)"],
+        # NUEVO: Agregada la opción "Día Extra (3 Días)"
+        options=["Sugerido (Mañana)", "Día Más (Pasado Mañana)", "Día Extra (3 Días)"], 
         horizontal=True
     )
     
-    f_cad = fecha_sugerido if opcion_fecha == "Sugerido (Mañana)" else fecha_dia_mas
+    # NUEVO: Lógica actualizada para asginar la fecha correcta según la selección
+    if opcion_fecha == "Sugerido (Mañana)":
+        f_cad = fecha_sugerido
+    elif opcion_fecha == "Día Más (Pasado Mañana)":
+        f_cad = fecha_dia_mas
+    else:
+        f_cad = fecha_extra
 
     st.write("")
     col_sum1, col_sum2, col_sum3 = st.columns(3)
@@ -529,7 +539,7 @@ def popup_manual(nombre_final):
             st.warning("Agrega una cantidad mayor a 0.")
 
 # ------------------ TABS ------------------
-tab1, tab2 = st.tabs(["📝 Registro", "📦 Archivo"])
+tab1, tab2, tab3 = st.tabs(["📝 Registro", "📦 Archivo", "🖼️ Reporte Visual"])
 
 # ------------------------------------------------------------
 # TAB 1: CONTEO
@@ -539,7 +549,6 @@ with tab1:
         st.session_state.conteo_temp = 0
     if "buscar_prod" not in st.session_state:
         st.session_state.buscar_prod = ""
-    # NUEVO: Inicializador para el caché del micrófono
     if "mic_key" not in st.session_state:
         st.session_state.mic_key = 0
 
@@ -553,7 +562,6 @@ with tab1:
             start_prompt="🎙️ Toca para Dictar",
             stop_prompt="🔴 Grabando...",
             use_container_width=True,
-            # NUEVO: Llave dinámica que cambiará para forzar un reset
             key=f"stt_mic_{st.session_state.mic_key}"
         )
 
@@ -633,29 +641,24 @@ with tab1:
 with tab2:
     st.markdown("### 📦 Gestión de Sugeridos")
     
-    # Consultar datos de stock con ID oculto para permitir edición de filas dinámicas
     df_stock = conn.query('SELECT id, nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc', params={"suc": seleccion_wa}, ttl=0)
     
     with st.expander(f"✏️ Editar Sugeridos de {seleccion_wa}", expanded=True):
         if df_stock.empty:
             st.info("No hay stock registrado. Realiza un ingreso directo en la pestaña de Registro.")
         else:
-            # Tabla editable interactiva
             df_editado_stock = st.data_editor(
                 df_stock, 
-                column_config={"id": None}, # Ocultamos el ID en la interfaz
-                num_rows="dynamic", # Permite añadir y eliminar filas
+                column_config={"id": None}, 
+                num_rows="dynamic", 
                 use_container_width=True, 
                 hide_index=True, 
                 key="editor_sugeridos"
             )
             
-            # Botón para confirmar y guardar los cambios en la base de datos
             if st.button("💾 Confirmar Cambios", use_container_width=True, type="primary"):
                 with conn.session as s:
-                    # Limpiamos los registros de la sucursal actual
                     s.execute(text("DELETE FROM base_anterior WHERE sucursal = :suc"), {"suc": seleccion_wa})
-                    # Insertamos los datos modificados del editor
                     for _, fila in df_editado_stock.iterrows():
                         if pd.notna(fila["Producto"]) and str(fila["Producto"]).strip() != "":
                             s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
@@ -666,16 +669,13 @@ with tab2:
                                           "can": int(fila["Existencia"])
                                       })
                     s.commit()
-                # Notificamos el éxito y recargamos para regenerar el Excel
                 st.session_state.show_toast = "✅ Sugeridos actualizados correctamente."
                 st.rerun()
 
     st.divider()
     
-    # 1. DESCARGAR
     st.markdown("### 📥 Descargar Excel Actualizado")
     
-    # Volvemos a consultar la base (ya sin el id) para pasarla al generador de Excel
     df_stock_final = conn.query('SELECT nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc', params={"suc": seleccion_wa}, ttl=0)
     
     if df_stock_final.empty:
@@ -685,7 +685,6 @@ with tab2:
         msg_stock = f""
         link_st = f"https://wa.me/{numero_whatsapp.strip()}?text={urllib.parse.quote(msg_stock)}"
         
-        # Generar el Excel con el DataFrame validado tras las ediciones
         excel_stock = generar_excel_formato(df_stock_final, sucursal=seleccion_wa, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.", elabora=elabora_input)
         
         col_down1, col_down2 = st.columns(2)
@@ -699,3 +698,79 @@ with tab2:
             )
         with col_down2:
             st.link_button("💬 2. Abrir WhatsApp", link_st, use_container_width=True, type="primary")
+
+# ------------------------------------------------------------
+# TAB 3: REPORTE VISUAL
+# ------------------------------------------------------------
+with tab3:
+    st.markdown(f"### 🖼️ Tarjeta de Sugeridos - {seleccion_wa}")
+    st.info("Toma una captura de pantalla de la tarjeta blanca de abajo y luego usa el botón verde para enviarla por WhatsApp.")
+    
+    df_visual = conn.query('SELECT nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc ORDER BY fecha_cad ASC', params={"suc": seleccion_wa}, ttl=0)
+    
+    if df_visual.empty:
+        st.warning(f"No hay productos registrados para {seleccion_wa}.")
+    else:
+        # Generar las filas de la tabla en HTML
+        filas_html = ""
+        for i, fila in df_visual.iterrows():
+            # Color alternado para las filas: blanco y un rosa muy tenue para simular el estilo Champlitte
+            color_fondo = "#FFFFFF" if i % 2 == 0 else "#FFF5F5"
+            
+            # Formatear la fecha a dd/mm/yyyy si es posible
+            fecha_str = str(fila['Fecha'])
+            try:
+                if '-' in fecha_str:
+                    partes = fecha_str.split('-')
+                    if len(partes) == 3:
+                        fecha_str = f"{partes[2]}/{partes[1]}/{partes[0]}"
+            except:
+                pass
+
+            filas_html += f"""
+            <tr style="background-color: {color_fondo}; border-bottom: 1px solid #f0f0f0;">
+                <td style="padding: 10px; text-align: left; color: #333; font-size: 13px;">{fila['Producto']}</td>
+                <td style="padding: 10px; text-align: center; color: #8C1C31; font-weight: bold; font-size: 14px;">{fila['Existencia']}</td>
+                <td style="padding: 10px; text-align: center; color: #555; font-size: 13px;">{fecha_str}</td>
+            </tr>
+            """
+            
+        fecha_hora_actual = datetime.now(zona_mx).strftime("%d %m %Y - %H:%M")
+        
+        # Construcción de la tarjeta visual
+        tarjeta_html = f"""
+        <div style="background-color: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); width: 100%; max-width: 500px; margin: auto; text-align: center; margin-bottom: 20px;">
+            <h1 style="color: #6D1427; font-family: 'Times New Roman', serif; font-size: 38px; margin: 0;">Champlitte</h1>
+            <p style="font-family: sans-serif; font-size: 10px; font-weight: bold; letter-spacing: 3px; margin: 0 0 20px 0; color: #000;">PASTELERÍA</p>
+            
+            <h2 style="color: #6D1427; font-family: sans-serif; font-weight: 900; margin: 0; font-size: 22px;">SUGERIDOS {seleccion_wa.upper()}</h2>
+            <p style="font-family: sans-serif; font-size: 12px; font-weight: bold; color: #666; margin: 5px 0 20px 0;">{fecha_hora_actual}</p>
+            
+            <table style="width: 100%; border-collapse: collapse; font-family: sans-serif;">
+                <thead>
+                    <tr style="background-color: #8C1C31; color: white;">
+                        <th style="padding: 12px; text-align: left; font-size: 11px; letter-spacing: 1px;">PRODUCTO</th>
+                        <th style="padding: 12px; text-align: center; font-size: 11px; letter-spacing: 1px;">CANTIDAD</th>
+                        <th style="padding: 12px; text-align: center; font-size: 11px; letter-spacing: 1px;">FECHA</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {filas_html}
+                </tbody>
+            </table>
+        </div>
+        <p style="text-align: center; color: gray; font-size: 13px; margin-top: 15px; margin-bottom: 20px;">Reporte generado automáticamente</p>
+        """
+        
+        # Renderizamos la tarjeta en Streamlit
+        st.markdown(tarjeta_html, unsafe_allow_html=True)
+        
+        # Botón estilo WhatsApp usando componentes HTML puros para respetar el CSS de tu imagen
+        link_wp = f"https://wa.me/{numero_whatsapp.strip()}"
+        boton_wp_html = f"""
+        <a href="{link_wp}" target="_blank" style="display: block; width: 100%; max-width: 500px; margin: auto; background-color: #25D366; color: white; text-align: center; padding: 15px; border-radius: 10px; font-size: 18px; font-weight: bold; text-decoration: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: background-color 0.3s;">
+            📞 Enviar Reporte a {seleccion_wa.upper()}
+        </a>
+        <br><br>
+        """
+        st.markdown(boton_wp_html, unsafe_allow_html=True)
