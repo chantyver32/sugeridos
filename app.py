@@ -8,7 +8,7 @@ import io
 import re
 import os
 import streamlit.components.v1 as components
-from streamlit_mic_recorder import speech_to_text
+from streamlit_mic_recorder import speech_to_text # <-- IMPORTACIÓN DEL BOTÓN NUEVO
 
 # ------------------ CONFIGURACIÓN GENERAL ------------------
 with st.spinner('Iniciando sistema Champlitte... 🥐'):
@@ -17,82 +17,59 @@ with st.spinner('Iniciando sistema Champlitte... 🥐'):
     
     st.set_page_config(page_title="Sugeridos", page_icon="🥐", layout="wide")
 
-# CSS personalizado (Sin trucos que rompan el botón de voz)
+# CSS personalizado 
 st.markdown("""
-    <style>
+<style>
     ul[role="listbox"] li[aria-selected="true"] {
         background-color: transparent !important;
         font-weight: bold !important;
     }
-    
+    /* Ajuste equilibrado del espacio superior */
     .block-container { padding-top: 3rem; padding-bottom: 1rem; }
-    
     .main { background-color: #f5f7f9; }
-    
-    .stButton > button, 
-    .stFormSubmitButton > button { 
-        width: 100%; 
-        border-radius: 8px; 
-        font-weight: bold; 
-        transition: none !important;
-        -webkit-transition: none !important;
+    /* FIX: Remover sombras (ghosting) y duplicados en los botones normales y de formulario */
+    .stButton > button, .stFormSubmitButton > button { 
+        width: 100%; border-radius: 8px; font-weight: bold; 
+        transition: none !important; -webkit-transition: none !important; 
     }
-    
-    .stButton > button:focus, .stButton > button:active,
-    .stFormSubmitButton > button:focus, .stFormSubmitButton > button:active {
-        box-shadow: none !important;
-        outline: none !important;
-        transform: none !important;
+    .stButton > button:focus, .stButton > button:active, 
+    .stFormSubmitButton > button:focus, .stFormSubmitButton > button:active { 
+        box-shadow: none !important; outline: none !important; transform: none !important; 
     }
-
-    [data-testid="stElementContainer"], 
-    [data-testid="stForm"] {
-        transition: none !important;
-        animation: none !important;
+    /* Eliminar transiciones de renderizado en los contenedores y formularios */
+    [data-testid="stElementContainer"], [data-testid="stForm"] { 
+        transition: none !important; animation: none !important; 
     }
-    
-    .btn-wa {
-        background-color: #25D366;
-        color: white !important;
-        padding: 15px 20px;
-        text-align: center;
-        text-decoration: none !important;
-        display: block;
-        font-size: 16px;
-        font-weight: bold;
-        border-radius: 8px;
-        margin: 10px auto;
-        max-width: 600px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    .btn-wa { 
+        background-color: #25D366; color: white !important; padding: 10px 20px; 
+        text-align: center; text-decoration: none !important; display: block; 
+        font-size: 14px; font-weight: bold; border-radius: 8px; margin: 10px 0; 
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
     }
-    .btn-wa:hover { background-color: #128C7E; color: white !important;}
-    
-    /* ESTILOS DE SELECTORES OSCUROS */
-    div[data-baseweb="popover"] > div {
-        background-color: #1a1a1c !important; 
-        border-radius: 8px !important;
-        border: 1px solid rgba(255, 255, 255, 0.1) !important;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.8) !important;
+    .btn-wa:hover { background-color: #128C7E; }
+    div[data-testid="stMetricValue"] { font-size: 28px; color: #1f77b4; }
+    div[data-testid="stMetricDelta"] { font-size: 30px !important; font-weight: bold !important; }
+    div[data-testid="stMetricDelta"] svg { width: 35px !important; height: 35px !important; }
+    /* ESTILO OSCURO PARA LISTAS DESPLEGABLES */
+    div[data-baseweb="popover"] > div { 
+        background-color: #1a1a1c !important; border-radius: 8px !important; 
+        border: 1px solid rgba(255, 255, 255, 0.1) !important; box-shadow: 0 4px 12px rgba(0,0,0,0.8) !important; 
     }
     div[data-baseweb="popover"] ul { background-color: transparent !important; }
-    div[data-baseweb="popover"] li {
-        background-color: transparent !important;
-        color: #FFFFFF !important;
-        font-size: 14px !important;
-        padding-top: 10px !important;
-        padding-bottom: 10px !important;
+    div[data-baseweb="popover"] li { 
+        background-color: transparent !important; color: #FFFFFF !important; 
+        font-size: 14px !important; padding-top: 10px !important; padding-bottom: 10px !important; 
     }
     div[data-baseweb="popover"] li:hover { background-color: #2d2d30 !important; }
     div[data-baseweb="popover"] li[aria-selected="true"] { background-color: #3a3b3e !important; font-weight: bold !important; }
-
-    div[data-baseweb="select"] > div {
-        background-color: #1a1a1c !important; 
-        border-radius: 8px !important;
-        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    div[data-baseweb="select"] > div { 
+        background-color: #1a1a1c !important; border-radius: 8px !important; 
+        border: 1px solid rgba(255, 255, 255, 0.2) !important; 
     }
+    div[data-baseweb="select"] > div:focus-within { border-color: #ff4b4b !important; box-shadow: 0 0 0 1px #ff4b4b !important; }
     div[data-baseweb="select"] div { color: #FFFFFF !important; }
     div[data-baseweb="select"] svg { fill: #FFFFFF !important; }
-    </style>
+</style>
 """, unsafe_allow_html=True)
 
 # ------------------ SISTEMA DE NOTIFICACIONES POST-RERUN ------------------
@@ -116,9 +93,7 @@ if not db_url:
         db_url = st.secrets["DATABASE_URL"]
     except:
         pass
-        
 conn = st.connection("supabase", type="sql", url=db_url)
-
 with conn.session as s:
     s.execute(text('''CREATE TABLE IF NOT EXISTS usuarios (
         id SERIAL PRIMARY KEY, username TEXT UNIQUE, password TEXT
@@ -139,18 +114,15 @@ with conn.session as s:
 def verificar_login():
     if "autenticado" not in st.session_state:
         st.session_state.autenticado = False
-
     if not st.session_state.autenticado:
         st.markdown("### 🥐 Sugeridos")
         st.markdown("### Control de Acceso")
-        
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             with st.form("form_login"):
                 usuario_input = st.text_input("👤 Usuario:", key="login_usr")
                 password_input = st.text_input("🔑 Contraseña:", type="password", key="login_pwd")
                 btn_login = st.form_submit_button("Iniciar Sesión", use_container_width=True, type="primary")
-                
                 if btn_login:
                     df_check = conn.query("SELECT * FROM usuarios WHERE username = :u AND password = :p", 
                                           params={"u": usuario_input.strip(), "p": password_input}, ttl=0)
@@ -186,14 +158,16 @@ def resetear():
     st.session_state.conteo_temp = 0
     sonido_click()
 
+def limpiar_buscador():
+    st.session_state.buscar_prod = ""
+
 def generar_excel_formato(df, sucursal, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.", elabora="PEDRO GARCÍA"):
     output = io.BytesIO()
     writer = pd.ExcelWriter(output, engine='xlsxwriter')
     workbook = writer.book
     sheet = workbook.add_worksheet('SUGERIDOS')
-
+    
     sheet.hide_gridlines(2)
-
     color_guinda = '#8C0000'
     color_sombreado_rojo = '#FCE4D6' 
     
@@ -202,7 +176,6 @@ def generar_excel_formato(df, sucursal, titulo="PASTELERÍA CHAMPLITTE, S.A. DE 
     fmt_etiqueta = workbook.add_format({'bold': True, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10})
     fmt_valor = workbook.add_format({'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10})
     fmt_header_tabla = workbook.add_format({'bold': True, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10})
-    
     fmt_datos_centro = workbook.add_format({'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10})
     fmt_sombreado = workbook.add_format({'bg_color': color_sombreado_rojo, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10})
 
@@ -337,7 +310,7 @@ st.sidebar.caption(f"📱 WhatsApp: **{numero_whatsapp}**")
 st.sidebar.divider()
 
 st.sidebar.markdown("### 💾 Respaldo de Base de Datos")
-st.sidebar.info(f"Guarda o restaura tu stock para {seleccion_wa}.")
+st.sidebar.info(f"Guarda o restaura tu stock específicamente para {seleccion_wa}.")
 archivo_csv = st.sidebar.file_uploader("⬆️ Subir Respaldo CSV", type=["csv"])
 
 if archivo_csv is not None:
@@ -380,7 +353,7 @@ if st.session_state.get('usuario_actual', '').lower() == 'admin':
                 st.sidebar.error("Debes confirmar primero seleccionando la casilla.")
 
 # ------------------------------------------------------------
-# LÓGICA DE CALLBACKS PARA POPUP VOZ
+# LÓGICA DE CALLBACKS PARA POPUP VOZ (Evita Bugs y Ghosting)
 # ------------------------------------------------------------
 def guardar_datos_voz(sucursal):
     cant = st.session_state.voz_input_cant
@@ -403,13 +376,13 @@ def guardar_datos_voz(sucursal):
         s.commit()
         
     st.session_state.confirmacion_voz = None
-    st.session_state.ultimo_audio_procesado = None
+    st.session_state.ultimo_audio_procesado = None # <-- Clave para resetear el botón
     st.session_state.audio_leido = False
     st.session_state.buscar_prod = ""
     st.session_state.show_toast = f"✅ Ingreso directo: {int(cant)} {prod}"
 
 # ------------------------------------------------------------
-# POP-UPS (st.dialog)
+# DEFINICIÓN DE POP-UPS (st.dialog)
 # ------------------------------------------------------------
 @st.dialog("🗣️ Confirmar Dictado")
 def popup_voz():
@@ -439,6 +412,7 @@ def popup_voz():
     st.text_input("Producto", value=datos['prod'], key="voz_input_prod")
     st.date_input("Fecha", value=datos['fecha'], key="voz_input_fech")
     
+    # Botones con opción de Cancelar añadida para evitar quedarse atrapado
     col1, col2 = st.columns(2)
     with col1:
         st.button("🥖 Ingresar", use_container_width=True, type="primary", on_click=guardar_datos_voz, args=(seleccion_wa,))
@@ -449,98 +423,233 @@ def popup_voz():
             st.session_state.audio_leido = False
             st.rerun()
 
-@st.dialog("✏️ Registrar Manualmente")
+@st.dialog("✏️ Registro")
 def popup_manual(nombre_final):
-    st.markdown(f"### 📦 Producto: {nombre_final}")
+    st.markdown(f"### 📦 {nombre_final}")
     
-    cant = st.number_input("Cantidad", min_value=1, step=1, key="man_cant")
-    fech = st.date_input("Fecha", value=fecha_hoy_mx, key="man_fech")
+    fecha_sugerido = fecha_hoy_mx + timedelta(days=1)
+    fecha_dia_mas = fecha_hoy_mx + timedelta(days=2)
     
-    if st.button("Guardar", type="primary", use_container_width=True):
-        with conn.session as s:
-            existe = s.execute(text("SELECT cantidad FROM base_anterior WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
-                                     {"nom": nombre_final, "fec": str(fech), "suc": seleccion_wa}).fetchone()
-            if existe:
-                s.execute(text("UPDATE base_anterior SET cantidad=cantidad+:can WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
-                          {"can": cant, "nom": nombre_final, "fec": str(fech), "suc": seleccion_wa})
-            else:
-                s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
-                          {"suc": seleccion_wa, "nom": nombre_final, "fec": str(fech), "can": cant})
-            s.commit()
-            
-        st.session_state.show_toast = f"✅ Guardado: {cant} de {nombre_final}"
-        st.rerun()
-
-# ------------------------------------------------------------
-# INTERFAZ PRINCIPAL Y BOTÓN DE VOZ 
-# ------------------------------------------------------------
-st.header(f"Gestión de Inventario - {seleccion_wa}")
-
-# 1. Componente de voz 
-texto_capturado = speech_to_text(
-    language='es-MX',
-    start_prompt="🎙️ Toca para Dictar",
-    stop_prompt="🔴 Grabando...",
-    use_container_width=True,
-    key='stt_mic_unico'
-)
-
-# 2. Lógica para procesar y disparar ventana
-if texto_capturado and texto_capturado != st.session_state.get("ultimo_audio_procesado"):
+    opcion_fecha = st.radio(
+        "📅 Fecha:",
+        options=["Sugerido (Mañana)", "Día Más (Pasado Mañana)"],
+        horizontal=True
+    )
     
-    st.session_state.ultimo_audio_procesado = texto_capturado
+    f_cad = fecha_sugerido if opcion_fecha == "Sugerido (Mañana)" else fecha_dia_mas
     
-    prod, cant, fec = analizar_dictado(texto_capturado, fecha_hoy_mx)
-    st.session_state.confirmacion_voz = {
-        'original': texto_capturado,
-        'prod': prod,
-        'cant': cant,
-        'fecha': fec
-    }
-    
-    st.rerun()
-
-if st.session_state.get("confirmacion_voz"):
-    popup_voz()
-
-# ------------------------------------------------------------
-# VISTA DE DATOS Y CONTROLES MANUALES 
-# ------------------------------------------------------------
-st.divider()
-
-st.subheader("📋 Sugeridos Actuales")
-
-# Controles manuales rápidos
-col_input, col_btn = st.columns([3, 1])
-with col_input:
-    producto_manual = st.text_input("🔍 Escribe un producto para agregar manualmente:")
-with col_btn:
-    st.write("") 
-    st.write("") 
-    if st.button("➕ Agregar Manual", use_container_width=True):
-        if producto_manual:
-            popup_manual(producto_manual.strip().upper())
-        else:
-            st.warning("Escribe el nombre del producto primero.")
-
-# Tabla interactiva
-try:
-    df_actual = conn.query(f"SELECT nombre as Producto, cantidad as Existencia, fecha_cad as Fecha FROM base_anterior WHERE sucursal = '{seleccion_wa}' ORDER BY fecha_cad ASC", ttl=0)
-    
-    if not df_actual.empty:
-        st.dataframe(df_actual, use_container_width=True, hide_index=True)
+    st.write("")
+    col_sum1, col_sum2, col_sum3 = st.columns(3)
+    with col_sum1:
+        st.button("+1", use_container_width=True, on_click=sumar, args=(1,))
+    with col_sum2:
+        st.button("+2", use_container_width=True, on_click=sumar, args=(2,))
+    with col_sum3:
+        st.button("Borrar", use_container_width=True, on_click=resetear)
         
-        # Botón mágico para el Excel
-        excel_data = generar_excel_formato(df_actual, seleccion_wa)
-        st.download_button(
-            label="📊 Descargar Formato Excel",
-            data=excel_data,
-            file_name=f"Sugeridos_{seleccion_wa}_{fecha_hoy_mx}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    st.write("")
+    st.markdown(
+        f"""
+        <div style="margin-bottom: 15px;">
+            <span style="color: gray; font-size: 14px;">Total a registrar</span><br>
+            <span style="font-size: 28px; color: #1f77b4; font-weight: bold;">{st.session_state.conteo_temp}</span>
+        </div>
+        """, 
+        unsafe_allow_html=True
+    )
+    
+    if st.button("🥖 Ingreso directo", use_container_width=True, type="primary"):
+        cant = st.session_state.conteo_temp
+        if cant > 0:
+            with conn.session as s:
+                existe_stock = s.execute(text("SELECT cantidad FROM base_anterior WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                                         {"nom": nombre_final, "fec": str(f_cad), "suc": seleccion_wa}).fetchone()
+                if existe_stock:
+                    s.execute(text("UPDATE base_anterior SET cantidad=cantidad+:can WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                              {"can": int(cant), "nom": nombre_final, "fec": str(f_cad), "suc": seleccion_wa})
+                else:
+                    s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
+                              {"suc": seleccion_wa, "nom": nombre_final, "fec": str(f_cad), "can": int(cant)})
+                s.commit()
+                
+            st.session_state.conteo_temp = 0
+            st.session_state.buscar_prod = ""
+            st.session_state.show_toast = f"✅ Ingreso directo: {int(cant)} {nombre_final}"
+            st.rerun()
+        else:
+            st.warning("Agrega una cantidad mayor a 0.")
+
+# ------------------ TABS ------------------
+tab1, tab2 = st.tabs(["📝 Registro", "📦 Archivo"])
+
+# ------------------------------------------------------------
+# TAB 1: CONTEO
+# ------------------------------------------------------------
+with tab1:
+    if "conteo_temp" not in st.session_state:
+        st.session_state.conteo_temp = 0
+    if "buscar_prod" not in st.session_state:
+        st.session_state.buscar_prod = ""
+        
+    st.markdown(f"### 📍 Estás en la sucursal: **{seleccion_wa}**")
+
+    # --- 1. INGRESO POR VOZ NUEVO ---
+    with st.expander("🎤 **Ingreso por Voz** (Clic para desplegar)", expanded=True):
+        
+        texto_capturado = speech_to_text(
+            language='es-MX',
+            start_prompt="🎙️ Toca para Dictar",
+            stop_prompt="🔴 Grabando...",
             use_container_width=True,
-            type="primary"
+            key='stt_mic_unico'
         )
+
+        if texto_capturado and texto_capturado != st.session_state.get("ultimo_audio_procesado"):
+            
+            st.session_state.ultimo_audio_procesado = texto_capturado
+            
+            prod, cant, fec = analizar_dictado(texto_capturado, fecha_hoy_mx)
+            st.session_state.confirmacion_voz = {
+                'original': texto_capturado,
+                'prod': prod,
+                'cant': cant,
+                'fecha': fec
+            }
+            
+            st.rerun()
+
+    if st.session_state.get("confirmacion_voz"):
+        popup_voz()
+        
+    st.divider()
+
+    # --- 2. AÑADIR PRODUCTO (TEXT INPUT) ---
+    def on_buscar_prod_change():
+        texto = st.session_state.buscar_prod.strip().upper()
+        if texto:
+            popup_manual(texto)
+
+    st.text_input(
+        "Añadir producto", 
+        placeholder="🔎 AÑADIR PRODUCTO (Presiona Enter para agregar)...",
+        key="buscar_prod", 
+        label_visibility="collapsed",
+        on_change=on_buscar_prod_change
+    )
+    
+    if st.session_state.get('enfocar_buscador', False):
+        components.html(
+            """
+            <script>
+            setTimeout(function() {
+                const textInputs = window.parent.document.querySelectorAll('input[type="text"]');
+                if (textInputs.length > 0) {
+                    textInputs[0].focus();
+                    window.parent.scrollTo(0,0);
+                }
+            }, 100);
+            </script>
+            """, height=0
+        )
+        st.session_state.enfocar_buscador = False
+
+    st.divider()
+
+    df_hoy_captura = conn.query("SELECT id, nombre, fecha_cad AS \"Fecha\", cantidad FROM captura_actual WHERE sucursal=:suc", params={"suc": seleccion_wa}, ttl=0)
+    
+    if not df_hoy_captura.empty:
+        with st.expander("📋 Productos registrados al momento", expanded=False):
+            df_editado = st.data_editor(
+                df_hoy_captura,
+                column_config={"id": None},
+                num_rows="dynamic",
+                height=300,
+                use_container_width=True,
+                hide_index=True,
+                key="editor_conteo"
+            )
+            if st.button("💾 Guardar Cambios", use_container_width=True):
+                with conn.session as s:
+                    s.execute(text("DELETE FROM captura_actual WHERE sucursal = :suc"), {"suc": seleccion_wa})
+                    for _, fila in df_editado.iterrows():
+                        if pd.notna(fila["nombre"]) and str(fila["nombre"]).strip() != "":
+                            s.execute(text("INSERT INTO captura_actual (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"),
+                                      {"suc": seleccion_wa, "nom": str(fila["nombre"]).upper(), "fec": str(fila["Fecha"]), "can": int(fila["cantidad"])})
+                    s.commit()
+                st.session_state.show_toast = "✅ Cambios guardados."
+                st.rerun()
+
+# ------------------------------------------------------------
+# TAB 2: INVENTARIO Y CORTE
+# ------------------------------------------------------------
+with tab2:
+    st.markdown("### 📦 Gestión de Sugeridos")
+    
+    # Consultar datos de stock con ID oculto para permitir edición de filas dinámicas
+    df_stock = conn.query('SELECT id, nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc', params={"suc": seleccion_wa}, ttl=0)
+    
+    with st.expander(f"✏️ Editar Sugeridos de {seleccion_wa}", expanded=True):
+        if df_stock.empty:
+            st.info("No hay stock registrado. Realiza un ingreso directo en la pestaña de Registro.")
+        else:
+            # Tabla editable interactiva
+            df_editado_stock = st.data_editor(
+                df_stock,
+                column_config={"id": None}, # Ocultamos el ID en la interfaz
+                num_rows="dynamic",         # Permite añadir y eliminar filas
+                use_container_width=True,
+                hide_index=True,
+                key="editor_sugeridos"
+            )
+            # Botón para confirmar y guardar los cambios en la base de datos
+            if st.button("💾 Confirmar Cambios", use_container_width=True, type="primary"):
+                with conn.session as s:
+                    # Limpiamos los registros de la sucursal actual
+                    s.execute(text("DELETE FROM base_anterior WHERE sucursal = :suc"), {"suc": seleccion_wa})
+                    
+                    # Insertamos los datos modificados del editor
+                    for _, fila in df_editado_stock.iterrows():
+                        if pd.notna(fila["Producto"]) and str(fila["Producto"]).strip() != "":
+                            s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"),
+                                      {
+                                          "suc": seleccion_wa,
+                                          "nom": str(fila["Producto"]).upper(),
+                                          "fec": str(fila["Fecha"]),
+                                          "can": int(fila["Existencia"])
+                                      })
+                    s.commit()
+                # Notificamos el éxito y recargamos para regenerar el Excel
+                st.session_state.show_toast = "✅ Sugeridos actualizados correctamente."
+                st.rerun()
+
+    st.divider()
+
+    # 1. DESCARGAR
+    st.markdown("### 📥 Descargar Excel Actualizado")
+    
+    # Volvemos a consultar la base (ya sin el id) para pasarla al generador de Excel
+    df_stock_final = conn.query('SELECT nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc', params={"suc": seleccion_wa}, ttl=0)
+    
+    if df_stock_final.empty:
+        st.warning("No hay datos para generar el Excel.")
     else:
-        st.info("No hay productos registrados para esta sucursal.")
-except Exception as e:
-    st.error(f"Error al cargar la base de datos: {e}")
+        elabora_input = st.text_input("👨‍🍳 Nombre de quien Elabora", value=st.session_state.get('usuario_actual', 'PEDRO GARCÍA')).upper()
+        
+        msg_stock = f""
+        link_st = f"https://wa.me/{numero_whatsapp.strip()}?text={urllib.parse.quote(msg_stock)}"
+        
+        # Generar el Excel con el DataFrame validado tras las ediciones
+        excel_stock = generar_excel_formato(df_stock_final, sucursal=seleccion_wa, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.", elabora=elabora_input)
+        
+        col_down1, col_down2 = st.columns(2)
+        with col_down1:
+            st.download_button(
+                "📗 1. Descargar Excel",
+                data=excel_stock,
+                file_name=f"Sugeridos_{seleccion_wa}_{fecha_hoy_mx}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+        with col_down2:
+            st.link_button("💬 2. Abrir WhatsApp", link_st, use_container_width=True, type="primary")
+
