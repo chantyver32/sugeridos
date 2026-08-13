@@ -516,7 +516,7 @@ def popup_manual(nombre_final):
             st.warning("Agrega una cantidad mayor a 0.")
 
 # ------------------ TABS ------------------
-tab1, tab2 = st.tabs(["📝 Registro", "📦 Archivo"])
+tab1, tab2, tab3 = st.tabs(["📝 Registro", "📦 Archivo", "🖼️ Reporte Visual"])
 
 # ------------------------------------------------------------
 # TAB 1: CONTEO
@@ -528,10 +528,14 @@ with tab1:
         st.session_state.buscar_prod = ""
 
     st.markdown(f"### 📍 Estás en la sucursal: **{seleccion_wa}**")
+    st.markdown("### Registrar Nueva Mercancía")
 
-    # --- 1. INGRESO POR VOZ AL INICIO ---
-    with st.expander("🎤 **Ingreso por Voz** (Clic para desplegar)", expanded=False):
-        audio_val = st.audio_input("Di algo como: 3 brownies para el 15 de octubre.")
+    # --- 1. MÉTODO DE INGRESO ---
+    metodo = st.radio("Método:", options=["✍️ Manual", "🗣️ Voz"], horizontal=True)
+
+    if metodo == "🗣️ Voz":
+        st.info("💡 Dicta ej: '3 brownies para el 15 de octubre'")
+        audio_val = st.audio_input("Grabando...")
 
         if audio_val is not None:
             audio_bytes = audio_val.getvalue()
@@ -555,39 +559,39 @@ with tab1:
 
     if st.session_state.get("confirmacion_voz"):
         popup_voz()
-        
+
     st.divider()
 
-    # --- 2. AÑADIR PRODUCTO (TEXT INPUT) ---
-    def on_buscar_prod_change():
-        texto = st.session_state.buscar_prod.strip().upper()
-        if texto:
-            popup_manual(texto)
+    if metodo == "✍️ Manual":
+        def on_buscar_prod_change():
+            texto = st.session_state.buscar_prod.strip().upper()
+            if texto:
+                popup_manual(texto)
 
-    st.text_input(
-        "Añadir producto", 
-        placeholder="🔎 AÑADIR PRODUCTO (Presiona Enter para agregar)...", 
-        key="buscar_prod", 
-        label_visibility="collapsed",
-        on_change=on_buscar_prod_change
-    )
-    
-    if st.session_state.get('enfocar_buscador', False):
-        components.html(
-            """
-            <script>
-            setTimeout(function() {
-                const textInputs = window.parent.document.querySelectorAll('input[type="text"]');
-                if (textInputs.length > 0) {
-                    textInputs[0].focus();
-                    window.parent.scrollTo(0,0);
-                }
-            }, 100);
-            </script>
-            """,
-            height=0
+        st.text_input(
+            "Añadir producto", 
+            placeholder="🔎 AÑADIR PRODUCTO (Presiona Enter para agregar)...", 
+            key="buscar_prod", 
+            label_visibility="collapsed",
+            on_change=on_buscar_prod_change
         )
-        st.session_state.enfocar_buscador = False
+        
+        if st.session_state.get('enfocar_buscador', False):
+            components.html(
+                """
+                <script>
+                setTimeout(function() {
+                    const textInputs = window.parent.document.querySelectorAll('input[type="text"]');
+                    if (textInputs.length > 0) {
+                        textInputs[0].focus();
+                        window.parent.scrollTo(0,0);
+                    }
+                }, 100);
+                </script>
+                """,
+                height=0
+            )
+            st.session_state.enfocar_buscador = False
 
     st.divider()
     
@@ -688,3 +692,68 @@ with tab2:
             )
         with col_down2:
             st.link_button("💬 2. Abrir WhatsApp", link_st, use_container_width=True, type="primary")
+
+# ------------------------------------------------------------
+# TAB 3: REPORTE VISUAL
+# ------------------------------------------------------------
+with tab3:
+    st.markdown("### 🖼️ Reporte Visual de Sugeridos")
+
+    df_stock_visual = conn.query('SELECT nombre, cantidad, fecha_cad FROM base_anterior WHERE sucursal=:suc ORDER BY fecha_cad ASC', params={"suc": seleccion_wa}, ttl=0)
+    
+    if df_stock_visual.empty:
+        st.info("No hay sugeridos registrados para mostrar el reporte.")
+    else:
+        fecha_hora_actual = datetime.now(zona_mx).strftime("%d %m %Y - %H:%M")
+        
+        filas_html = ""
+        for i, fila in df_stock_visual.iterrows():
+            bg_color = "#fce4d6" if i % 2 == 1 else "white"
+            
+            fecha_str = str(fila['fecha_cad'])
+            try:
+                if '-' in fecha_str:
+                    partes = fecha_str.split('-')
+                    if len(partes) == 3:
+                        fecha_str = f"{partes[2]}/{partes[1]}/{partes[0]}"
+            except Exception:
+                pass
+            
+            filas_html += f"""
+            <tr style="background-color: {bg_color}; border-bottom: 1px solid #f0f0f0;">
+                <td style="padding: 12px; text-align: left; font-size: 13px;">{fila['nombre']}</td>
+                <td style="padding: 12px; font-weight: bold; color: #8C0000; font-size: 13px;">{fila['cantidad']}</td>
+                <td style="padding: 12px; font-size: 13px;">{fecha_str}</td>
+            </tr>
+            """
+            
+        html_reporte = f"""
+        <div style="background-color: white; border-radius: 15px; padding: 25px 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: black; max-width: 600px; margin: 0 auto;">
+            <div style="text-align: center; margin-bottom: 20px;">
+                <h1 style="color: #8C0000; margin: 0; font-size: 38px; font-weight: 900; letter-spacing: -0.5px;">Champlitte</h1>
+                <p style="margin: 0; font-size: 12px; letter-spacing: 3px; font-weight: 600; color: #333;">PASTELERÍA</p>
+                <h2 style="color: #8C0000; margin: 15px 0 5px 0; font-size: 22px; font-weight: 800; letter-spacing: 1px;">SUGERIDOS</h2>
+                <p style="margin: 0; font-size: 12px; font-weight: bold; color: #666;">{fecha_hora_actual}</p>
+            </div>
+            <table style="width: 100%; border-collapse: collapse; text-align: center; margin-bottom: 20px;">
+                <tr style="background-color: #8C0000; color: white; font-size: 12px; letter-spacing: 1px;">
+                    <th style="padding: 12px; text-align: left; border-top-left-radius: 8px;">PRODUCTO</th>
+                    <th style="padding: 12px;">CANTIDAD</th>
+                    <th style="padding: 12px; border-top-right-radius: 8px;">FECHA</th>
+                </tr>
+                {filas_html}
+            </table>
+        </div>
+        <p style="text-align: center; color: gray; font-size: 14px; margin-top: 15px;">Reporte generado automáticamente</p>
+        """
+        
+        st.markdown(html_reporte, unsafe_allow_html=True)
+        
+        msg_stock = "Aquí tienes los sugeridos visuales de " + seleccion_wa
+        link_st = f"https://wa.me/{numero_whatsapp.strip()}?text={urllib.parse.quote(msg_stock)}"
+        
+        st.write("")
+        st.markdown(
+            f'<a href="{link_st}" class="btn-wa" target="_blank" style="max-width: 600px; margin: 0 auto;">📞 Enviar Reporte a {seleccion_wa}</a>', 
+            unsafe_allow_html=True
+        )
