@@ -6,3 +6,5 @@ XlsxWriter
 SpeechRecognition
 SQLAlchemy
 psycopg2-binary
+streamlit-mic-recorder
+
