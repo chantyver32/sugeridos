@@ -708,7 +708,7 @@ with tab3:
     if df_visual.empty:
         st.warning(f"No hay productos registrados para {seleccion_wa}.")
     else:
-        # Generar las filas de la tabla en HTML
+        # Generar las filas de la tabla en HTML (se hace en UNA SOLA LÍNEA para evitar el bug de Markdown de Streamlit)
         filas_html = ""
         for i, fila in df_visual.iterrows():
             color_fondo = "#FFFFFF" if i % 2 == 0 else "#FFF5F5"
@@ -722,44 +722,16 @@ with tab3:
             except:
                 pass
 
-            # MODIFICADO: Quitamos la sangría a la cadena multilinea para evitar el bug de código en Streamlit
-            filas_html += f"""<tr style="background-color: {color_fondo}; border-bottom: 1px solid #f0f0f0;">
-    <td style="padding: 10px; text-align: left; color: #333; font-size: 13px;">{fila['Producto']}</td>
-    <td style="padding: 10px; text-align: center; color: #8C1C31; font-weight: bold; font-size: 14px;">{fila['Existencia']}</td>
-    <td style="padding: 10px; text-align: center; color: #555; font-size: 13px;">{fecha_str}</td>
-</tr>"""
+            filas_html += f"<tr style='background-color: {color_fondo}; border-bottom: 1px solid #f0f0f0;'><td style='padding: 10px; text-align: left; color: #333; font-size: 13px;'>{fila['Producto']}</td><td style='padding: 10px; text-align: center; color: #8C1C31; font-weight: bold; font-size: 14px;'>{fila['Existencia']}</td><td style='padding: 10px; text-align: center; color: #555; font-size: 13px;'>{fecha_str}</td></tr>"
             
         fecha_hora_actual = datetime.now(zona_mx).strftime("%d/%m/%Y %H:%M")
         
-        # Construcción de la tarjeta visual sin sangría
-        tarjeta_html = f"""<div style="background-color: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); width: 100%; max-width: 500px; margin: auto; text-align: center; margin-bottom: 20px;">
-    <h1 style="color: #6D1427; font-family: 'Times New Roman', serif; font-size: 38px; margin: 0;">Champlitte</h1>
-    <p style="font-family: sans-serif; font-size: 10px; font-weight: bold; letter-spacing: 3px; margin: 0 0 20px 0; color: #000;">PASTELERÍA</p>
-    
-    <h2 style="color: #6D1427; font-family: sans-serif; font-weight: 900; margin: 0; font-size: 22px;">SUGERIDOS {seleccion_wa.upper()}</h2>
-    <p style="font-family: sans-serif; font-size: 12px; font-weight: bold; color: #666; margin: 5px 0 20px 0;">{fecha_hora_actual}</p>
-    
-    <table style="width: 100%; border-collapse: collapse; font-family: sans-serif;">
-        <thead>
-            <tr style="background-color: #8C1C31; color: white;">
-                <th style="padding: 12px; text-align: left; font-size: 11px; letter-spacing: 1px;">PRODUCTO</th>
-                <th style="padding: 12px; text-align: center; font-size: 11px; letter-spacing: 1px;">CANTIDAD</th>
-                <th style="padding: 12px; text-align: center; font-size: 11px; letter-spacing: 1px;">FECHA</th>
-            </tr>
-        </thead>
-        <tbody>
-            {filas_html}
-        </tbody>
-    </table>
-</div>
-<p style="text-align: center; color: gray; font-size: 13px; margin-top: 15px; margin-bottom: 20px;">Reporte generado automáticamente</p>"""
+        # Construcción de la tarjeta visual en una sola línea continua
+        tarjeta_html = f"<div style='background-color: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); width: 100%; max-width: 500px; margin: auto; text-align: center; margin-bottom: 20px;'><h1 style='color: #6D1427; font-family: \"Times New Roman\", serif; font-size: 38px; margin: 0;'>Champlitte</h1><p style='font-family: sans-serif; font-size: 10px; font-weight: bold; letter-spacing: 3px; margin: 0 0 20px 0; color: #000;'>PASTELERÍA</p><h2 style='color: #6D1427; font-family: sans-serif; font-weight: 900; margin: 0; font-size: 22px;'>SUGERIDOS {seleccion_wa.upper()}</h2><p style='font-family: sans-serif; font-size: 12px; font-weight: bold; color: #666; margin: 5px 0 20px 0;'>{fecha_hora_actual}</p><table style='width: 100%; border-collapse: collapse; font-family: sans-serif;'><thead><tr style='background-color: #8C1C31; color: white;'><th style='padding: 12px; text-align: left; font-size: 11px; letter-spacing: 1px;'>PRODUCTO</th><th style='padding: 12px; text-align: center; font-size: 11px; letter-spacing: 1px;'>CANTIDAD</th><th style='padding: 12px; text-align: center; font-size: 11px; letter-spacing: 1px;'>FECHA</th></tr></thead><tbody>{filas_html}</tbody></table></div><p style='text-align: center; color: gray; font-size: 13px; margin-top: 15px; margin-bottom: 20px;'>Reporte generado automáticamente</p>"
         
         st.markdown(tarjeta_html, unsafe_allow_html=True)
         
-        # Botón estilo WhatsApp sin sangría
+        # Botón estilo WhatsApp
         link_wp = f"https://wa.me/{numero_whatsapp.strip()}"
-        boton_wp_html = f"""<a href="{link_wp}" target="_blank" style="display: block; width: 100%; max-width: 500px; margin: auto; background-color: #25D366; color: white; text-align: center; padding: 15px; border-radius: 10px; font-size: 18px; font-weight: bold; text-decoration: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: background-color 0.3s;">
-    📞 Enviar Reporte a {seleccion_wa.upper()}
-</a>
-<br><br>"""
+        boton_wp_html = f"<a href='{link_wp}' target='_blank' style='display: block; width: 100%; max-width: 500px; margin: auto; background-color: #25D366; color: white; text-align: center; padding: 15px; border-radius: 10px; font-size: 18px; font-weight: bold; text-decoration: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: background-color 0.3s;'>📞 Enviar Reporte a {seleccion_wa.upper()}</a><br><br>"
         st.markdown(boton_wp_html, unsafe_allow_html=True)
