@@ -8,8 +8,6 @@ import io
 import re
 import os
 import streamlit.components.v1 as components
-from streamlit_mic_recorder import speech_to_text 
-from PIL import Image, ImageDraw, ImageFont # <-- IMPORTACIONES DE IMAGEN AÑADIDAS
 
 # ------------------ CONFIGURACIÓN GENERAL ------------------
 with st.spinner('Iniciando sistema Champlitte... 🥐'):
@@ -25,9 +23,13 @@ st.markdown("""
         background-color: transparent !important;
         font-weight: bold !important;
     }
+    
+    /* Ajuste equilibrado del espacio superior */
     .block-container { padding-top: 3rem; padding-bottom: 1rem; }
+    
     .main { background-color: #f5f7f9; }
     
+    /* FIX: Remover sombras (ghosting) y duplicados en los botones normales y de formulario */
     .stButton > button, 
     .stFormSubmitButton > button { 
         width: 100%; 
@@ -44,16 +46,33 @@ st.markdown("""
         transform: none !important;
     }
 
+    /* Eliminar transiciones de renderizado en los contenedores y formularios */
     [data-testid="stElementContainer"], 
     [data-testid="stForm"] {
         transition: none !important;
         animation: none !important;
     }
     
+    .btn-wa {
+        background-color: #25D366;
+        color: white !important;
+        padding: 10px 20px;
+        text-align: center;
+        text-decoration: none !important;
+        display: block;
+        font-size: 14px;
+        font-weight: bold;
+        border-radius: 8px;
+        margin: 10px 0;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .btn-wa:hover { background-color: #128C7E; }
+    
     div[data-testid="stMetricValue"] { font-size: 28px; color: #1f77b4; }
     div[data-testid="stMetricDelta"] { font-size: 30px !important; font-weight: bold !important; }
     div[data-testid="stMetricDelta"] svg { width: 35px !important; height: 35px !important; }
 
+    /* ESTILO OSCURO PARA LISTAS DESPLEGABLES */
     div[data-baseweb="popover"] > div {
         background-color: #1a1a1c !important; 
         border-radius: 8px !important;
@@ -69,19 +88,23 @@ st.markdown("""
         padding-bottom: 10px !important;
     }
     div[data-baseweb="popover"] li:hover { background-color: #2d2d30 !important; }
+    
     div[data-baseweb="popover"] li[aria-selected="true"] {
         background-color: #3a3b3e !important; 
         font-weight: bold !important;
     }
+
     div[data-baseweb="select"] > div {
         background-color: #1a1a1c !important; 
         border-radius: 8px !important;
         border: 1px solid rgba(255, 255, 255, 0.2) !important;
     }
+
     div[data-baseweb="select"] > div:focus-within {
         border-color: #ff4b4b !important; 
         box-shadow: 0 0 0 1px #ff4b4b !important;
     }
+
     div[data-baseweb="select"] div { color: #FFFFFF !important; }
     div[data-baseweb="select"] svg { fill: #FFFFFF !important; }
     </style>
@@ -100,19 +123,6 @@ if "show_error" in st.session_state:
 if "show_warning" in st.session_state:
     st.warning(st.session_state.show_warning)
     del st.session_state.show_warning
-
-# ------------------ DICCIONARIO EMPAQUES (PARA REPORTE) ------------------
-EMPAQUES = {
-    "CUBILETE": {"categoria": "Dulce", "piezas_x_paq": 16},
-    "TUTI": {"categoria": "Dulce", "piezas_x_paq": 27},
-    "JAMÓN": {"categoria": "Salado", "piezas_x_paq": 9},
-    "COCHINITA": {"categoria": "Salado", "piezas_x_paq": 9},
-    "PICADILLO": {"categoria": "Salado", "piezas_x_paq": 9},
-    "PIERNA": {"categoria": "Salado", "piezas_x_paq": 9},
-    "CHORIZO": {"categoria": "Salado", "piezas_x_paq": 20},
-    "SALCHICHA": {"categoria": "Salado", "piezas_x_paq": 20},
-    "HOJALDRA": {"categoria": "Mixta", "piezas_x_paq": 48},
-}
 
 # ------------------ BASE DE DATOS (SUPABASE) ------------------
 db_url = os.environ.get("DATABASE_URL")
@@ -172,7 +182,7 @@ def verificar_login():
 if not verificar_login():
     st.stop()
 
-# ------------------ FUNCIONES LOGICAS ------------------
+# ------------------ FUNCIONES ------------------
 def sonido_click():
     st.markdown(
         """
@@ -182,6 +192,94 @@ def sonido_click():
         """,
         unsafe_allow_html=True
     )
+
+def sumar(valor):
+    st.session_state.conteo_temp += valor
+    sonido_click()
+
+def resetear():
+    st.session_state.conteo_temp = 0
+    sonido_click()
+
+def limpiar_buscador():
+    st.session_state.buscar_prod = ""
+
+def generar_excel_formato(df, sucursal, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.", elabora="PEDRO GARCÍA"):
+    output = io.BytesIO()
+    writer = pd.ExcelWriter(output, engine='xlsxwriter')
+    workbook = writer.book
+    sheet = workbook.add_worksheet('SUGERIDOS')
+
+    sheet.hide_gridlines(2)
+
+    color_guinda = '#8C0000'
+    color_sombreado_rojo = '#FCE4D6' 
+    
+    fmt_titulo = workbook.add_format({'bold': True, 'font_color': 'white', 'bg_color': color_guinda, 'align': 'center', 'valign': 'vcenter', 'font_size': 14, 'border': 1})
+    fmt_subtitulo = workbook.add_format({'bold': True, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 11})
+    fmt_etiqueta = workbook.add_format({'bold': True, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10})
+    fmt_valor = workbook.add_format({'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10})
+    fmt_header_tabla = workbook.add_format({'bold': True, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10})
+    
+    fmt_datos_centro = workbook.add_format({'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10})
+    fmt_sombreado = workbook.add_format({'bg_color': color_sombreado_rojo, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10})
+
+    sheet.set_column('A:A', 15)  
+    sheet.set_column('B:B', 35)  
+    sheet.set_column('C:C', 12)  
+    sheet.set_column('D:D', 22)  
+
+    sheet.set_row(0, 30)
+    sheet.merge_range('A1:D1', titulo, fmt_titulo)
+    sheet.merge_range('A2:D2', 'SUGERIDOS DEL DÍA', fmt_subtitulo)
+
+    sheet.write('A3', 'SUCURSAL', fmt_etiqueta)
+    sheet.merge_range('B3:D3', sucursal.upper(), fmt_valor)
+    
+    sheet.write('A4', 'FECHA', fmt_etiqueta)
+    fecha_str = datetime.now(pytz.timezone('America/Mexico_City')).strftime("%d/%m/%Y")
+    sheet.merge_range('B4:D4', fecha_str, fmt_valor)
+    
+    sheet.write('A5', 'ELABORA', fmt_etiqueta)
+    sheet.merge_range('B5:D5', elabora, fmt_valor)
+
+    sheet.write('A6', '', fmt_valor)
+    sheet.write('B6', 'DESCRIPCIÓN', fmt_header_tabla)
+    sheet.write('C6', 'CANTIDAD', fmt_header_tabla)
+    sheet.write('D6', 'FECHA', fmt_header_tabla)
+
+    row = 6
+    if not df.empty:
+        col_nombre = 'Producto' if 'Producto' in df.columns else 'nombre'
+        col_cant = 'Existencia' if 'Existencia' in df.columns else 'cantidad'
+        col_fecha = 'Fecha' if 'Fecha' in df.columns else 'fecha_cad'
+
+        df = df.sort_values(by=col_fecha).reset_index(drop=True)
+        fecha_proxima_vencer = df[col_fecha].min()
+
+        for _, fila in df.iterrows():
+            formato_actual = fmt_sombreado if fila[col_fecha] == fecha_proxima_vencer else fmt_datos_centro
+            
+            fecha_str_out = str(fila[col_fecha])
+            try:
+                if '-' in fecha_str_out:
+                    partes = fecha_str_out.split('-')
+                    if len(partes) == 3:
+                        fecha_str_out = f"{partes[2]}/{partes[1]}/{partes[0]}"
+            except Exception:
+                pass
+            
+            sheet.write(row, 0, '', fmt_valor) 
+            sheet.write(row, 1, str(fila[col_nombre]), formato_actual) 
+            sheet.write(row, 2, fila[col_cant], formato_actual)
+            sheet.write(row, 3, fecha_str_out, formato_actual) 
+            row += 1
+
+    last_row = row - 1 if row > 6 else 6
+    sheet.autofilter(5, 1, last_row, 3)
+
+    writer.close()
+    return output.getvalue()
 
 def analizar_dictado(texto, fecha_base):
     texto = texto.lower()
@@ -207,9 +305,6 @@ def analizar_dictado(texto, fecha_base):
         except ValueError:
             pass
         texto = texto.replace(match_fecha.group(0), "")
-    elif "extra" in texto:
-        fecha_calc = fecha_base + timedelta(days=3)
-        texto = texto.replace("extra", "")
     elif "pasado mañana" in texto or "día más" in texto or "dia mas" in texto:
         fecha_calc = fecha_base + timedelta(days=2)
         texto = texto.replace("pasado mañana", "").replace("día más", "").replace("diamas", "")
@@ -231,112 +326,6 @@ def analizar_dictado(texto, fecha_base):
     producto = re.sub(r'\s+', ' ', texto).strip().upper()
     return producto, cantidad, fecha_calc
 
-def guardar_manual(sucursal, prod, cant, fech):
-    with conn.session as s:
-        existe = s.execute(text("SELECT cantidad FROM base_anterior WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
-                           {"nom": prod, "fec": str(fech), "suc": sucursal}).fetchone()
-        if existe:
-            s.execute(text("UPDATE base_anterior SET cantidad=cantidad+:can WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
-                      {"can": int(cant), "nom": prod, "fec": str(fech), "suc": sucursal})
-        else:
-            s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
-                      {"suc": sucursal, "nom": prod, "fec": str(fech), "can": int(cant)})
-        s.commit()
-    st.session_state.show_toast = f"✅ Guardado: {cant} {prod}"
-
-# ------------------ FUNCIONES IMAGEN Y BOTON WA ------------------
-def get_font(names, size):
-    for name in names:
-        try: return ImageFont.truetype(name, size)
-        except: continue
-    return ImageFont.load_default()
-
-def dibujar_logo_texto(draw, width, color_vino, color_texto_oscuro):
-    font_champlitte = get_font(["DejaVuSerif-Bold.ttf", "georgiab.ttf", "Times-Bold.ttf", "arialbd.ttf"], 75)
-    font_pasteleria = get_font(["DejaVuSans-Bold.ttf", "arialbd.ttf", "Helvetica-Bold.ttf"], 22)
-    draw.text((width//2, 60), "Champlitte", fill=color_vino, font=font_champlitte, anchor="mm")
-    draw.text((width//2, 130), "PASTELERÍA", fill=color_texto_oscuro, font=font_pasteleria, anchor="mm")
-
-def generar_plantilla_sugeridos(datos, fecha_str):
-    width = 900
-    espacio_logo = 175 
-    header_height = 130
-    table_header_height = 45
-    row_height = 55
-    total_height = espacio_logo + header_height + table_header_height + (max(1, len(datos)) * row_height) + 40
-
-    img = Image.new('RGB', (width, total_height), color=(255, 253, 251))
-    draw = ImageDraw.Draw(img)
-
-    WINE, WINE_LIGHT, TEXT_DARK, WHITE = (128, 21, 43), (160, 40, 70), (40, 40, 40), (255, 255, 255)
-    ROW_ALT, LINE_COLOR = (253, 243, 243), (235, 220, 225) 
-
-    font_title = get_font(["DejaVuSans-Bold.ttf", "arialbd.ttf"], 42)
-    font_sub = get_font(["DejaVuSans.ttf", "arial.ttf"], 18)
-    font_th = get_font(["DejaVuSans-Bold.ttf", "arialbd.ttf"], 13)
-    font_td = get_font(["DejaVuSans.ttf", "arial.ttf"], 15)
-    font_badge = get_font(["DejaVuSans-Bold.ttf", "arialbd.ttf"], 11)
-
-    dibujar_logo_texto(draw, width, WINE, TEXT_DARK)
-
-    y = espacio_logo
-    draw.text((width//2, y + 35), "SUGERIDOS", fill=WINE, font=font_title, anchor="mm")
-    draw.text((width//2, y + 85), fecha_str, fill=TEXT_DARK, font=font_sub, anchor="mm")
-
-    y += header_height
-    draw.rectangle([0, y, width, y + table_header_height], fill=WINE)
-    
-    col_prod, col_linea, col_cant, col_totales = 200, 520, 680, 820
-    draw.text((col_prod, y + 22), "PRODUCTO", fill=WHITE, font=font_th, anchor="mm")
-    draw.text((col_linea, y + 22), "CATEGORÍA", fill=WHITE, font=font_th, anchor="mm")
-    draw.text((col_cant, y + 22), "PAQUETE + PIEZAS", fill=WHITE, font=font_th, anchor="mm")
-    draw.text((col_totales, y + 22), "TOTAL (PIEZAS)", fill=WHITE, font=font_th, anchor="mm")
-
-    y += table_header_height
-    if not datos:
-        draw.rectangle([0, y, width, y + row_height], fill=WHITE)
-        draw.text((width//2, y + (row_height//2)), "No hay sugeridos registrados", fill=TEXT_DARK, font=font_td, anchor="mm")
-        y += row_height
-    else:
-        for item in datos:
-            bg_color = WHITE if datos.index(item) % 2 == 0 else ROW_ALT
-            draw.rectangle([0, y, width, y + row_height], fill=bg_color)
-            draw.line([420, y, 420, y + row_height], fill=LINE_COLOR, width=1)
-            draw.line([600, y, 600, y + row_height], fill=LINE_COLOR, width=1)
-            draw.line([750, y, 750, y + row_height], fill=LINE_COLOR, width=1)
-
-            draw.text((30, y + (row_height//2)), str(item.get("producto", "")), fill=TEXT_DARK, font=font_td, anchor="lm")
-
-            linea_texto = str(item.get("linea", ""))
-            badge_bg = WINE_LIGHT if "Mixta" in linea_texto else ((252, 230, 230) if "Dulce" in linea_texto else WINE)
-            badge_text = WHITE if "Mixta" in linea_texto else (WINE if "Dulce" in linea_texto else WHITE)
-
-            badge_w, badge_h = 130, 26
-            badge_x = col_linea - (badge_w//2)
-            badge_y = y + (row_height//2) - (badge_h//2)
-            if linea_texto != "-":
-                draw.rounded_rectangle([badge_x, badge_y, badge_x + badge_w, badge_y + badge_h], radius=13, fill=badge_bg)
-                draw.text((col_linea, y + (row_height//2)), linea_texto.upper(), fill=badge_text, font=font_badge, anchor="mm")
-
-            draw.text((col_cant, y + (row_height//2)), str(item.get("cantidad", "")), fill=TEXT_DARK, font=font_th, anchor="mm")
-            draw.text((col_totales, y + (row_height//2)), str(item.get("totales", "0")), fill=WINE, font=font_th, anchor="mm")
-
-            draw.line([0, y + row_height, width, y + row_height], fill=LINE_COLOR, width=1)
-            y += row_height
-
-    img.save("reporte_sugeridos.png")
-    return "reporte_sugeridos.png"
-
-def boton_whatsapp_bonito(url, texto):
-    html_wa = f"""
-    <a href="{url}" target="_blank" style="background-color: #25D366; color: white; text-align: center; padding: 12px 20px; border-radius: 8px; text-decoration: none; font-weight: bold; font-family: sans-serif; display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; box-sizing: border-box; font-size: 16px;">
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16"><path d="M11.42 9.49c-.19-.09-1.1-.54-1.27-.61s-.29-.09-.41.1-.48.61-.59.73-.21.14-.4.05a5.1 5.1 0 0 1-1.5-.92 5.54 5.54 0 0 1-1.04-1.29c-.11-.18 0-.28.09-.38.08-.09.19-.21.28-.32a1.36 1.36 0 0 0 .19-.32.54.54 0 0 0-.03-.52c-.05-.09-.41-1-.56-1.37-.15-.36-.3-.31-.41-.31h-.35a.68.68 0 0 0-.49.23 2.06 2.06 0 0 0-.64 1.53c0 1.22 1.25 2.4 1.42 2.63.17.23 1.79 2.73 4.33 3.82.6.26 1.07.41 1.44.53.6.19 1.15.16 1.58.1.48-.07 1.47-.6 1.68-1.18.21-.58.21-1.07.15-1.18-.06-.1-.23-.15-.42-.24zM8 14.5a6.5 6.5 0 1 1 0-13 6.5 6.5 0 0 1 0 13zM8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0z"/></svg>
-        {texto}
-    </a>
-    <br>
-    """
-    st.markdown(html_wa, unsafe_allow_html=True)
-
 # ------------------ SIDEBAR ------------------
 st.sidebar.markdown("### 🏢 Datos de Sesión")
 st.sidebar.caption(f"👤 Conectado como: **{st.session_state.get('usuario_actual', 'Usuario')}**")
@@ -349,7 +338,7 @@ if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True):
 st.sidebar.divider()
 
 opciones_wa = {
-    "URANO": "522291653665", "COSTA DE ORO": "522292780850", "COSTA VERDE": "522299359597",
+    "URANO": "522281342454", "COSTA DE ORO": "522292780850", "COSTA VERDE": "522299359597",
     "DÍAZ MIRÓN": "522291302759", "EJÉRCITO MEXICANO": "522299272107", "PLAZA RÍO": "522299864120",
     "PLAYAS DEL CONCHAL": "522291794020", "COYOL": "522299398334", "LA PLACITA": "522299208481",
     "CUAUHTÉMOC": "522291651340", "MARIO MOLINA": "522291780851", "RAFAEL CUERVO": "522291980229",
@@ -360,45 +349,89 @@ opciones_wa = {
     "MURILLO VIDAL": "522286886443", "ARAUCARIAS": "522281177133", "ÁVILA CAMACHO": "522288170989",
     "EMILIANO ZAPATA": "522969628525"
 }
-
-# Pre-seleccionar Urano por defecto
-lista_tiendas = list(opciones_wa.keys())
-idx_defecto = lista_tiendas.index("URANO") if "URANO" in lista_tiendas else 0
-seleccion_wa = st.sidebar.selectbox("📍 Selecciona la Sucursal", lista_tiendas, index=idx_defecto)
+seleccion_wa = st.sidebar.selectbox("📍 Selecciona la Sucursal", list(opciones_wa.keys()))
 numero_whatsapp = opciones_wa[seleccion_wa]
 st.sidebar.caption(f"📱 WhatsApp: **{numero_whatsapp}**")
 
 st.sidebar.divider()
 
+st.sidebar.markdown("### 💾 Respaldo de Base de Datos")
+st.sidebar.info(f"Guarda o restaura tu stock específicamente para {seleccion_wa}.")
+archivo_csv = st.sidebar.file_uploader("⬆️ Subir Respaldo CSV", type=["csv"])
+
+if archivo_csv is not None:
+    if st.sidebar.button("🔄 Cargar y Restaurar Stock", use_container_width=True):
+        try:
+            df_restaurar = pd.read_csv(archivo_csv)
+            if 'Producto' in df_restaurar.columns:
+                df_restaurar = df_restaurar.rename(columns={'Producto': 'nombre', 'Caducidad': 'fecha_cad', 'Fecha': 'fecha_cad', 'Existencia': 'cantidad'})
+            
+            with conn.session as s:
+                s.execute(text("DELETE FROM base_anterior WHERE sucursal = :suc"), {"suc": seleccion_wa})
+                for _, fila in df_restaurar.iterrows():
+                    s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"),
+                              {"suc": seleccion_wa, "nom": str(fila['nombre']).upper(), "fec": str(fila['fecha_cad']), "can": int(fila['cantidad'])})
+                s.commit()
+            
+            st.session_state.show_toast = "✅ Inventario restaurado correctamente para " + seleccion_wa
+            st.rerun()
+        except Exception as e:
+            st.sidebar.error(f"⚠️ Error al restaurar: {e}")
+
+st.sidebar.divider()
+
 if st.session_state.get('usuario_actual', '').lower() == 'admin':
     with st.sidebar.expander("🚨 Zona de Peligro"):
-        st.warning("¡ATENCIÓN! Esto borrará el inventario.")
-        confirmar_reset = st.checkbox("Confirmar reseteo", key="check_reset")
-        if st.button("⚠️ EJECUTAR RESET TOTAL", use_container_width=True):
+        st.warning("¡ATENCIÓN! Esto borrará el inventario de TODAS las sucursales.")
+        confirmar_reset = st.checkbox("Confirmar que deseo borrar toda la base de datos", key="check_reset")
+        
+        if st.button("⚠️ EJECUTAR RESET TOTAL", use_keyword_width=True if "use_keyword_width" in dir(st) else False, use_container_width=True):
             if confirmar_reset:
                 with conn.session as s:
                     s.execute(text("TRUNCATE TABLE captura_actual RESTART IDENTITY"))
                     s.execute(text("TRUNCATE TABLE base_anterior RESTART IDENTITY"))
                     s.execute(text("TRUNCATE TABLE historial_ventas RESTART IDENTITY"))
                     s.commit()
+                    
                 st.session_state.show_toast = "✅ Base de datos limpiada por completo."
                 st.rerun()
+            else:
+                st.sidebar.error("Debes confirmar primero seleccionando la casilla.")
+
 
 # ------------------------------------------------------------
-# DEFINICIÓN DE POP-UPS (st.dialog)
+# LÓGICA DE CALLBACKS PARA POPUP VOZ (Evita Bugs y Ghosting)
 # ------------------------------------------------------------
 def guardar_datos_voz(sucursal):
     cant = st.session_state.voz_input_cant
     prod = st.session_state.voz_input_prod.strip().upper()
     fech = st.session_state.voz_input_fech
+    
     if not prod:
         st.session_state.show_error = "El nombre no puede estar vacío."
         return
-    guardar_manual(sucursal, prod, cant, fech)
+        
+    with conn.session as s:
+        existe_stock = s.execute(text("SELECT cantidad FROM base_anterior WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                                 {"nom": prod, "fec": str(fech), "suc": sucursal}).fetchone()
+        if existe_stock:
+            s.execute(text("UPDATE base_anterior SET cantidad=cantidad+:can WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                      {"can": int(cant), "nom": prod, "fec": str(fech), "suc": sucursal})
+        else:
+            s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
+                      {"suc": sucursal, "nom": prod, "fec": str(fech), "can": int(cant)})
+        s.commit()
+        
     st.session_state.confirmacion_voz = None
     st.session_state.audio_leido = False
+    st.session_state.buscar_prod = ""
+    st.session_state.show_toast = f"✅ Ingreso directo: {int(cant)} {prod}"
 
-@st.dialog("🗣️ Confirmar Dictado")
+# ------------------------------------------------------------
+# DEFINICIÓN DE POP-UPS (st.dialog)
+# ------------------------------------------------------------
+
+@st.dialog("🗣️")
 def popup_voz():
     datos = st.session_state.get("confirmacion_voz")
     if not datos:
@@ -421,135 +454,158 @@ def popup_voz():
         st.session_state.audio_leido = True
         
     st.success(f"**Escuché:** '{datos['original']}'")
+    
     st.number_input("Cantidad", value=int(datos['cant']), min_value=1, key="voz_input_cant")
     st.text_input("Producto", value=datos['prod'], key="voz_input_prod")
     st.date_input("Fecha", value=datos['fecha'], key="voz_input_fech")
     
     st.button("🥖 Ingreso directo", use_container_width=True, type="primary", on_click=guardar_datos_voz, args=(seleccion_wa,))
 
-@st.dialog("✏️ Entrada Manual")
-def popup_manual(nombre_final):
-    st.markdown(f"### 📦 {nombre_final}")
-    
-    fecha_sugerido = fecha_hoy_mx + timedelta(days=1)
-    fecha_dia_mas = fecha_hoy_mx + timedelta(days=2)
-    fecha_extra = fecha_hoy_mx + timedelta(days=3) 
+# ------------------ INTERFAZ PRINCIPAL CON TRES PESTAÑAS ------------------
+st.markdown("# Stock y Horneado")
 
-    cant_manual = st.number_input("Cantidad a registrar:", min_value=1, value=1, key="cant_manual_in")
+tab1, tab2, tab3 = st.tabs(["📥 Entradas", "🥐 Horneado", "🖼️ Reporte Visual"])
 
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        if st.button(f"Sugerido\n({fecha_sugerido.strftime('%d/%m')})", use_container_width=True):
-            guardar_manual(seleccion_wa, nombre_final, cant_manual, fecha_sugerido)
-            st.rerun()
-    with col2:
-        if st.button(f"Día más\n({fecha_dia_mas.strftime('%d/%m')})", use_container_width=True):
-            guardar_manual(seleccion_wa, nombre_final, cant_manual, fecha_dia_mas)
-            st.rerun()
-    with col3:
-        if st.button(f"Extra\n({fecha_extra.strftime('%d/%m')})", use_container_width=True):
-            guardar_manual(seleccion_wa, nombre_final, cant_manual, fecha_extra)
-            st.rerun()
-
-# ------------------------------------------------------------
-# INTERFAZ PRINCIPAL (TABS)
-# ------------------------------------------------------------
-st.title("🥐 Sugeridos - Champlitte")
-
-tab1, tab2, tab3 = st.tabs(["📝 Captura", "📋 Datos Excel", "🖼️ Reporte Visual"])
-
-# ---------- PESTAÑA 1: CAPTURA ----------
 with tab1:
-    st.header("Registrar Nuevo Sugerido")
-    tipo_entrada = st.radio("Método:", ["✍️ Manual", "🗣️ Voz"], horizontal=True)
+    st.markdown("### Registrar Nueva Mercancía")
+    st.markdown("Método:")
     
-    if tipo_entrada == "🗣️ Voz":
-        st.info("💡 Dicta ej: 'Sugerido dos cubiletes para mañana'")
-        texto_capturado = speech_to_text(
-            language='es-MX',                 
-            start_prompt="🎙️ Toca para Dictar", 
-            stop_prompt="🔴 Grabando...",     
-            use_container_width=True,         
-            just_once=True,                   
-            key='boton_dictado_sugeridos'             
-        )
-        if texto_capturado:
-            prod, cant, fech = analizar_dictado(texto_capturado, fecha_hoy_mx)
-            st.session_state.confirmacion_voz = {
-                'original': texto_capturado,
-                'prod': prod,
-                'cant': cant,
-                'fecha': fech
-            }
-            popup_voz()
+    metodo_input = st.radio("Método de captura", ["🛠️ Manual", "🗣️ Voz"], horizontal=True, label_visibility="collapsed")
     
-    else: # Modo Manual
-        producto_buscado = st.text_input("🔍 Buscar o registrar producto manualmente:", placeholder="Ej. Cubiletes")
-        if st.button("Abrir registro manual", type="secondary", use_container_width=True):
-            if producto_buscado:
-                popup_manual(producto_buscado.upper())
-            else:
-                st.warning("Escribe un producto primero.")
-
-# ---------- PESTAÑA 2: DATOS EXCEL ----------
-with tab2:
-    st.subheader("📋 Resumen Rápido de Inventario")
-    df_resumen = conn.query("SELECT nombre, cantidad, fecha_cad FROM base_anterior WHERE sucursal = :suc", params={"suc": seleccion_wa}, ttl=0)
-
-    if not df_resumen.empty:
-        st.dataframe(df_resumen, use_container_width=True)
+    if "🛠️ Manual" in metodo_input:
+        with st.form("form_manual_entrada"):
+            prod_m = st.text_input("Producto:")
+            cant_m = st.number_input("Cantidad:", min_value=1, value=1)
+            fech_m = st.date_input("Fecha de Caducidad:", value=fecha_hoy_mx + timedelta(days=1))
+            submit_m = st.form_submit_button("Guardar Entrada Manual", type="primary", use_container_width=True)
+            
+            if submit_m:
+                if prod_m.strip():
+                    with conn.session as s:
+                        s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"),
+                                  {"suc": seleccion_wa, "nom": prod_m.strip().upper(), "fec": str(fech_m), "can": int(cant_m)})
+                        s.commit()
+                    st.success(f"✅ Registrado correctamente: {cant_m} {prod_m.strip().upper()}")
+                else:
+                    st.error("⚠️ El nombre del producto no puede estar vacío.")
     else:
-        st.info(f"No hay sugeridos registrados actualmente para {seleccion_wa}.")
-
-# ---------- PESTAÑA 3: REPORTE VISUAL ----------
-with tab3:
-    st.header("Generar Reporte Visual")
-    
-    df_resumen = conn.query("SELECT nombre, cantidad FROM base_anterior WHERE sucursal = :suc", params={"suc": seleccion_wa}, ttl=0)
-    
-    datos_plantilla = []
-    fecha_img_str = datetime.now(zona_mx).strftime('%d %m %Y - %H:%M')
-    
-    if not df_resumen.empty:
-        # Agrupar por nombre por si hay repetidos en la BD para sacar el total
-        df_agrupado = df_resumen.groupby('nombre')['cantidad'].sum().reset_index()
+        st.markdown("""
+        <div style="background-color: #1e3a5f; padding: 12px; border-radius: 8px; color: white; margin-bottom: 10px;">
+            💡 Dicta ej: 'Llegaron dos paquetes y cinco piezas de tutis'
+        </div>
+        """, unsafe_allow_html=True)
         
-        for index, row in df_agrupado.iterrows():
-            prod_db = str(row['nombre']).upper()
-            totales = int(row['cantidad'])
-            
-            linea = "-"
-            cant_texto = f"{totales} pz"
-            
-            # Buscar coincidencia en diccionario para calcular paquetes
-            for p_key, p_data in EMPAQUES.items():
-                if p_key in prod_db:
-                    linea = p_data["categoria"]
-                    pz_x_paq = p_data["piezas_x_paq"]
-                    paquetes = totales // pz_x_paq
-                    sueltas = totales % pz_x_paq
-                    
-                    if paquetes > 0 and sueltas == 0:
-                        cant_texto = f"{paquetes} pq"
-                    elif paquetes == 0 and sueltas > 0:
-                        cant_texto = f"{sueltas} pz"
-                    else:
-                        cant_texto = f"{paquetes} pq + {sueltas} pz"
-                    break
-                    
-            datos_plantilla.append({
-                "producto": prod_db,
-                "linea": linea,
-                "cantidad": cant_texto,
-                "totales": totales
-            })
-            
-    ruta_img = generar_plantilla_sugeridos(datos_plantilla, fecha_img_str)
-    st.image(ruta_img, caption="Reporte generado automáticamente", use_container_width=True)
-    
-    if seleccion_wa:
-        mensaje_wa = f"Sugeridos ({seleccion_wa} | {fecha_img_str})"
-        url_wa = f"https://wa.me/{numero_whatsapp}?text={urllib.parse.quote(mensaje_wa)}"
-        boton_whatsapp_bonito(url_wa, f"Enviar Reporte a {seleccion_wa}")
+        # Componente de voz adaptado con botón a lo largo idéntico al de las capturas
+        componentes_voz_html = """
+        <div style="width: 100%;">
+            <button id="micBtn" onclick="toggleDictation()" style="width: 100%; background-color: #1f1f23; color: white; border: 1px solid rgba(255,255,255,0.2); padding: 14px; border-radius: 8px; font-weight: bold; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px;">
+                🎤 Toca para Dictar
+            </button>
+            <p id="status" style="color: #a0a0a0; font-size: 13px; text-align: center; margin-top: 5px;"></p>
+        </div>
+
+        <script>
+            let recognizing = false;
+            let recognition;
+
+            if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                recognition = new SpeechRecognition();
+                recognition.lang = 'es-MX';
+                recognition.continuous = false;
+                recognition.interimResults = false;
+
+                recognition.onstart = function() {
+                    recognizing = true;
+                    const btn = document.getElementById('micBtn');
+                    btn.style.backgroundColor = '#8c0000';
+                    btn.style.border = '2px dashed white';
+                    btn.innerHTML = '🔴 Grabando...';
+                };
+
+                recognition.onresult = function(event) {
+                    const text = event.results[0][0].transcript;
+                    document.getElementById('status').innerText = "Procesando: " + text;
+                    window.parent.postMessage({type: 'streamlit:setComponentValue', value: text}, '*');
+                };
+
+                recognition.onerror = function(event) {
+                    recognizing = false;
+                    resetButton();
+                };
+
+                recognition.onend = function() {
+                    recognizing = false;
+                    resetButton();
+                };
+            } else {
+                document.getElementById('micBtn').innerText = "❌ Navegador sin soporte de voz";
+            }
+
+            function toggleDictation() {
+                if (!recognition) return;
+                if (recognizing) {
+                    recognition.stop();
+                } else {
+                    recognition.start();
+                }
+            }
+
+            function resetButton() {
+                const btn = document.getElementById('micBtn');
+                btn.style.backgroundColor = '#1f1f23';
+                btn.style.border = '1px solid rgba(255,255,255,0.2)';
+                btn.innerHTML = '🎤 Toca para Dictar';
+            }
+        </script>
+        """
+        texto_dictado = components.html(componentes_voz_html, height=75)
+        
+        if texto_dictado:
+            prod_v, cant_v, fech_v = analizar_dictado(str(texto_dictado), fecha_hoy_mx)
+            if prod_v:
+                st.session_state.confirmacion_voz = {
+                    "original": str(texto_dictado),
+                    "prod": prod_v,
+                    "cant": cant_v,
+                    "fecha": fech_v
+                }
+                popup_voz()
+            else:
+                st.markdown(f"""
+                <div style="background-color: #5c1d1d; padding: 12px; border-radius: 8px; color: #ff9999; margin-top: 10px; border: 1px solid #ff4b4b;">
+                    ❌ No entendí: '{texto_dictado}'. Intenta de nuevo indicando producto y cantidad.
+                </div>
+                """, unsafe_allow_html=True)
+
+with tab2:
+    st.markdown("### 🥐 Control de Horneado y Salidas")
+    df_horneado = conn.query("SELECT nombre, fecha_cad, cantidad FROM base_anterior WHERE sucursal = :suc", params={"suc": seleccion_wa}, ttl=0)
+    if not df_horneado.empty:
+        st.dataframe(df_horneado, use_container_width=True)
     else:
-        st.info("ℹ️ Selecciona una sucursal en el menú lateral para enviar por WhatsApp.")
+        st.info("No hay registros de inventario actuales para esta sucursal.")
+
+with tab3:
+    st.markdown("### 🖼️ Reporte Visual de Stock")
+    
+    st.markdown("""
+    <div style="background-color: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); color: #222; text-align: center; margin-bottom: 15px;">
+        <h2 style="color: #8C0000; margin-bottom: 0; font-family: serif;">Champlitte</h2>
+        <p style="font-size: 12px; letter-spacing: 2px; color: #555; margin-top: 2px;">PASTELERÍA</p>
+        <h3 style="color: #4A1515; margin-top: 10px;">BOCADILLOS</h3>
+        <p style="font-size: 11px; color: #777;">""" + datetime.now(zona_mx).strftime("%d %m %Y - %H:%M") + """</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    df_reporte = conn.query("SELECT nombre as PRODUCTO, fecha_cad as FECHA, cantidad as TOTAL FROM base_anterior WHERE sucursal = :suc", params={"suc": seleccion_wa}, ttl=0)
+    
+    if not df_reporte.empty:
+        st.dataframe(df_reporte, use_container_width=True)
+    else:
+        st.warning("Sin datos para mostrar en el reporte visual.")
+        
+    st.markdown("<p style='text-align: center; color: gray; font-size: 12px;'>Reporte generado automáticamente</p>", unsafe_allow_html=True)
+    
+    link_whatsapp = f"https://wa.me/{numero_whatsapp}?text=" + urllib.parse.quote(f"Hola, adjunto el reporte de stock automático para la sucursal {seleccion_wa}.")
+    st.markdown(f'<a href="{link_whatsapp}" target="_blank" class="btn-wa">📞 Enviar Reporte a {seleccion_wa}</a>', unsafe_allow_html=True)
