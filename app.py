@@ -238,13 +238,13 @@ def generar_excel_formato(df, sucursal, titulo="PASTELERÍA CHAMPLITTE, S.A. DE 
     sheet.merge_range('B3:D3', sucursal.upper(), fmt_valor)
     
     # MODIFICADO: Agregar hora a la fecha en formato 24hrs
-    sheet.write('A4', 'FECHA', fmt_etiqueta)
+    sheet.write('A4', 'ACTUALIZADO', fmt_etiqueta)
     fecha_str = datetime.now(pytz.timezone('America/Mexico_City')).strftime("%d/%m/%Y %H:%M")
     sheet.merge_range('B4:D4', fecha_str, fmt_valor)
 
     # MODIFICADO: Se elimina "ELABORA" y se suben las cabeceras de la tabla
     sheet.write('A5', '', fmt_valor)
-    sheet.write('B5', 'DESCRIPCIÓN', fmt_header_tabla)
+    sheet.write('B5', 'PRODUCTO', fmt_header_tabla)
     sheet.write('C5', 'CANTIDAD', fmt_header_tabla)
     sheet.write('D5', 'FECHA', fmt_header_tabla)
 
@@ -340,7 +340,7 @@ if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True):
 st.sidebar.divider()
 
 opciones_wa = {
-    "URANO": "522281342454", "COSTA DE ORO": "522292780850", "COSTA VERDE": "522299359597",
+    "URANO": "522291653665", "COSTA DE ORO": "522292780850", "COSTA VERDE": "522299359597",
     "DÍAZ MIRÓN": "522291302759", "EJÉRCITO MEXICANO": "522299272107", "PLAZA RÍO": "522299864120",
     "PLAYAS DEL CONCHAL": "522291794020", "COYOL": "522299398334", "LA PLACITA": "522299208481",
     "CUAUHTÉMOC": "522291651340", "MARIO MOLINA": "522291780851", "RAFAEL CUERVO": "522291980229",
@@ -701,7 +701,6 @@ with tab2:
 # ------------------------------------------------------------
 with tab3:
     st.markdown(f"### 🖼️ Tarjeta de Sugeridos - {seleccion_wa}")
-    st.info("Toma una captura de pantalla de la tarjeta blanca de abajo y luego usa el botón verde para enviarla por WhatsApp.")
     
     df_visual = conn.query('SELECT nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc ORDER BY fecha_cad ASC', params={"suc": seleccion_wa}, ttl=0)
     
