@@ -1,8 +1,8 @@
 streamlit
 pandas
-SQLAlchemy
 pytz
-streamlit-mic-recorder
-Pillow
+openpyxl
+XlsxWriter
+SpeechRecognition
+SQLAlchemy
 psycopg2-binary
-xlsxwriter
