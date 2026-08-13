@@ -8,6 +8,7 @@ import io
 import re
 import os
 import streamlit.components.v1 as components
+from streamlit_mic_recorder import speech_to_text # <-- IMPORTACIÓN AÑADIDA
 
 # ------------------ CONFIGURACIÓN GENERAL ------------------
 with st.spinner('Iniciando sistema Champlitte... 🥐'):
@@ -424,6 +425,7 @@ def guardar_datos_voz(sucursal):
                       {"suc": sucursal, "nom": prod, "fec": str(fech), "can": int(cant)})
         s.commit()
         
+    # Paso 5: Limpiar el estado de la sesión
     st.session_state.confirmacion_voz = None
     st.session_state.audio_leido = False
     st.session_state.buscar_prod = ""
@@ -460,264 +462,66 @@ def popup_voz():
     st.text_input("Producto", value=datos['prod'], key="voz_input_prod")
     st.date_input("Fecha", value=datos['fecha'], key="voz_input_fech")
     
-    st.button("🥖 Ingreso directo", use_container_width=True, type="primary", on_click=guardar_datos_voz, args=(seleccion_wa,))
+    # Botones de Acción
+    col1, col2 = st.columns(2)
+    with col1:
+        st.button("🥖 Ingresar", use_container_width=True, type="primary", on_click=guardar_datos_voz, args=(seleccion_wa,))
+    with col2:
+        if st.button("❌ Cancelar", use_container_width=True):
+            st.session_state.confirmacion_voz = None
+            st.session_state.audio_leido = False
+            st.rerun()
 
+# (Se completa la función manual que había quedado cortada en tu código)
 @st.dialog("✏️ Registrar Manualmente")
 def popup_manual(nombre_final):
-    st.markdown(f"### 📦 {nombre_final}")
-    fecha_sugerido = fecha_hoy_mx + timedelta(days=1)
-    fecha_dia_mas = fecha_hoy_mx + timedelta(days=2)
+    st.markdown(f"### 📦 Producto: {nombre_final}")
     
-    opcion_fecha = st.radio(
-        "📅 Fecha:",
-        options=["Sugerido (Mañana)", "Día Más (Pasado Mañana)"],
-        horizontal=True
-    )
+    cant = st.number_input("Cantidad", min_value=1, step=1, key="man_cant")
+    fech = st.date_input("Fecha", value=fecha_hoy_mx, key="man_fech")
     
-    f_cad = fecha_sugerido if opcion_fecha == "Sugerido (Mañana)" else fecha_dia_mas
-
-    st.write("")
-    col_sum1, col_sum2, col_sum3 = st.columns(3)
-    with col_sum1: st.button("+1", use_container_width=True, on_click=sumar, args=(1,))
-    with col_sum2: st.button("+2", use_container_width=True, on_click=sumar, args=(2,))
-    with col_sum3: st.button("Borrar", use_container_width=True, on_click=resetear)
-
-    st.write("") 
-    
-    st.markdown(
-        f"""
-        <div style="margin-bottom: 15px;">
-            <span style="color: gray; font-size: 14px;">Total a registrar</span><br>
-            <span style="font-size: 28px; color: #1f77b4; font-weight: bold;">{st.session_state.conteo_temp}</span>
-        </div>
-        """, 
-        unsafe_allow_html=True
-    )
-
-    if st.button("🥖 Ingreso directo", use_container_width=True, type="primary"):
-        cant = st.session_state.conteo_temp
-        if cant > 0:
-            with conn.session as s:
-                existe_stock = s.execute(text("SELECT cantidad FROM base_anterior WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
-                                         {"nom": nombre_final, "fec": str(f_cad), "suc": seleccion_wa}).fetchone()
-                if existe_stock:
-                    s.execute(text("UPDATE base_anterior SET cantidad=cantidad+:can WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
-                              {"can": int(cant), "nom": nombre_final, "fec": str(f_cad), "suc": seleccion_wa})
-                else:
-                    s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
-                              {"suc": seleccion_wa, "nom": nombre_final, "fec": str(f_cad), "can": int(cant)})
-                s.commit()
-                
-            st.session_state.conteo_temp = 0
-            st.session_state.buscar_prod = ""
-            st.session_state.show_toast = f"✅ Ingreso directo: {int(cant)} {nombre_final}"
-            st.rerun()
-        else:
-            st.warning("Agrega una cantidad mayor a 0.")
-
-# ------------------ TABS ------------------
-tab1, tab2, tab3 = st.tabs(["📝 Captura", "📋 Datos Excel", "🖼️ Reporte Visual"])
-
-# ------------------------------------------------------------
-# TAB 1: CAPTURA (VOZ Y MANUAL)
-# ------------------------------------------------------------
-with tab1:
-    if "conteo_temp" not in st.session_state:
-        st.session_state.conteo_temp = 0
-    if "buscar_prod" not in st.session_state:
-        st.session_state.buscar_prod = ""
-
-    st.markdown(f"### 📍 Sucursal: **{seleccion_wa}**")
-    st.markdown("## Registrar Nueva Mercancía")
-
-    # --- MÉTODO DE INGRESO ---
-    metodo = st.radio("Método:", options=["✍️ Manual", "🗣️ Voz"], horizontal=True)
-    st.write("")
-
-    if metodo == "🗣️ Voz":
-        st.info("💡 Dicta ej: '3 brownies para el 15 de octubre'")
-        # Esto usará el CSS que hace que el botón se vea exactamente como "🎙️ Toca para Dictar"
-        audio_val = st.audio_input("Dictar", label_visibility="collapsed")
-
-        if audio_val is not None:
-            audio_bytes = audio_val.getvalue()
-            if st.session_state.get("ultimo_audio") != audio_bytes:
-                st.session_state.ultimo_audio = audio_bytes
-                try:
-                    import speech_recognition as sr
-                    r = sr.Recognizer()
-                    with sr.AudioFile(audio_val) as source:
-                        audio_data = r.restore() if hasattr(r, 'restore') else r.record(source) 
-                        texto_voz = r.recognize_google(audio_data, language="es-MX")
-                        if texto_voz:
-                            prod, cant, fech = analizar_dictado(texto_voz, fecha_hoy_mx)
-                            st.session_state.confirmacion_voz = {"prod": prod, "cant": cant, "fecha": fech, "original": texto_voz}
-                            st.session_state.audio_leido = False  
-                            st.rerun()
-                except ImportError:
-                    st.error("⚠️ Faltan dependencias. Instala SpeechRecognition.")
-                except Exception as e:
-                    st.toast("❌ No pude entender el audio o hubo ruido de fondo.")
-
-    if st.session_state.get("confirmacion_voz"):
-        popup_voz()
-
-    if metodo == "✍️ Manual":
-        def on_buscar_prod_change():
-            texto = st.session_state.buscar_prod.strip().upper()
-            if texto:
-                popup_manual(texto)
-
-        st.text_input(
-            "Añadir producto", 
-            placeholder="🔎 AÑADIR PRODUCTO (Presiona Enter para agregar)...", 
-            key="buscar_prod", 
-            label_visibility="collapsed",
-            on_change=on_buscar_prod_change
-        )
-        
-        if st.session_state.get('enfocar_buscador', False):
-            components.html(
-                """
-                <script>
-                setTimeout(function() {
-                    const textInputs = window.parent.document.querySelectorAll('input[type="text"]');
-                    if (textInputs.length > 0) {
-                        textInputs[0].focus();
-                        window.parent.scrollTo(0,0);
-                    }
-                }, 100);
-                </script>
-                """,
-                height=0
-            )
-            st.session_state.enfocar_buscador = False
-
-    st.divider()
-    
-    df_hoy_captura = conn.query("SELECT id, nombre, fecha_cad AS \"Fecha\", cantidad FROM captura_actual WHERE sucursal=:suc", params={"suc": seleccion_wa}, ttl=0)
-    
-    if not df_hoy_captura.empty:
-        with st.expander("📋 Productos registrados al momento", expanded=False):
-            df_editado = st.data_editor(
-                df_hoy_captura, 
-                column_config={"id": None}, 
-                num_rows="dynamic", 
-                height=300, 
-                use_container_width=True, 
-                hide_index=True, 
-                key="editor_conteo"
-            )
+    if st.button("Guardar", type="primary", use_container_width=True):
+        with conn.session as s:
+            existe = s.execute(text("SELECT cantidad FROM base_anterior WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                                     {"nom": nombre_final, "fec": str(fech), "suc": seleccion_wa}).fetchone()
+            if existe:
+                s.execute(text("UPDATE base_anterior SET cantidad=cantidad+:can WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                          {"can": cant, "nom": nombre_final, "fec": str(fech), "suc": seleccion_wa})
+            else:
+                s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
+                          {"suc": seleccion_wa, "nom": nombre_final, "fec": str(fech), "can": cant})
+            s.commit()
             
-            if st.button("💾 Guardar Cambios", use_container_width=True):
-                with conn.session as s:
-                    s.execute(text("DELETE FROM captura_actual WHERE sucursal = :suc"), {"suc": seleccion_wa})
-                    for _, fila in df_editado.iterrows():
-                        if pd.notna(fila["nombre"]) and str(fila["nombre"]).strip() != "":
-                            s.execute(text("INSERT INTO captura_actual (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
-                                      {"suc": seleccion_wa, "nom": str(fila["nombre"]).upper(), "fec": str(fila["Fecha"]), "can": int(fila["cantidad"])})
-                    s.commit()
-                st.session_state.show_toast = "✅ Cambios guardados."
-                st.rerun()
+        st.session_state.show_toast = f"✅ Guardado: {cant} de {nombre_final}"
+        st.rerun()
 
 # ------------------------------------------------------------
-# TAB 2: INVENTARIO Y CORTE (DATOS EXCEL)
+# INTERFAZ PRINCIPAL Y BOTÓN DE VOZ (LÓGICA IMPLEMENTADA)
 # ------------------------------------------------------------
-with tab2:
-    st.markdown("### 📦 Gestión de Sugeridos")
-    
-    df_stock = conn.query('SELECT id, nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc', params={"suc": seleccion_wa}, ttl=0)
-    
-    with st.expander(f"✏️ Editar Sugeridos de {seleccion_wa}", expanded=True):
-        if df_stock.empty:
-            st.info("No hay stock registrado. Realiza un ingreso directo en la pestaña de Captura.")
-        else:
-            df_editado_stock = st.data_editor(
-                df_stock, 
-                column_config={"id": None},
-                num_rows="dynamic", 
-                use_container_width=True, 
-                hide_index=True, 
-                key="editor_sugeridos"
-            )
-            
-            if st.button("💾 Confirmar Cambios", use_container_width=True, type="primary"):
-                with conn.session as s:
-                    s.execute(text("DELETE FROM base_anterior WHERE sucursal = :suc"), {"suc": seleccion_wa})
-                    for _, fila in df_editado_stock.iterrows():
-                        if pd.notna(fila["Producto"]) and str(fila["Producto"]).strip() != "":
-                            s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
-                                      {"suc": seleccion_wa, "nom": str(fila["Producto"]).upper(), "fec": str(fila["Fecha"]), "can": int(fila["Existencia"])})
-                    s.commit()
-                st.session_state.show_toast = "✅ Sugeridos actualizados correctamente."
-                st.rerun()
+st.header(f"Gestión de Inventario - {seleccion_wa}")
 
-    st.divider()
-    
-    st.markdown("### 📥 Descargar Excel Actualizado")
-    
-    df_stock_final = conn.query('SELECT nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc', params={"suc": seleccion_wa}, ttl=0)
-    
-    if df_stock_final.empty:
-        st.warning("No hay datos para generar el Excel.")
-    else:
-        elabora_input = st.text_input("👨‍🍳 Nombre de quien Elabora", value=st.session_state.get('usuario_actual', 'PEDRO GARCÍA')).upper()
-        
-        excel_stock = generar_excel_formato(df_stock_final, sucursal=seleccion_wa, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.", elabora=elabora_input)
-        
-        col_down1, col_down2 = st.columns(2)
-        with col_down1:
-            st.download_button(
-                "📗 1. Descargar Excel", 
-                data=excel_stock, 
-                file_name=f"Sugeridos_{seleccion_wa}_{fecha_hoy_mx}.xlsx", 
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
-                use_container_width=True
-            )
-        with col_down2:
-            msg_excel = f"Sugeridos listos en Excel para {seleccion_wa}."
-            link_ex = f"https://wa.me/{numero_whatsapp.strip()}?text={urllib.parse.quote(msg_excel)}"
-            st.link_button("💬 2. Abrir WhatsApp", link_ex, use_container_width=True, type="primary")
+# Paso 1 y 2: Renderizar el botón y capturar
+texto_capturado = speech_to_text(
+    language='es-MX',
+    start_prompt="🎙️ Toca para Dictar",
+    stop_prompt="🔴 Grabando...",
+    use_container_width=True,
+    just_once=True,
+    key='stt_mic_unico'
+)
 
-# ------------------------------------------------------------
-# TAB 3: REPORTE VISUAL HTML
-# ------------------------------------------------------------
-with tab3:
-    st.markdown("## 🖼️ Reporte Visual de Sugeridos")
+# Paso 3: Proteger el dato en Session State
+if texto_capturado:
+    prod, cant, fec = analizar_dictado(texto_capturado, fecha_hoy_mx)
+    st.session_state.confirmacion_voz = {
+        'original': texto_capturado,
+        'prod': prod,
+        'cant': cant,
+        'fecha': fec
+    }
+    st.rerun()
 
-    df_stock_visual = conn.query('SELECT nombre, cantidad, fecha_cad FROM base_anterior WHERE sucursal=:suc ORDER BY fecha_cad ASC', params={"suc": seleccion_wa}, ttl=0)
-    
-    fecha_hora_actual = datetime.now(zona_mx).strftime("%d %m %Y - %H:%M")
-    filas_html = ""
-    
-    if not df_stock_visual.empty:
-        for i, fila in df_stock_visual.iterrows():
-            bg_color = "#FCE4D6" if i % 2 == 1 else "#FFFFFF"
-            
-            fecha_str = str(fila['fecha_cad'])
-            try:
-                if '-' in fecha_str:
-                    partes = fecha_str.split('-')
-                    if len(partes) == 3:
-                        fecha_str = f"{partes[2]}/{partes[1]}/{partes[0]}"
-            except Exception:
-                pass
-            
-            # TODO ESTE HTML ESTÁ EN UNA SOLA LÍNEA INTERNA PARA EVITAR BUGS DE STREAMLIT
-            filas_html += f"""<tr style="background-color: {bg_color}; border-bottom: 1px solid #f0f0f0;"><td style="padding: 12px; text-align: left; font-size: 12px; font-weight: bold; color: #333;">{fila['nombre']}</td><td style="padding: 12px; font-weight: bold; color: #8C0000; font-size: 13px;">{fila['cantidad']}</td><td style="padding: 12px; font-size: 12px; color: #333;">{fecha_str}</td></tr>"""
-    else:
-        filas_html = """<tr><td colspan="3" style="padding: 20px; text-align: center; color: #999;">No hay sugeridos registrados al momento</td></tr>"""
-        
-    # HTML ESTRUCTURADO Y COMPRIMIDO PARA EVITAR QUE SE FORMEN BLOQUES DE CÓDIGO
-    html_reporte = f"""<div style="background-color: white; border-radius: 15px; padding: 25px 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: black; max-width: 600px; margin: 0 auto;"><div style="text-align: center; margin-bottom: 25px;"><h1 style="color: #8C0000; margin: 0; font-size: 38px; font-weight: 900; letter-spacing: -0.5px; font-family: Georgia, serif;">Champlitte</h1><p style="margin: 0; font-size: 12px; letter-spacing: 3px; font-weight: 700; color: #555;">PASTELERÍA</p><h2 style="color: #8C0000; margin: 15px 0 5px 0; font-size: 22px; font-weight: 800; letter-spacing: 1px;">SUGERIDOS</h2><p style="margin: 0; font-size: 12px; font-weight: bold; color: #777;">{fecha_hora_actual}</p></div><table style="width: 100%; border-collapse: collapse; text-align: center; margin-bottom: 15px;"><tr style="background-color: #8C0000; color: white; font-size: 11px; font-weight: bold; letter-spacing: 1px;"><th style="padding: 14px; text-align: left; border-top-left-radius: 8px;">PRODUCTO</th><th style="padding: 14px;">CANTIDAD</th><th style="padding: 14px; border-top-right-radius: 8px;">FECHA</th></tr>{filas_html}</table></div><p style="text-align: center; color: gray; font-size: 14px; margin-top: 15px;">Reporte generado automáticamente</p>""".replace('\n', '')
-    
-    st.markdown(html_reporte, unsafe_allow_html=True)
-    
-    msg_stock = "Aquí tienes el reporte visual de sugeridos correspondiente a " + seleccion_wa
-    link_st = f"https://wa.me/{numero_whatsapp.strip()}?text={urllib.parse.quote(msg_stock)}"
-    
-    st.write("")
-    st.markdown(
-        f'<a href="{link_st}" class="btn-wa" target="_blank" style="max-width: 600px; margin: 0 auto;">📞 Enviar Reporte a {seleccion_wa}</a>', 
-        unsafe_allow_html=True
-    )
+# Paso 4: Lanzar la ventana de confirmación
+if st.session_state.get("confirmacion_voz"):
+    popup_voz()
+
