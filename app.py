@@ -237,9 +237,10 @@ def generar_excel_formato(df, sucursal, titulo="PASTELERÍA CHAMPLITTE, S.A. DE 
     sheet.write('A3', 'SUCURSAL', fmt_etiqueta)
     sheet.merge_range('B3:D3', sucursal.upper(), fmt_valor)
     
-    # MODIFICADO: Agregar hora a la fecha en formato 24hrs
+    # MODIFICADO: Agregar hora a la fecha en formato 24hrs y zona horaria de México
     sheet.write('A4', 'ACTUALIZADO', fmt_etiqueta)
-    fecha_str = datetime.now(pytz.timezone('America/Mexico_City')).strftime("%d/%m/%Y %H:%M")
+    zona_mx = pytz.timezone('America/Mexico_City')
+    fecha_str = datetime.now(zona_mx).strftime("%d/%m/%Y %H:%M")
     sheet.merge_range('B4:D4', fecha_str, fmt_valor)
 
     # MODIFICADO: Se elimina "ELABORA" y se suben las cabeceras de la tabla
@@ -551,22 +552,22 @@ with tab1:
     st.markdown(f"### 📍 Estás en la sucursal: **{seleccion_wa}**")
 
     # --- 1. INGRESO POR VOZ AL INICIO ---
-    with st.expander("🎤 **Ingreso por Voz** (Clic para desplegar)", expanded=False):
-        
-        texto_capturado = speech_to_text(
-            language='es-MX',
-            start_prompt="🎙️ Toca para Dictar",
-            stop_prompt="🔴 Grabando...",
-            use_container_width=True,
-            key=f"stt_mic_{st.session_state.mic_key}"
-        )
+    st.markdown("🎤 **Ingreso por Voz**")
+    
+    texto_capturado = speech_to_text(
+        language='es-MX',
+        start_prompt="🎙️ Toca para Dictar",
+        stop_prompt="🔴 Grabando...",
+        use_container_width=True,
+        key=f"stt_mic_{st.session_state.mic_key}"
+    )
 
-        if texto_capturado and texto_capturado != st.session_state.get("ultimo_audio_procesado"):
-            st.session_state.ultimo_audio_procesado = texto_capturado
-            prod, cant, fech = analizar_dictado(texto_capturado, fecha_hoy_mx)
-            st.session_state.confirmacion_voz = {"prod": prod, "cant": cant, "fecha": fech, "original": texto_capturado}
-            st.session_state.audio_leido = False  
-            st.rerun()
+    if texto_capturado and texto_capturado != st.session_state.get("ultimo_audio_procesado"):
+        st.session_state.ultimo_audio_procesado = texto_capturado
+        prod, cant, fech = analizar_dictado(texto_capturado, fecha_hoy_mx)
+        st.session_state.confirmacion_voz = {"prod": prod, "cant": cant, "fecha": fech, "original": texto_capturado}
+        st.session_state.audio_leido = False  
+        st.rerun()
 
     if st.session_state.get("confirmacion_voz"):
         popup_voz()
