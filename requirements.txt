@@ -5,3 +5,4 @@ pytz
 streamlit-mic-recorder
 Pillow
 psycopg2-binary
+xlsxwriter
