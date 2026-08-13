@@ -205,7 +205,7 @@ def resetear():
 def limpiar_buscador():
     st.session_state.buscar_prod = ""
 
-def generar_excel_formato(df, sucursal, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.", elabora="PEDRO GARCÍA"):
+def generar_excel_formato(df, sucursal, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V."):
     output = io.BytesIO()
     writer = pd.ExcelWriter(output, engine='xlsxwriter')
     workbook = writer.book
@@ -237,19 +237,18 @@ def generar_excel_formato(df, sucursal, titulo="PASTELERÍA CHAMPLITTE, S.A. DE 
     sheet.write('A3', 'SUCURSAL', fmt_etiqueta)
     sheet.merge_range('B3:D3', sucursal.upper(), fmt_valor)
     
+    # MODIFICADO: Agregar hora a la fecha en formato 24hrs
     sheet.write('A4', 'FECHA', fmt_etiqueta)
-    fecha_str = datetime.now(pytz.timezone('America/Mexico_City')).strftime("%d/%m/%Y")
+    fecha_str = datetime.now(pytz.timezone('America/Mexico_City')).strftime("%d/%m/%Y %H:%M")
     sheet.merge_range('B4:D4', fecha_str, fmt_valor)
-    
-    sheet.write('A5', 'ELABORA', fmt_etiqueta)
-    sheet.merge_range('B5:D5', elabora, fmt_valor)
 
-    sheet.write('A6', '', fmt_valor)
-    sheet.write('B6', 'DESCRIPCIÓN', fmt_header_tabla)
-    sheet.write('C6', 'CANTIDAD', fmt_header_tabla)
-    sheet.write('D6', 'FECHA', fmt_header_tabla)
+    # MODIFICADO: Se elimina "ELABORA" y se suben las cabeceras de la tabla
+    sheet.write('A5', '', fmt_valor)
+    sheet.write('B5', 'DESCRIPCIÓN', fmt_header_tabla)
+    sheet.write('C5', 'CANTIDAD', fmt_header_tabla)
+    sheet.write('D5', 'FECHA', fmt_header_tabla)
 
-    row = 6
+    row = 5
     if not df.empty:
         col_nombre = 'Producto' if 'Producto' in df.columns else 'nombre'
         col_cant = 'Existencia' if 'Existencia' in df.columns else 'cantidad'
@@ -276,8 +275,8 @@ def generar_excel_formato(df, sucursal, titulo="PASTELERÍA CHAMPLITTE, S.A. DE 
             sheet.write(row, 3, fecha_str_out, formato_actual) 
             row += 1
 
-    last_row = row - 1 if row > 6 else 6
-    sheet.autofilter(5, 1, last_row, 3)
+    last_row = row - 1 if row > 5 else 5
+    sheet.autofilter(4, 1, last_row, 3)
 
     writer.close()
     return output.getvalue()
@@ -305,7 +304,6 @@ def analizar_dictado(texto, fecha_base):
         except ValueError:
             pass
         texto = texto.replace(match_fecha.group(0), "")
-    # NUEVO: Detección de día extra (3 días)
     elif "extra" in texto:
         fecha_calc = fecha_base + timedelta(days=3)
         texto = texto.replace("día extra", "").replace("dia extra", "").replace("extra", "")
@@ -480,16 +478,14 @@ def popup_manual(nombre_final):
     
     fecha_sugerido = fecha_hoy_mx + timedelta(days=1)
     fecha_dia_mas = fecha_hoy_mx + timedelta(days=2)
-    fecha_extra = fecha_hoy_mx + timedelta(days=3) # NUEVO: Día extra para modo manual
+    fecha_extra = fecha_hoy_mx + timedelta(days=3)
     
     opcion_fecha = st.radio(
         "📅 Fecha:",
-        # NUEVO: Agregada la opción "Día Extra (3 Días)"
         options=["Sugerido (Mañana)", "Día Más (Pasado Mañana)", "Día Extra (3 Días)"], 
         horizontal=True
     )
     
-    # NUEVO: Lógica actualizada para asginar la fecha correcta según la selección
     if opcion_fecha == "Sugerido (Mañana)":
         f_cad = fecha_sugerido
     elif opcion_fecha == "Día Más (Pasado Mañana)":
@@ -681,11 +677,12 @@ with tab2:
     if df_stock_final.empty:
         st.warning("No hay datos para generar el Excel.")
     else:
-        elabora_input = st.text_input("👨‍🍳 Nombre de quien Elabora", value=st.session_state.get('usuario_actual', 'PEDRO GARCÍA')).upper()
+        # MODIFICADO: Se elimina el campo de entrada "Elabora"
         msg_stock = f""
         link_st = f"https://wa.me/{numero_whatsapp.strip()}?text={urllib.parse.quote(msg_stock)}"
         
-        excel_stock = generar_excel_formato(df_stock_final, sucursal=seleccion_wa, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.", elabora=elabora_input)
+        # MODIFICADO: Se remueve el parámetro elabora de la función
+        excel_stock = generar_excel_formato(df_stock_final, sucursal=seleccion_wa, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.")
         
         col_down1, col_down2 = st.columns(2)
         with col_down1:
@@ -714,10 +711,8 @@ with tab3:
         # Generar las filas de la tabla en HTML
         filas_html = ""
         for i, fila in df_visual.iterrows():
-            # Color alternado para las filas: blanco y un rosa muy tenue para simular el estilo Champlitte
             color_fondo = "#FFFFFF" if i % 2 == 0 else "#FFF5F5"
             
-            # Formatear la fecha a dd/mm/yyyy si es posible
             fecha_str = str(fila['Fecha'])
             try:
                 if '-' in fecha_str:
@@ -727,50 +722,44 @@ with tab3:
             except:
                 pass
 
-            filas_html += f"""
-            <tr style="background-color: {color_fondo}; border-bottom: 1px solid #f0f0f0;">
-                <td style="padding: 10px; text-align: left; color: #333; font-size: 13px;">{fila['Producto']}</td>
-                <td style="padding: 10px; text-align: center; color: #8C1C31; font-weight: bold; font-size: 14px;">{fila['Existencia']}</td>
-                <td style="padding: 10px; text-align: center; color: #555; font-size: 13px;">{fecha_str}</td>
+            # MODIFICADO: Quitamos la sangría a la cadena multilinea para evitar el bug de código en Streamlit
+            filas_html += f"""<tr style="background-color: {color_fondo}; border-bottom: 1px solid #f0f0f0;">
+    <td style="padding: 10px; text-align: left; color: #333; font-size: 13px;">{fila['Producto']}</td>
+    <td style="padding: 10px; text-align: center; color: #8C1C31; font-weight: bold; font-size: 14px;">{fila['Existencia']}</td>
+    <td style="padding: 10px; text-align: center; color: #555; font-size: 13px;">{fecha_str}</td>
+</tr>"""
+            
+        fecha_hora_actual = datetime.now(zona_mx).strftime("%d/%m/%Y %H:%M")
+        
+        # Construcción de la tarjeta visual sin sangría
+        tarjeta_html = f"""<div style="background-color: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); width: 100%; max-width: 500px; margin: auto; text-align: center; margin-bottom: 20px;">
+    <h1 style="color: #6D1427; font-family: 'Times New Roman', serif; font-size: 38px; margin: 0;">Champlitte</h1>
+    <p style="font-family: sans-serif; font-size: 10px; font-weight: bold; letter-spacing: 3px; margin: 0 0 20px 0; color: #000;">PASTELERÍA</p>
+    
+    <h2 style="color: #6D1427; font-family: sans-serif; font-weight: 900; margin: 0; font-size: 22px;">SUGERIDOS {seleccion_wa.upper()}</h2>
+    <p style="font-family: sans-serif; font-size: 12px; font-weight: bold; color: #666; margin: 5px 0 20px 0;">{fecha_hora_actual}</p>
+    
+    <table style="width: 100%; border-collapse: collapse; font-family: sans-serif;">
+        <thead>
+            <tr style="background-color: #8C1C31; color: white;">
+                <th style="padding: 12px; text-align: left; font-size: 11px; letter-spacing: 1px;">PRODUCTO</th>
+                <th style="padding: 12px; text-align: center; font-size: 11px; letter-spacing: 1px;">CANTIDAD</th>
+                <th style="padding: 12px; text-align: center; font-size: 11px; letter-spacing: 1px;">FECHA</th>
             </tr>
-            """
-            
-        fecha_hora_actual = datetime.now(zona_mx).strftime("%d %m %Y - %H:%M")
+        </thead>
+        <tbody>
+            {filas_html}
+        </tbody>
+    </table>
+</div>
+<p style="text-align: center; color: gray; font-size: 13px; margin-top: 15px; margin-bottom: 20px;">Reporte generado automáticamente</p>"""
         
-        # Construcción de la tarjeta visual
-        tarjeta_html = f"""
-        <div style="background-color: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); width: 100%; max-width: 500px; margin: auto; text-align: center; margin-bottom: 20px;">
-            <h1 style="color: #6D1427; font-family: 'Times New Roman', serif; font-size: 38px; margin: 0;">Champlitte</h1>
-            <p style="font-family: sans-serif; font-size: 10px; font-weight: bold; letter-spacing: 3px; margin: 0 0 20px 0; color: #000;">PASTELERÍA</p>
-            
-            <h2 style="color: #6D1427; font-family: sans-serif; font-weight: 900; margin: 0; font-size: 22px;">SUGERIDOS {seleccion_wa.upper()}</h2>
-            <p style="font-family: sans-serif; font-size: 12px; font-weight: bold; color: #666; margin: 5px 0 20px 0;">{fecha_hora_actual}</p>
-            
-            <table style="width: 100%; border-collapse: collapse; font-family: sans-serif;">
-                <thead>
-                    <tr style="background-color: #8C1C31; color: white;">
-                        <th style="padding: 12px; text-align: left; font-size: 11px; letter-spacing: 1px;">PRODUCTO</th>
-                        <th style="padding: 12px; text-align: center; font-size: 11px; letter-spacing: 1px;">CANTIDAD</th>
-                        <th style="padding: 12px; text-align: center; font-size: 11px; letter-spacing: 1px;">FECHA</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {filas_html}
-                </tbody>
-            </table>
-        </div>
-        <p style="text-align: center; color: gray; font-size: 13px; margin-top: 15px; margin-bottom: 20px;">Reporte generado automáticamente</p>
-        """
-        
-        # Renderizamos la tarjeta en Streamlit
         st.markdown(tarjeta_html, unsafe_allow_html=True)
         
-        # Botón estilo WhatsApp usando componentes HTML puros para respetar el CSS de tu imagen
+        # Botón estilo WhatsApp sin sangría
         link_wp = f"https://wa.me/{numero_whatsapp.strip()}"
-        boton_wp_html = f"""
-        <a href="{link_wp}" target="_blank" style="display: block; width: 100%; max-width: 500px; margin: auto; background-color: #25D366; color: white; text-align: center; padding: 15px; border-radius: 10px; font-size: 18px; font-weight: bold; text-decoration: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: background-color 0.3s;">
-            📞 Enviar Reporte a {seleccion_wa.upper()}
-        </a>
-        <br><br>
-        """
+        boton_wp_html = f"""<a href="{link_wp}" target="_blank" style="display: block; width: 100%; max-width: 500px; margin: auto; background-color: #25D366; color: white; text-align: center; padding: 15px; border-radius: 10px; font-size: 18px; font-weight: bold; text-decoration: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: background-color 0.3s;">
+    📞 Enviar Reporte a {seleccion_wa.upper()}
+</a>
+<br><br>"""
         st.markdown(boton_wp_html, unsafe_allow_html=True)
