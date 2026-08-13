@@ -17,7 +17,7 @@ with st.spinner('Iniciando sistema Champlitte... 🥐'):
     
     st.set_page_config(page_title="Sugeridos", page_icon="🥐", layout="wide")
 
-# CSS personalizado (Se eliminó el truco del audio nativo para evitar conflictos)
+# CSS personalizado (Sin trucos que rompan el botón de voz)
 st.markdown("""
     <style>
     ul[role="listbox"] li[aria-selected="true"] {
@@ -403,7 +403,7 @@ def guardar_datos_voz(sucursal):
         s.commit()
         
     st.session_state.confirmacion_voz = None
-    st.session_state.ultimo_audio_procesado = None # Reseteamos para que pueda dictar lo mismo de nuevo si quiere
+    st.session_state.ultimo_audio_procesado = None
     st.session_state.audio_leido = False
     st.session_state.buscar_prod = ""
     st.session_state.show_toast = f"✅ Ingreso directo: {int(cant)} {prod}"
@@ -445,7 +445,7 @@ def popup_voz():
     with col2:
         if st.button("❌ Cancelar", use_container_width=True):
             st.session_state.confirmacion_voz = None
-            st.session_state.ultimo_audio_procesado = None # Para que pueda reintentar
+            st.session_state.ultimo_audio_procesado = None 
             st.session_state.audio_leido = False
             st.rerun()
 
@@ -472,11 +472,11 @@ def popup_manual(nombre_final):
         st.rerun()
 
 # ------------------------------------------------------------
-# INTERFAZ PRINCIPAL Y BOTÓN DE VOZ CORREGIDO
+# INTERFAZ PRINCIPAL Y BOTÓN DE VOZ 
 # ------------------------------------------------------------
 st.header(f"Gestión de Inventario - {seleccion_wa}")
 
-# 1. Componente del botón (sin just_once para que no se bloquee)
+# 1. Componente de voz 
 texto_capturado = speech_to_text(
     language='es-MX',
     start_prompt="🎙️ Toca para Dictar",
@@ -485,7 +485,7 @@ texto_capturado = speech_to_text(
     key='stt_mic_unico'
 )
 
-# 2. Candado de ejecución: Verifica que haya texto y que sea diferente a la última corrida
+# 2. Lógica para procesar y disparar ventana
 if texto_capturado and texto_capturado != st.session_state.get("ultimo_audio_procesado"):
     
     st.session_state.ultimo_audio_procesado = texto_capturado
@@ -498,10 +498,49 @@ if texto_capturado and texto_capturado != st.session_state.get("ultimo_audio_pro
         'fecha': fec
     }
     
-    # Recarga manual obligatoria para que el script abra el popup
     st.rerun()
 
-# 3. Disparar Pop-up si hay datos confirmados en memoria
 if st.session_state.get("confirmacion_voz"):
     popup_voz()
 
+# ------------------------------------------------------------
+# VISTA DE DATOS Y CONTROLES MANUALES 
+# ------------------------------------------------------------
+st.divider()
+
+st.subheader("📋 Sugeridos Actuales")
+
+# Controles manuales rápidos
+col_input, col_btn = st.columns([3, 1])
+with col_input:
+    producto_manual = st.text_input("🔍 Escribe un producto para agregar manualmente:")
+with col_btn:
+    st.write("") 
+    st.write("") 
+    if st.button("➕ Agregar Manual", use_container_width=True):
+        if producto_manual:
+            popup_manual(producto_manual.strip().upper())
+        else:
+            st.warning("Escribe el nombre del producto primero.")
+
+# Tabla interactiva
+try:
+    df_actual = conn.query(f"SELECT nombre as Producto, cantidad as Existencia, fecha_cad as Fecha FROM base_anterior WHERE sucursal = '{seleccion_wa}' ORDER BY fecha_cad ASC", ttl=0)
+    
+    if not df_actual.empty:
+        st.dataframe(df_actual, use_container_width=True, hide_index=True)
+        
+        # Botón mágico para el Excel
+        excel_data = generar_excel_formato(df_actual, seleccion_wa)
+        st.download_button(
+            label="📊 Descargar Formato Excel",
+            data=excel_data,
+            file_name=f"Sugeridos_{seleccion_wa}_{fecha_hoy_mx}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+            type="primary"
+        )
+    else:
+        st.info("No hay productos registrados para esta sucursal.")
+except Exception as e:
+    st.error(f"Error al cargar la base de datos: {e}")
