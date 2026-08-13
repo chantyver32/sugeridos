@@ -8,7 +8,7 @@ import io
 import re
 import os
 import streamlit.components.v1 as components
-from streamlit_mic_recorder import speech_to_text # <-- IMPORTACIÓN AÑADIDA
+from streamlit_mic_recorder import speech_to_text
 
 # ------------------ CONFIGURACIÓN GENERAL ------------------
 with st.spinner('Iniciando sistema Champlitte... 🥐'):
@@ -17,7 +17,7 @@ with st.spinner('Iniciando sistema Champlitte... 🥐'):
     
     st.set_page_config(page_title="Sugeridos", page_icon="🥐", layout="wide")
 
-# CSS personalizado 
+# CSS personalizado (Se eliminó el truco del audio nativo para evitar conflictos)
 st.markdown("""
     <style>
     ul[role="listbox"] li[aria-selected="true"] {
@@ -66,29 +66,6 @@ st.markdown("""
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
     .btn-wa:hover { background-color: #128C7E; color: white !important;}
-    
-    /* TRUCO CSS PARA CAMBIAR EL BOTON DE AUDIO NATIVO Y QUE SE VEA COMO "🎙️ Toca para Dictar" */
-    [data-testid="stAudioInput"] {
-        background: transparent !important;
-        border: none !important;
-        padding: 0 !important;
-    }
-    [data-testid="stAudioInput"] button {
-        width: 100% !important;
-        background-color: #1a1a1c !important; 
-        border: 1px solid rgba(255,255,255,0.2) !important;
-        border-radius: 8px !important;
-        padding: 15px !important;
-        color: white !important;
-        font-size: 16px !important;
-    }
-    [data-testid="stAudioInput"] button p {
-        display: none !important; 
-    }
-    [data-testid="stAudioInput"] button::after {
-        content: "🎙️ Toca para Dictar" !important;
-        font-weight: normal !important;
-    }
     
     /* ESTILOS DE SELECTORES OSCUROS */
     div[data-baseweb="popover"] > div {
@@ -425,8 +402,8 @@ def guardar_datos_voz(sucursal):
                       {"suc": sucursal, "nom": prod, "fec": str(fech), "can": int(cant)})
         s.commit()
         
-    # Paso 5: Limpiar el estado de la sesión
     st.session_state.confirmacion_voz = None
+    st.session_state.ultimo_audio_procesado = None # Reseteamos para que pueda dictar lo mismo de nuevo si quiere
     st.session_state.audio_leido = False
     st.session_state.buscar_prod = ""
     st.session_state.show_toast = f"✅ Ingreso directo: {int(cant)} {prod}"
@@ -462,17 +439,16 @@ def popup_voz():
     st.text_input("Producto", value=datos['prod'], key="voz_input_prod")
     st.date_input("Fecha", value=datos['fecha'], key="voz_input_fech")
     
-    # Botones de Acción
     col1, col2 = st.columns(2)
     with col1:
         st.button("🥖 Ingresar", use_container_width=True, type="primary", on_click=guardar_datos_voz, args=(seleccion_wa,))
     with col2:
         if st.button("❌ Cancelar", use_container_width=True):
             st.session_state.confirmacion_voz = None
+            st.session_state.ultimo_audio_procesado = None # Para que pueda reintentar
             st.session_state.audio_leido = False
             st.rerun()
 
-# (Se completa la función manual que había quedado cortada en tu código)
 @st.dialog("✏️ Registrar Manualmente")
 def popup_manual(nombre_final):
     st.markdown(f"### 📦 Producto: {nombre_final}")
@@ -496,22 +472,24 @@ def popup_manual(nombre_final):
         st.rerun()
 
 # ------------------------------------------------------------
-# INTERFAZ PRINCIPAL Y BOTÓN DE VOZ (LÓGICA IMPLEMENTADA)
+# INTERFAZ PRINCIPAL Y BOTÓN DE VOZ CORREGIDO
 # ------------------------------------------------------------
 st.header(f"Gestión de Inventario - {seleccion_wa}")
 
-# Paso 1 y 2: Renderizar el botón y capturar
+# 1. Componente del botón (sin just_once para que no se bloquee)
 texto_capturado = speech_to_text(
     language='es-MX',
     start_prompt="🎙️ Toca para Dictar",
     stop_prompt="🔴 Grabando...",
     use_container_width=True,
-    just_once=True,
     key='stt_mic_unico'
 )
 
-# Paso 3: Proteger el dato en Session State
-if texto_capturado:
+# 2. Candado de ejecución: Verifica que haya texto y que sea diferente a la última corrida
+if texto_capturado and texto_capturado != st.session_state.get("ultimo_audio_procesado"):
+    
+    st.session_state.ultimo_audio_procesado = texto_capturado
+    
     prod, cant, fec = analizar_dictado(texto_capturado, fecha_hoy_mx)
     st.session_state.confirmacion_voz = {
         'original': texto_capturado,
@@ -519,9 +497,11 @@ if texto_capturado:
         'cant': cant,
         'fecha': fec
     }
+    
+    # Recarga manual obligatoria para que el script abra el popup
     st.rerun()
 
-# Paso 4: Lanzar la ventana de confirmación
+# 3. Disparar Pop-up si hay datos confirmados en memoria
 if st.session_state.get("confirmacion_voz"):
     popup_voz()
 
