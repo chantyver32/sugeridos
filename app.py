@@ -8,7 +8,7 @@ import io
 import re
 import os
 import streamlit.components.v1 as components
-from streamlit_mic_recorder import speech_to_text # <-- IMPORTACIÓN DEL BOTÓN NUEVO
+from streamlit_mic_recorder import speech_to_text  # <-- LIBRERÍA AGREGADA
 
 # ------------------ CONFIGURACIÓN GENERAL ------------------
 with st.spinner('Iniciando sistema Champlitte... 🥐'):
@@ -19,57 +19,96 @@ with st.spinner('Iniciando sistema Champlitte... 🥐'):
 
 # CSS personalizado 
 st.markdown("""
-<style>
+    <style>
     ul[role="listbox"] li[aria-selected="true"] {
         background-color: transparent !important;
         font-weight: bold !important;
     }
+    
     /* Ajuste equilibrado del espacio superior */
     .block-container { padding-top: 3rem; padding-bottom: 1rem; }
+    
     .main { background-color: #f5f7f9; }
+    
     /* FIX: Remover sombras (ghosting) y duplicados en los botones normales y de formulario */
-    .stButton > button, .stFormSubmitButton > button { 
-        width: 100%; border-radius: 8px; font-weight: bold; 
-        transition: none !important; -webkit-transition: none !important; 
+    .stButton > button, 
+    .stFormSubmitButton > button { 
+        width: 100%; 
+        border-radius: 8px; 
+        font-weight: bold; 
+        transition: none !important;
+        -webkit-transition: none !important;
     }
-    .stButton > button:focus, .stButton > button:active, 
-    .stFormSubmitButton > button:focus, .stFormSubmitButton > button:active { 
-        box-shadow: none !important; outline: none !important; transform: none !important; 
+    
+    .stButton > button:focus, .stButton > button:active,
+    .stFormSubmitButton > button:focus, .stFormSubmitButton > button:active {
+        box-shadow: none !important;
+        outline: none !important;
+        transform: none !important;
     }
+
     /* Eliminar transiciones de renderizado en los contenedores y formularios */
-    [data-testid="stElementContainer"], [data-testid="stForm"] { 
-        transition: none !important; animation: none !important; 
+    [data-testid="stElementContainer"], 
+    [data-testid="stForm"] {
+        transition: none !important;
+        animation: none !important;
     }
-    .btn-wa { 
-        background-color: #25D366; color: white !important; padding: 10px 20px; 
-        text-align: center; text-decoration: none !important; display: block; 
-        font-size: 14px; font-weight: bold; border-radius: 8px; margin: 10px 0; 
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
+    
+    .btn-wa {
+        background-color: #25D366;
+        color: white !important;
+        padding: 10px 20px;
+        text-align: center;
+        text-decoration: none !important;
+        display: block;
+        font-size: 14px;
+        font-weight: bold;
+        border-radius: 8px;
+        margin: 10px 0;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
     .btn-wa:hover { background-color: #128C7E; }
+    
     div[data-testid="stMetricValue"] { font-size: 28px; color: #1f77b4; }
     div[data-testid="stMetricDelta"] { font-size: 30px !important; font-weight: bold !important; }
     div[data-testid="stMetricDelta"] svg { width: 35px !important; height: 35px !important; }
+
     /* ESTILO OSCURO PARA LISTAS DESPLEGABLES */
-    div[data-baseweb="popover"] > div { 
-        background-color: #1a1a1c !important; border-radius: 8px !important; 
-        border: 1px solid rgba(255, 255, 255, 0.1) !important; box-shadow: 0 4px 12px rgba(0,0,0,0.8) !important; 
+    div[data-baseweb="popover"] > div {
+        background-color: #1a1a1c !important; 
+        border-radius: 8px !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.8) !important;
     }
     div[data-baseweb="popover"] ul { background-color: transparent !important; }
-    div[data-baseweb="popover"] li { 
-        background-color: transparent !important; color: #FFFFFF !important; 
-        font-size: 14px !important; padding-top: 10px !important; padding-bottom: 10px !important; 
+    div[data-baseweb="popover"] li {
+        background-color: transparent !important;
+        color: #FFFFFF !important;
+        font-size: 14px !important;
+        padding-top: 10px !important;
+        padding-bottom: 10px !important;
     }
     div[data-baseweb="popover"] li:hover { background-color: #2d2d30 !important; }
-    div[data-baseweb="popover"] li[aria-selected="true"] { background-color: #3a3b3e !important; font-weight: bold !important; }
-    div[data-baseweb="select"] > div { 
-        background-color: #1a1a1c !important; border-radius: 8px !important; 
-        border: 1px solid rgba(255, 255, 255, 0.2) !important; 
+    
+    div[data-baseweb="popover"] li[aria-selected="true"] {
+        background-color: #3a3b3e !important; 
+        font-weight: bold !important;
     }
-    div[data-baseweb="select"] > div:focus-within { border-color: #ff4b4b !important; box-shadow: 0 0 0 1px #ff4b4b !important; }
+
+    div[data-baseweb="select"] > div {
+        background-color: #1a1a1c !important; 
+        border-radius: 8px !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    }
+
+    div[data-baseweb="select"] > div:focus-within {
+        border-color: #ff4b4b !important; 
+        box-shadow: 0 0 0 1px #ff4b4b !important;
+    }
+
     div[data-baseweb="select"] div { color: #FFFFFF !important; }
     div[data-baseweb="select"] svg { fill: #FFFFFF !important; }
-</style>
+    </style>
 """, unsafe_allow_html=True)
 
 # ------------------ SISTEMA DE NOTIFICACIONES POST-RERUN ------------------
@@ -93,7 +132,9 @@ if not db_url:
         db_url = st.secrets["DATABASE_URL"]
     except:
         pass
+        
 conn = st.connection("supabase", type="sql", url=db_url)
+
 with conn.session as s:
     s.execute(text('''CREATE TABLE IF NOT EXISTS usuarios (
         id SERIAL PRIMARY KEY, username TEXT UNIQUE, password TEXT
@@ -114,15 +155,18 @@ with conn.session as s:
 def verificar_login():
     if "autenticado" not in st.session_state:
         st.session_state.autenticado = False
+
     if not st.session_state.autenticado:
         st.markdown("### 🥐 Sugeridos")
         st.markdown("### Control de Acceso")
+        
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             with st.form("form_login"):
                 usuario_input = st.text_input("👤 Usuario:", key="login_usr")
                 password_input = st.text_input("🔑 Contraseña:", type="password", key="login_pwd")
                 btn_login = st.form_submit_button("Iniciar Sesión", use_container_width=True, type="primary")
+                
                 if btn_login:
                     df_check = conn.query("SELECT * FROM usuarios WHERE username = :u AND password = :p", 
                                           params={"u": usuario_input.strip(), "p": password_input}, ttl=0)
@@ -166,8 +210,9 @@ def generar_excel_formato(df, sucursal, titulo="PASTELERÍA CHAMPLITTE, S.A. DE 
     writer = pd.ExcelWriter(output, engine='xlsxwriter')
     workbook = writer.book
     sheet = workbook.add_worksheet('SUGERIDOS')
-    
+
     sheet.hide_gridlines(2)
+
     color_guinda = '#8C0000'
     color_sombreado_rojo = '#FCE4D6' 
     
@@ -176,6 +221,7 @@ def generar_excel_formato(df, sucursal, titulo="PASTELERÍA CHAMPLITTE, S.A. DE 
     fmt_etiqueta = workbook.add_format({'bold': True, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10})
     fmt_valor = workbook.add_format({'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10})
     fmt_header_tabla = workbook.add_format({'bold': True, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10})
+    
     fmt_datos_centro = workbook.add_format({'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10})
     fmt_sombreado = workbook.add_format({'bg_color': color_sombreado_rojo, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10})
 
@@ -376,7 +422,7 @@ def guardar_datos_voz(sucursal):
         s.commit()
         
     st.session_state.confirmacion_voz = None
-    st.session_state.ultimo_audio_procesado = None # <-- Clave para resetear el botón
+    st.session_state.ultimo_audio_procesado = None
     st.session_state.audio_leido = False
     st.session_state.buscar_prod = ""
     st.session_state.show_toast = f"✅ Ingreso directo: {int(cant)} {prod}"
@@ -384,7 +430,7 @@ def guardar_datos_voz(sucursal):
 # ------------------------------------------------------------
 # DEFINICIÓN DE POP-UPS (st.dialog)
 # ------------------------------------------------------------
-@st.dialog("🗣️ Confirmar Dictado")
+@st.dialog("🗣️")
 def popup_voz():
     datos = st.session_state.get("confirmacion_voz")
     if not datos:
@@ -412,10 +458,10 @@ def popup_voz():
     st.text_input("Producto", value=datos['prod'], key="voz_input_prod")
     st.date_input("Fecha", value=datos['fecha'], key="voz_input_fech")
     
-    # Botones con opción de Cancelar añadida para evitar quedarse atrapado
+    # ❌ FIX: Se añadio botón de cancelar para que el usuario pueda abortar y el botón no se bloquee
     col1, col2 = st.columns(2)
     with col1:
-        st.button("🥖 Ingresar", use_container_width=True, type="primary", on_click=guardar_datos_voz, args=(seleccion_wa,))
+        st.button("🥖 Ingreso directo", use_container_width=True, type="primary", on_click=guardar_datos_voz, args=(seleccion_wa,))
     with col2:
         if st.button("❌ Cancelar", use_container_width=True):
             st.session_state.confirmacion_voz = None
@@ -423,7 +469,7 @@ def popup_voz():
             st.session_state.audio_leido = False
             st.rerun()
 
-@st.dialog("✏️ Registro")
+@st.dialog("✏️")
 def popup_manual(nombre_final):
     st.markdown(f"### 📦 {nombre_final}")
     
@@ -437,7 +483,7 @@ def popup_manual(nombre_final):
     )
     
     f_cad = fecha_sugerido if opcion_fecha == "Sugerido (Mañana)" else fecha_dia_mas
-    
+
     st.write("")
     col_sum1, col_sum2, col_sum3 = st.columns(3)
     with col_sum1:
@@ -490,11 +536,11 @@ with tab1:
         st.session_state.conteo_temp = 0
     if "buscar_prod" not in st.session_state:
         st.session_state.buscar_prod = ""
-        
+
     st.markdown(f"### 📍 Estás en la sucursal: **{seleccion_wa}**")
 
-    # --- 1. INGRESO POR VOZ NUEVO ---
-    with st.expander("🎤 **Ingreso por Voz** (Clic para desplegar)", expanded=True):
+    # --- 1. INGRESO POR VOZ AL INICIO ---
+    with st.expander("🎤 **Ingreso por Voz** (Clic para desplegar)", expanded=False):
         
         texto_capturado = speech_to_text(
             language='es-MX',
@@ -505,17 +551,10 @@ with tab1:
         )
 
         if texto_capturado and texto_capturado != st.session_state.get("ultimo_audio_procesado"):
-            
             st.session_state.ultimo_audio_procesado = texto_capturado
-            
-            prod, cant, fec = analizar_dictado(texto_capturado, fecha_hoy_mx)
-            st.session_state.confirmacion_voz = {
-                'original': texto_capturado,
-                'prod': prod,
-                'cant': cant,
-                'fecha': fec
-            }
-            
+            prod, cant, fech = analizar_dictado(texto_capturado, fecha_hoy_mx)
+            st.session_state.confirmacion_voz = {"prod": prod, "cant": cant, "fecha": fech, "original": texto_capturado}
+            st.session_state.audio_leido = False  
             st.rerun()
 
     if st.session_state.get("confirmacion_voz"):
@@ -531,7 +570,7 @@ with tab1:
 
     st.text_input(
         "Añadir producto", 
-        placeholder="🔎 AÑADIR PRODUCTO (Presiona Enter para agregar)...",
+        placeholder="🔎 AÑADIR PRODUCTO (Presiona Enter para agregar)...", 
         key="buscar_prod", 
         label_visibility="collapsed",
         on_change=on_buscar_prod_change
@@ -549,31 +588,33 @@ with tab1:
                 }
             }, 100);
             </script>
-            """, height=0
+            """,
+            height=0
         )
         st.session_state.enfocar_buscador = False
 
     st.divider()
-
+    
     df_hoy_captura = conn.query("SELECT id, nombre, fecha_cad AS \"Fecha\", cantidad FROM captura_actual WHERE sucursal=:suc", params={"suc": seleccion_wa}, ttl=0)
     
     if not df_hoy_captura.empty:
         with st.expander("📋 Productos registrados al momento", expanded=False):
             df_editado = st.data_editor(
-                df_hoy_captura,
-                column_config={"id": None},
-                num_rows="dynamic",
-                height=300,
-                use_container_width=True,
-                hide_index=True,
+                df_hoy_captura, 
+                column_config={"id": None}, 
+                num_rows="dynamic", 
+                height=300, 
+                use_container_width=True, 
+                hide_index=True, 
                 key="editor_conteo"
             )
+            
             if st.button("💾 Guardar Cambios", use_container_width=True):
                 with conn.session as s:
                     s.execute(text("DELETE FROM captura_actual WHERE sucursal = :suc"), {"suc": seleccion_wa})
                     for _, fila in df_editado.iterrows():
                         if pd.notna(fila["nombre"]) and str(fila["nombre"]).strip() != "":
-                            s.execute(text("INSERT INTO captura_actual (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"),
+                            s.execute(text("INSERT INTO captura_actual (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
                                       {"suc": seleccion_wa, "nom": str(fila["nombre"]).upper(), "fec": str(fila["Fecha"]), "can": int(fila["cantidad"])})
                     s.commit()
                 st.session_state.show_toast = "✅ Cambios guardados."
@@ -594,27 +635,27 @@ with tab2:
         else:
             # Tabla editable interactiva
             df_editado_stock = st.data_editor(
-                df_stock,
+                df_stock, 
                 column_config={"id": None}, # Ocultamos el ID en la interfaz
-                num_rows="dynamic",         # Permite añadir y eliminar filas
-                use_container_width=True,
-                hide_index=True,
+                num_rows="dynamic", # Permite añadir y eliminar filas
+                use_container_width=True, 
+                hide_index=True, 
                 key="editor_sugeridos"
             )
+            
             # Botón para confirmar y guardar los cambios en la base de datos
             if st.button("💾 Confirmar Cambios", use_container_width=True, type="primary"):
                 with conn.session as s:
                     # Limpiamos los registros de la sucursal actual
                     s.execute(text("DELETE FROM base_anterior WHERE sucursal = :suc"), {"suc": seleccion_wa})
-                    
                     # Insertamos los datos modificados del editor
                     for _, fila in df_editado_stock.iterrows():
                         if pd.notna(fila["Producto"]) and str(fila["Producto"]).strip() != "":
-                            s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"),
+                            s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
                                       {
-                                          "suc": seleccion_wa,
-                                          "nom": str(fila["Producto"]).upper(),
-                                          "fec": str(fila["Fecha"]),
+                                          "suc": seleccion_wa, 
+                                          "nom": str(fila["Producto"]).upper(), 
+                                          "fec": str(fila["Fecha"]), 
                                           "can": int(fila["Existencia"])
                                       })
                     s.commit()
@@ -623,7 +664,7 @@ with tab2:
                 st.rerun()
 
     st.divider()
-
+    
     # 1. DESCARGAR
     st.markdown("### 📥 Descargar Excel Actualizado")
     
@@ -634,7 +675,6 @@ with tab2:
         st.warning("No hay datos para generar el Excel.")
     else:
         elabora_input = st.text_input("👨‍🍳 Nombre de quien Elabora", value=st.session_state.get('usuario_actual', 'PEDRO GARCÍA')).upper()
-        
         msg_stock = f""
         link_st = f"https://wa.me/{numero_whatsapp.strip()}?text={urllib.parse.quote(msg_stock)}"
         
@@ -644,12 +684,11 @@ with tab2:
         col_down1, col_down2 = st.columns(2)
         with col_down1:
             st.download_button(
-                "📗 1. Descargar Excel",
-                data=excel_stock,
-                file_name=f"Sugeridos_{seleccion_wa}_{fecha_hoy_mx}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "📗 1. Descargar Excel", 
+                data=excel_stock, 
+                file_name=f"Sugeridos_{seleccion_wa}_{fecha_hoy_mx}.xlsx", 
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
                 use_container_width=True
             )
         with col_down2:
             st.link_button("💬 2. Abrir WhatsApp", link_st, use_container_width=True, type="primary")
-
