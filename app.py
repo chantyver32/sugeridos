@@ -24,12 +24,10 @@ st.markdown("""
         font-weight: bold !important;
     }
     
-    /* Ajuste equilibrado del espacio superior */
     .block-container { padding-top: 3rem; padding-bottom: 1rem; }
     
     .main { background-color: #f5f7f9; }
     
-    /* FIX: Remover sombras (ghosting) y duplicados en los botones normales y de formulario */
     .stButton > button, 
     .stFormSubmitButton > button { 
         width: 100%; 
@@ -46,7 +44,6 @@ st.markdown("""
         transform: none !important;
     }
 
-    /* Eliminar transiciones de renderizado en los contenedores y formularios */
     [data-testid="stElementContainer"], 
     [data-testid="stForm"] {
         transition: none !important;
@@ -56,23 +53,22 @@ st.markdown("""
     .btn-wa {
         background-color: #25D366;
         color: white !important;
-        padding: 10px 20px;
+        padding: 15px 20px;
         text-align: center;
         text-decoration: none !important;
         display: block;
-        font-size: 14px;
+        font-size: 16px;
         font-weight: bold;
         border-radius: 8px;
-        margin: 10px 0;
+        margin: 10px auto;
+        max-width: 600px;
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
-    .btn-wa:hover { background-color: #128C7E; }
+    .btn-wa:hover { background-color: #128C7E; color: white !important;}
     
     div[data-testid="stMetricValue"] { font-size: 28px; color: #1f77b4; }
     div[data-testid="stMetricDelta"] { font-size: 30px !important; font-weight: bold !important; }
-    div[data-testid="stMetricDelta"] svg { width: 35px !important; height: 35px !important; }
-
-    /* ESTILO OSCURO PARA LISTAS DESPLEGABLES */
+    
     div[data-baseweb="popover"] > div {
         background-color: #1a1a1c !important; 
         border-radius: 8px !important;
@@ -88,7 +84,6 @@ st.markdown("""
         padding-bottom: 10px !important;
     }
     div[data-baseweb="popover"] li:hover { background-color: #2d2d30 !important; }
-    
     div[data-baseweb="popover"] li[aria-selected="true"] {
         background-color: #3a3b3e !important; 
         font-weight: bold !important;
@@ -99,12 +94,10 @@ st.markdown("""
         border-radius: 8px !important;
         border: 1px solid rgba(255, 255, 255, 0.2) !important;
     }
-
     div[data-baseweb="select"] > div:focus-within {
         border-color: #ff4b4b !important; 
         box-shadow: 0 0 0 1px #ff4b4b !important;
     }
-
     div[data-baseweb="select"] div { color: #FFFFFF !important; }
     div[data-baseweb="select"] svg { fill: #FFFFFF !important; }
     </style>
@@ -201,9 +194,6 @@ def resetear():
     st.session_state.conteo_temp = 0
     sonido_click()
 
-def limpiar_buscador():
-    st.session_state.buscar_prod = ""
-
 def generar_excel_formato(df, sucursal, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.", elabora="PEDRO GARCÍA"):
     output = io.BytesIO()
     writer = pd.ExcelWriter(output, engine='xlsxwriter')
@@ -283,7 +273,6 @@ def generar_excel_formato(df, sucursal, titulo="PASTELERÍA CHAMPLITTE, S.A. DE 
 
 def analizar_dictado(texto, fecha_base):
     texto = texto.lower()
-    
     nums = {"un": "1", "uno": "1", "una": "1", "dos": "2", "tres": "3", "cuatro": "4", "cinco": "5", "seis": "6"}
     for k, v in nums.items():
         texto = re.sub(rf'\b{k}\b', v, texto)
@@ -356,7 +345,7 @@ st.sidebar.caption(f"📱 WhatsApp: **{numero_whatsapp}**")
 st.sidebar.divider()
 
 st.sidebar.markdown("### 💾 Respaldo de Base de Datos")
-st.sidebar.info(f"Guarda o restaura tu stock específicamente para {seleccion_wa}.")
+st.sidebar.info(f"Guarda o restaura tu stock para {seleccion_wa}.")
 archivo_csv = st.sidebar.file_uploader("⬆️ Subir Respaldo CSV", type=["csv"])
 
 if archivo_csv is not None:
@@ -398,9 +387,8 @@ if st.session_state.get('usuario_actual', '').lower() == 'admin':
             else:
                 st.sidebar.error("Debes confirmar primero seleccionando la casilla.")
 
-
 # ------------------------------------------------------------
-# LÓGICA DE CALLBACKS PARA POPUP VOZ (Evita Bugs y Ghosting)
+# LÓGICA DE CALLBACKS PARA POPUP VOZ
 # ------------------------------------------------------------
 def guardar_datos_voz(sucursal):
     cant = st.session_state.voz_input_cant
@@ -428,10 +416,9 @@ def guardar_datos_voz(sucursal):
     st.session_state.show_toast = f"✅ Ingreso directo: {int(cant)} {prod}"
 
 # ------------------------------------------------------------
-# DEFINICIÓN DE POP-UPS (st.dialog)
+# POP-UPS (st.dialog)
 # ------------------------------------------------------------
-
-@st.dialog("🗣️")
+@st.dialog("🗣️ Confirmar Dictado")
 def popup_voz():
     datos = st.session_state.get("confirmacion_voz")
     if not datos:
@@ -461,8 +448,7 @@ def popup_voz():
     
     st.button("🥖 Ingreso directo", use_container_width=True, type="primary", on_click=guardar_datos_voz, args=(seleccion_wa,))
 
-
-@st.dialog("✏️")
+@st.dialog("✏️ Registrar Manualmente")
 def popup_manual(nombre_final):
     st.markdown(f"### 📦 {nombre_final}")
     fecha_sugerido = fecha_hoy_mx + timedelta(days=1)
@@ -516,10 +502,10 @@ def popup_manual(nombre_final):
             st.warning("Agrega una cantidad mayor a 0.")
 
 # ------------------ TABS ------------------
-tab1, tab2, tab3 = st.tabs(["📝 Registro", "📦 Archivo", "🖼️ Reporte Visual"])
+tab1, tab2, tab3 = st.tabs(["📝 Captura", "📋 Datos Excel", "🖼️ Reporte Visual"])
 
 # ------------------------------------------------------------
-# TAB 1: CONTEO
+# TAB 1: CAPTURA (VOZ Y MANUAL)
 # ------------------------------------------------------------
 with tab1:
     if "conteo_temp" not in st.session_state:
@@ -527,15 +513,18 @@ with tab1:
     if "buscar_prod" not in st.session_state:
         st.session_state.buscar_prod = ""
 
-    st.markdown(f"### 📍 Estás en la sucursal: **{seleccion_wa}**")
-    st.markdown("### Registrar Nueva Mercancía")
+    st.markdown(f"### 📍 Sucursal: **{seleccion_wa}**")
+    st.markdown("## Registrar Nueva Mercancía")
 
-    # --- 1. MÉTODO DE INGRESO ---
+    # --- MÉTODO DE INGRESO ---
     metodo = st.radio("Método:", options=["✍️ Manual", "🗣️ Voz"], horizontal=True)
+    st.write("")
 
     if metodo == "🗣️ Voz":
         st.info("💡 Dicta ej: '3 brownies para el 15 de octubre'")
-        audio_val = st.audio_input("Grabando...")
+        # Este label_visibility="collapsed" hace que el botón de grabar 
+        # se vea solo como la grabadora, exacto a la imagen sin textos extra
+        audio_val = st.audio_input("Grabando...", label_visibility="collapsed")
 
         if audio_val is not None:
             audio_bytes = audio_val.getvalue()
@@ -553,14 +542,12 @@ with tab1:
                             st.session_state.audio_leido = False  
                             st.rerun()
                 except ImportError:
-                    st.error("⚠️ Faltan dependencias. Asegúrate de tener SpeechRecognition en tu requirements.txt")
+                    st.error("⚠️ Faltan dependencias. Instala SpeechRecognition.")
                 except Exception as e:
-                    st.toast("❌ No pude entender el audio o hubo mucho ruido de fondo.")
+                    st.toast("❌ No pude entender el audio o hubo ruido de fondo.")
 
     if st.session_state.get("confirmacion_voz"):
         popup_voz()
-
-    st.divider()
 
     if metodo == "✍️ Manual":
         def on_buscar_prod_change():
@@ -621,64 +608,48 @@ with tab1:
                 st.rerun()
 
 # ------------------------------------------------------------
-# TAB 2: INVENTARIO Y CORTE
+# TAB 2: INVENTARIO Y CORTE (DATOS EXCEL)
 # ------------------------------------------------------------
 with tab2:
     st.markdown("### 📦 Gestión de Sugeridos")
     
-    # Consultar datos de stock con ID oculto para permitir edición de filas dinámicas
     df_stock = conn.query('SELECT id, nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc', params={"suc": seleccion_wa}, ttl=0)
     
     with st.expander(f"✏️ Editar Sugeridos de {seleccion_wa}", expanded=True):
         if df_stock.empty:
-            st.info("No hay stock registrado. Realiza un ingreso directo en la pestaña de Registro.")
+            st.info("No hay stock registrado. Realiza un ingreso directo en la pestaña de Captura.")
         else:
-            # Tabla editable interactiva
             df_editado_stock = st.data_editor(
                 df_stock, 
-                column_config={"id": None}, # Ocultamos el ID en la interfaz
-                num_rows="dynamic", # Permite añadir y eliminar filas
+                column_config={"id": None},
+                num_rows="dynamic", 
                 use_container_width=True, 
                 hide_index=True, 
                 key="editor_sugeridos"
             )
             
-            # Botón para confirmar y guardar los cambios en la base de datos
             if st.button("💾 Confirmar Cambios", use_container_width=True, type="primary"):
                 with conn.session as s:
-                    # Limpiamos los registros de la sucursal actual
                     s.execute(text("DELETE FROM base_anterior WHERE sucursal = :suc"), {"suc": seleccion_wa})
-                    # Insertamos los datos modificados del editor
                     for _, fila in df_editado_stock.iterrows():
                         if pd.notna(fila["Producto"]) and str(fila["Producto"]).strip() != "":
                             s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
-                                      {
-                                          "suc": seleccion_wa, 
-                                          "nom": str(fila["Producto"]).upper(), 
-                                          "fec": str(fila["Fecha"]), 
-                                          "can": int(fila["Existencia"])
-                                      })
+                                      {"suc": seleccion_wa, "nom": str(fila["Producto"]).upper(), "fec": str(fila["Fecha"]), "can": int(fila["Existencia"])})
                     s.commit()
-                # Notificamos el éxito y recargamos para regenerar el Excel
                 st.session_state.show_toast = "✅ Sugeridos actualizados correctamente."
                 st.rerun()
 
     st.divider()
     
-    # 1. DESCARGAR
     st.markdown("### 📥 Descargar Excel Actualizado")
     
-    # Volvemos a consultar la base (ya sin el id) para pasarla al generador de Excel
     df_stock_final = conn.query('SELECT nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc', params={"suc": seleccion_wa}, ttl=0)
     
     if df_stock_final.empty:
         st.warning("No hay datos para generar el Excel.")
     else:
         elabora_input = st.text_input("👨‍🍳 Nombre de quien Elabora", value=st.session_state.get('usuario_actual', 'PEDRO GARCÍA')).upper()
-        msg_stock = f""
-        link_st = f"https://wa.me/{numero_whatsapp.strip()}?text={urllib.parse.quote(msg_stock)}"
         
-        # Generar el Excel con el DataFrame validado tras las ediciones
         excel_stock = generar_excel_formato(df_stock_final, sucursal=seleccion_wa, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.", elabora=elabora_input)
         
         col_down1, col_down2 = st.columns(2)
@@ -691,24 +662,26 @@ with tab2:
                 use_container_width=True
             )
         with col_down2:
-            st.link_button("💬 2. Abrir WhatsApp", link_st, use_container_width=True, type="primary")
+            msg_excel = f"Sugeridos listos en Excel para {seleccion_wa}."
+            link_ex = f"https://wa.me/{numero_whatsapp.strip()}?text={urllib.parse.quote(msg_excel)}"
+            st.link_button("💬 2. Abrir WhatsApp", link_ex, use_container_width=True, type="primary")
 
 # ------------------------------------------------------------
-# TAB 3: REPORTE VISUAL
+# TAB 3: REPORTE VISUAL HTML
 # ------------------------------------------------------------
 with tab3:
-    st.markdown("### 🖼️ Reporte Visual de Sugeridos")
+    st.markdown("## 🖼️ Reporte Visual de Sugeridos")
 
+    # Extraer la data
     df_stock_visual = conn.query('SELECT nombre, cantidad, fecha_cad FROM base_anterior WHERE sucursal=:suc ORDER BY fecha_cad ASC', params={"suc": seleccion_wa}, ttl=0)
     
-    if df_stock_visual.empty:
-        st.info("No hay sugeridos registrados para mostrar el reporte.")
-    else:
-        fecha_hora_actual = datetime.now(zona_mx).strftime("%d %m %Y - %H:%M")
-        
-        filas_html = ""
+    fecha_hora_actual = datetime.now(zona_mx).strftime("%d %m %Y - %H:%M")
+    filas_html = ""
+    
+    if not df_stock_visual.empty:
         for i, fila in df_stock_visual.iterrows():
-            bg_color = "#fce4d6" if i % 2 == 1 else "white"
+            # Intercalado de color como en la imagen, base blanca o rosa claro
+            bg_color = "#fce4d6" if i % 2 == 1 else "#ffffff"
             
             fecha_str = str(fila['fecha_cad'])
             try:
@@ -721,39 +694,67 @@ with tab3:
             
             filas_html += f"""
             <tr style="background-color: {bg_color}; border-bottom: 1px solid #f0f0f0;">
-                <td style="padding: 12px; text-align: left; font-size: 13px;">{fila['nombre']}</td>
-                <td style="padding: 12px; font-weight: bold; color: #8C0000; font-size: 13px;">{fila['cantidad']}</td>
-                <td style="padding: 12px; font-size: 13px;">{fecha_str}</td>
+                <td style="padding: 12px; text-align: left; font-size: 14px; color: #333;">{fila['nombre']}</td>
+                <td style="padding: 12px; font-weight: bold; color: #8C0000; font-size: 14px;">{fila['cantidad']}</td>
+                <td style="padding: 12px; font-size: 14px; color: #333;">{fecha_str}</td>
             </tr>
             """
-            
-        html_reporte = f"""
-        <div style="background-color: white; border-radius: 15px; padding: 25px 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: black; max-width: 600px; margin: 0 auto;">
-            <div style="text-align: center; margin-bottom: 20px;">
-                <h1 style="color: #8C0000; margin: 0; font-size: 38px; font-weight: 900; letter-spacing: -0.5px;">Champlitte</h1>
-                <p style="margin: 0; font-size: 12px; letter-spacing: 3px; font-weight: 600; color: #333;">PASTELERÍA</p>
-                <h2 style="color: #8C0000; margin: 15px 0 5px 0; font-size: 22px; font-weight: 800; letter-spacing: 1px;">SUGERIDOS</h2>
-                <p style="margin: 0; font-size: 12px; font-weight: bold; color: #666;">{fecha_hora_actual}</p>
+    else:
+        filas_html = """
+        <tr>
+            <td colspan="3" style="padding: 20px; text-align: center; color: #999;">No hay sugeridos registrados al momento</td>
+        </tr>
+        """
+        
+    # Construcción segura de HTML: Componente aislado (evita CSS oscuro de streamlit)
+    html_reporte = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+        body {{ margin: 0; padding: 20px; background-color: transparent; font-family: 'Segoe UI', Arial, sans-serif; }}
+        .card {{ background-color: #ffffff; border-radius: 15px; padding: 30px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-width: 600px; margin: 0 auto; }}
+        .header {{ text-align: center; margin-bottom: 25px; }}
+        .title {{ color: #8C0000; margin: 0; font-size: 42px; font-weight: 900; letter-spacing: -0.5px; font-family: Georgia, serif; }}
+        .subtitle {{ margin: 0; font-size: 13px; letter-spacing: 3px; font-weight: 700; color: #555; }}
+        .category {{ color: #8C0000; margin: 20px 0 5px 0; font-size: 24px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }}
+        .date {{ margin: 0; font-size: 13px; font-weight: bold; color: #777; }}
+        table {{ width: 100%; border-collapse: collapse; text-align: center; margin-bottom: 20px; }}
+        th {{ background-color: #8C0000; color: white; font-size: 12px; font-weight: bold; letter-spacing: 1px; padding: 14px; }}
+        th:first-child {{ border-top-left-radius: 8px; text-align: left; }}
+        th:last-child {{ border-top-right-radius: 8px; }}
+    </style>
+    </head>
+    <body>
+        <div class="card">
+            <div class="header">
+                <h1 class="title">Champlitte</h1>
+                <p class="subtitle">PASTELERÍA</p>
+                <h2 class="category">SUGERIDOS</h2>
+                <p class="date">{fecha_hora_actual}</p>
             </div>
-            <table style="width: 100%; border-collapse: collapse; text-align: center; margin-bottom: 20px;">
-                <tr style="background-color: #8C0000; color: white; font-size: 12px; letter-spacing: 1px;">
-                    <th style="padding: 12px; text-align: left; border-top-left-radius: 8px;">PRODUCTO</th>
-                    <th style="padding: 12px;">CANTIDAD</th>
-                    <th style="padding: 12px; border-top-right-radius: 8px;">FECHA</th>
+            <table>
+                <tr>
+                    <th>PRODUCTO</th>
+                    <th>CANTIDAD</th>
+                    <th>FECHA</th>
                 </tr>
                 {filas_html}
             </table>
         </div>
-        <p style="text-align: center; color: gray; font-size: 14px; margin-top: 15px;">Reporte generado automáticamente</p>
-        """
-        
-        st.markdown(html_reporte, unsafe_allow_html=True)
-        
-        msg_stock = "Aquí tienes los sugeridos visuales de " + seleccion_wa
-        link_st = f"https://wa.me/{numero_whatsapp.strip()}?text={urllib.parse.quote(msg_stock)}"
-        
-        st.write("")
-        st.markdown(
-            f'<a href="{link_st}" class="btn-wa" target="_blank" style="max-width: 600px; margin: 0 auto;">📞 Enviar Reporte a {seleccion_wa}</a>', 
-            unsafe_allow_html=True
-        )
+        <p style="text-align: center; color: gray; font-size: 14px; margin-top: 20px;">Reporte generado automáticamente</p>
+    </body>
+    </html>
+    """
+    
+    # Altura estática suficiente para que se vean todos los items; scrolling habilitado por si son muchos
+    components.html(html_reporte, height=700, scrolling=True)
+    
+    # Botón Flotante de Enviar Reporte a WhatsApp
+    msg_stock = "Aquí tienes el reporte visual de sugeridos correspondiente a " + seleccion_wa
+    link_st = f"https://wa.me/{numero_whatsapp.strip()}?text={urllib.parse.quote(msg_stock)}"
+    
+    st.markdown(
+        f'<a href="{link_st}" class="btn-wa" target="_blank">📞 Enviar Reporte a {seleccion_wa}</a>', 
+        unsafe_allow_html=True
+    )
