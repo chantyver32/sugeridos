@@ -8,7 +8,8 @@ import io
 import re
 import os
 import streamlit.components.v1 as components
-from streamlit_mic_recorder import speech_to_text # <-- IMPORTACIÓN DE VOZ AÑADIDA
+from streamlit_mic_recorder import speech_to_text 
+from PIL import Image, ImageDraw, ImageFont # <-- IMPORTACIONES DE IMAGEN AÑADIDAS
 
 # ------------------ CONFIGURACIÓN GENERAL ------------------
 with st.spinner('Iniciando sistema Champlitte... 🥐'):
@@ -48,21 +49,6 @@ st.markdown("""
         transition: none !important;
         animation: none !important;
     }
-    
-    .btn-wa {
-        background-color: #25D366;
-        color: white !important;
-        padding: 10px 20px;
-        text-align: center;
-        text-decoration: none !important;
-        display: block;
-        font-size: 14px;
-        font-weight: bold;
-        border-radius: 8px;
-        margin: 10px 0;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    }
-    .btn-wa:hover { background-color: #128C7E; }
     
     div[data-testid="stMetricValue"] { font-size: 28px; color: #1f77b4; }
     div[data-testid="stMetricDelta"] { font-size: 30px !important; font-weight: bold !important; }
@@ -114,6 +100,19 @@ if "show_error" in st.session_state:
 if "show_warning" in st.session_state:
     st.warning(st.session_state.show_warning)
     del st.session_state.show_warning
+
+# ------------------ DICCIONARIO EMPAQUES (PARA REPORTE) ------------------
+EMPAQUES = {
+    "CUBILETE": {"categoria": "Dulce", "piezas_x_paq": 16},
+    "TUTI": {"categoria": "Dulce", "piezas_x_paq": 27},
+    "JAMÓN": {"categoria": "Salado", "piezas_x_paq": 9},
+    "COCHINITA": {"categoria": "Salado", "piezas_x_paq": 9},
+    "PICADILLO": {"categoria": "Salado", "piezas_x_paq": 9},
+    "PIERNA": {"categoria": "Salado", "piezas_x_paq": 9},
+    "CHORIZO": {"categoria": "Salado", "piezas_x_paq": 20},
+    "SALCHICHA": {"categoria": "Salado", "piezas_x_paq": 20},
+    "HOJALDRA": {"categoria": "Mixta", "piezas_x_paq": 48},
+}
 
 # ------------------ BASE DE DATOS (SUPABASE) ------------------
 db_url = os.environ.get("DATABASE_URL")
@@ -173,7 +172,7 @@ def verificar_login():
 if not verificar_login():
     st.stop()
 
-# ------------------ FUNCIONES ------------------
+# ------------------ FUNCIONES LOGICAS ------------------
 def sonido_click():
     st.markdown(
         """
@@ -208,7 +207,6 @@ def analizar_dictado(texto, fecha_base):
         except ValueError:
             pass
         texto = texto.replace(match_fecha.group(0), "")
-    # <-- LÓGICA DE DÍAS ACTUALIZADA AQUÍ -->
     elif "extra" in texto:
         fecha_calc = fecha_base + timedelta(days=3)
         texto = texto.replace("extra", "")
@@ -246,6 +244,99 @@ def guardar_manual(sucursal, prod, cant, fech):
         s.commit()
     st.session_state.show_toast = f"✅ Guardado: {cant} {prod}"
 
+# ------------------ FUNCIONES IMAGEN Y BOTON WA ------------------
+def get_font(names, size):
+    for name in names:
+        try: return ImageFont.truetype(name, size)
+        except: continue
+    return ImageFont.load_default()
+
+def dibujar_logo_texto(draw, width, color_vino, color_texto_oscuro):
+    font_champlitte = get_font(["DejaVuSerif-Bold.ttf", "georgiab.ttf", "Times-Bold.ttf", "arialbd.ttf"], 75)
+    font_pasteleria = get_font(["DejaVuSans-Bold.ttf", "arialbd.ttf", "Helvetica-Bold.ttf"], 22)
+    draw.text((width//2, 60), "Champlitte", fill=color_vino, font=font_champlitte, anchor="mm")
+    draw.text((width//2, 130), "PASTELERÍA", fill=color_texto_oscuro, font=font_pasteleria, anchor="mm")
+
+def generar_plantilla_sugeridos(datos, fecha_str):
+    width = 900
+    espacio_logo = 175 
+    header_height = 130
+    table_header_height = 45
+    row_height = 55
+    total_height = espacio_logo + header_height + table_header_height + (max(1, len(datos)) * row_height) + 40
+
+    img = Image.new('RGB', (width, total_height), color=(255, 253, 251))
+    draw = ImageDraw.Draw(img)
+
+    WINE, WINE_LIGHT, TEXT_DARK, WHITE = (128, 21, 43), (160, 40, 70), (40, 40, 40), (255, 255, 255)
+    ROW_ALT, LINE_COLOR = (253, 243, 243), (235, 220, 225) 
+
+    font_title = get_font(["DejaVuSans-Bold.ttf", "arialbd.ttf"], 42)
+    font_sub = get_font(["DejaVuSans.ttf", "arial.ttf"], 18)
+    font_th = get_font(["DejaVuSans-Bold.ttf", "arialbd.ttf"], 13)
+    font_td = get_font(["DejaVuSans.ttf", "arial.ttf"], 15)
+    font_badge = get_font(["DejaVuSans-Bold.ttf", "arialbd.ttf"], 11)
+
+    dibujar_logo_texto(draw, width, WINE, TEXT_DARK)
+
+    y = espacio_logo
+    draw.text((width//2, y + 35), "SUGERIDOS", fill=WINE, font=font_title, anchor="mm")
+    draw.text((width//2, y + 85), fecha_str, fill=TEXT_DARK, font=font_sub, anchor="mm")
+
+    y += header_height
+    draw.rectangle([0, y, width, y + table_header_height], fill=WINE)
+    
+    col_prod, col_linea, col_cant, col_totales = 200, 520, 680, 820
+    draw.text((col_prod, y + 22), "PRODUCTO", fill=WHITE, font=font_th, anchor="mm")
+    draw.text((col_linea, y + 22), "CATEGORÍA", fill=WHITE, font=font_th, anchor="mm")
+    draw.text((col_cant, y + 22), "PAQUETE + PIEZAS", fill=WHITE, font=font_th, anchor="mm")
+    draw.text((col_totales, y + 22), "TOTAL (PIEZAS)", fill=WHITE, font=font_th, anchor="mm")
+
+    y += table_header_height
+    if not datos:
+        draw.rectangle([0, y, width, y + row_height], fill=WHITE)
+        draw.text((width//2, y + (row_height//2)), "No hay sugeridos registrados", fill=TEXT_DARK, font=font_td, anchor="mm")
+        y += row_height
+    else:
+        for item in datos:
+            bg_color = WHITE if datos.index(item) % 2 == 0 else ROW_ALT
+            draw.rectangle([0, y, width, y + row_height], fill=bg_color)
+            draw.line([420, y, 420, y + row_height], fill=LINE_COLOR, width=1)
+            draw.line([600, y, 600, y + row_height], fill=LINE_COLOR, width=1)
+            draw.line([750, y, 750, y + row_height], fill=LINE_COLOR, width=1)
+
+            draw.text((30, y + (row_height//2)), str(item.get("producto", "")), fill=TEXT_DARK, font=font_td, anchor="lm")
+
+            linea_texto = str(item.get("linea", ""))
+            badge_bg = WINE_LIGHT if "Mixta" in linea_texto else ((252, 230, 230) if "Dulce" in linea_texto else WINE)
+            badge_text = WHITE if "Mixta" in linea_texto else (WINE if "Dulce" in linea_texto else WHITE)
+
+            badge_w, badge_h = 130, 26
+            badge_x = col_linea - (badge_w//2)
+            badge_y = y + (row_height//2) - (badge_h//2)
+            if linea_texto != "-":
+                draw.rounded_rectangle([badge_x, badge_y, badge_x + badge_w, badge_y + badge_h], radius=13, fill=badge_bg)
+                draw.text((col_linea, y + (row_height//2)), linea_texto.upper(), fill=badge_text, font=font_badge, anchor="mm")
+
+            draw.text((col_cant, y + (row_height//2)), str(item.get("cantidad", "")), fill=TEXT_DARK, font=font_th, anchor="mm")
+            draw.text((col_totales, y + (row_height//2)), str(item.get("totales", "0")), fill=WINE, font=font_th, anchor="mm")
+
+            draw.line([0, y + row_height, width, y + row_height], fill=LINE_COLOR, width=1)
+            y += row_height
+
+    img.save("reporte_sugeridos.png")
+    return "reporte_sugeridos.png"
+
+def boton_whatsapp_bonito(url, texto):
+    html_wa = f"""
+    <a href="{url}" target="_blank" style="background-color: #25D366; color: white; text-align: center; padding: 12px 20px; border-radius: 8px; text-decoration: none; font-weight: bold; font-family: sans-serif; display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; box-sizing: border-box; font-size: 16px;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16"><path d="M11.42 9.49c-.19-.09-1.1-.54-1.27-.61s-.29-.09-.41.1-.48.61-.59.73-.21.14-.4.05a5.1 5.1 0 0 1-1.5-.92 5.54 5.54 0 0 1-1.04-1.29c-.11-.18 0-.28.09-.38.08-.09.19-.21.28-.32a1.36 1.36 0 0 0 .19-.32.54.54 0 0 0-.03-.52c-.05-.09-.41-1-.56-1.37-.15-.36-.3-.31-.41-.31h-.35a.68.68 0 0 0-.49.23 2.06 2.06 0 0 0-.64 1.53c0 1.22 1.25 2.4 1.42 2.63.17.23 1.79 2.73 4.33 3.82.6.26 1.07.41 1.44.53.6.19 1.15.16 1.58.1.48-.07 1.47-.6 1.68-1.18.21-.58.21-1.07.15-1.18-.06-.1-.23-.15-.42-.24zM8 14.5a6.5 6.5 0 1 1 0-13 6.5 6.5 0 0 1 0 13zM8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0z"/></svg>
+        {texto}
+    </a>
+    <br>
+    """
+    st.markdown(html_wa, unsafe_allow_html=True)
+
 # ------------------ SIDEBAR ------------------
 st.sidebar.markdown("### 🏢 Datos de Sesión")
 st.sidebar.caption(f"👤 Conectado como: **{st.session_state.get('usuario_actual', 'Usuario')}**")
@@ -258,7 +349,7 @@ if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True):
 st.sidebar.divider()
 
 opciones_wa = {
-    "URANO": "522281342454", "COSTA DE ORO": "522292780850", "COSTA VERDE": "522299359597",
+    "URANO": "522291653665", "COSTA DE ORO": "522292780850", "COSTA VERDE": "522299359597",
     "DÍAZ MIRÓN": "522291302759", "EJÉRCITO MEXICANO": "522299272107", "PLAZA RÍO": "522299864120",
     "PLAYAS DEL CONCHAL": "522291794020", "COYOL": "522299398334", "LA PLACITA": "522299208481",
     "CUAUHTÉMOC": "522291651340", "MARIO MOLINA": "522291780851", "RAFAEL CUERVO": "522291980229",
@@ -270,9 +361,9 @@ opciones_wa = {
     "EMILIANO ZAPATA": "522969628525"
 }
 
-# Pre-seleccionar Costa Verde si es posible
+# Pre-seleccionar Urano por defecto
 lista_tiendas = list(opciones_wa.keys())
-idx_defecto = lista_tiendas.index("COSTA VERDE") if "COSTA VERDE" in lista_tiendas else 0
+idx_defecto = lista_tiendas.index("URANO") if "URANO" in lista_tiendas else 0
 seleccion_wa = st.sidebar.selectbox("📍 Selecciona la Sucursal", lista_tiendas, index=idx_defecto)
 numero_whatsapp = opciones_wa[seleccion_wa]
 st.sidebar.caption(f"📱 WhatsApp: **{numero_whatsapp}**")
@@ -340,7 +431,6 @@ def popup_voz():
 def popup_manual(nombre_final):
     st.markdown(f"### 📦 {nombre_final}")
     
-    # <-- LÓGICA DE DÍAS AÑADIDA AQUÍ -->
     fecha_sugerido = fecha_hoy_mx + timedelta(days=1)
     fecha_dia_mas = fecha_hoy_mx + timedelta(days=2)
     fecha_extra = fecha_hoy_mx + timedelta(days=3) 
@@ -362,45 +452,104 @@ def popup_manual(nombre_final):
             st.rerun()
 
 # ------------------------------------------------------------
-# INTERFAZ PRINCIPAL
+# INTERFAZ PRINCIPAL (TABS)
 # ------------------------------------------------------------
 st.title("🥐 Sugeridos - Champlitte")
 
-col1, col2 = st.columns([3, 1])
-with col1:
-    producto_buscado = st.text_input("🔍 Buscar o registrar producto manualmente:", placeholder="Ej. Cubiletes")
-    if st.button("Abrir registro manual", type="secondary"):
-        if producto_buscado:
-            popup_manual(producto_buscado.upper())
-        else:
-            st.warning("Escribe un producto primero.")
+tab1, tab2, tab3 = st.tabs(["📝 Captura", "📋 Datos Excel", "🖼️ Reporte Visual"])
 
-with col2:
-    # <-- EL BOTÓN CON FORMATO IMPLEMENTADO -->
-    texto_capturado = speech_to_text(
-        language='es-MX',                 
-        start_prompt="🎙️ Dictar Entrada", 
-        stop_prompt="🔴 Grabando...",     
-        use_container_width=True,         
-        just_once=True,                   
-        key='boton_dictado_sugeridos'             
-    )
+# ---------- PESTAÑA 1: CAPTURA ----------
+with tab1:
+    st.header("Registrar Nuevo Sugerido")
+    tipo_entrada = st.radio("Método:", ["✍️ Manual", "🗣️ Voz"], horizontal=True)
+    
+    if tipo_entrada == "🗣️ Voz":
+        st.info("💡 Dicta ej: 'Sugerido dos cubiletes para mañana'")
+        texto_capturado = speech_to_text(
+            language='es-MX',                 
+            start_prompt="🎙️ Toca para Dictar", 
+            stop_prompt="🔴 Grabando...",     
+            use_container_width=True,         
+            just_once=True,                   
+            key='boton_dictado_sugeridos'             
+        )
+        if texto_capturado:
+            prod, cant, fech = analizar_dictado(texto_capturado, fecha_hoy_mx)
+            st.session_state.confirmacion_voz = {
+                'original': texto_capturado,
+                'prod': prod,
+                'cant': cant,
+                'fecha': fech
+            }
+            popup_voz()
+    
+    else: # Modo Manual
+        producto_buscado = st.text_input("🔍 Buscar o registrar producto manualmente:", placeholder="Ej. Cubiletes")
+        if st.button("Abrir registro manual", type="secondary", use_container_width=True):
+            if producto_buscado:
+                popup_manual(producto_buscado.upper())
+            else:
+                st.warning("Escribe un producto primero.")
 
-    if texto_capturado:
-        prod, cant, fech = analizar_dictado(texto_capturado, fecha_hoy_mx)
-        st.session_state.confirmacion_voz = {
-            'original': texto_capturado,
-            'prod': prod,
-            'cant': cant,
-            'fecha': fech
-        }
-        popup_voz()
+# ---------- PESTAÑA 2: DATOS EXCEL ----------
+with tab2:
+    st.subheader("📋 Resumen Rápido de Inventario")
+    df_resumen = conn.query("SELECT nombre, cantidad, fecha_cad FROM base_anterior WHERE sucursal = :suc", params={"suc": seleccion_wa}, ttl=0)
 
-st.divider()
-st.subheader("📋 Resumen Rápido de Inventario")
-df_resumen = conn.query("SELECT nombre, cantidad, fecha_cad FROM base_anterior WHERE sucursal = :suc", params={"suc": seleccion_wa}, ttl=0)
+    if not df_resumen.empty:
+        st.dataframe(df_resumen, use_container_width=True)
+    else:
+        st.info(f"No hay sugeridos registrados actualmente para {seleccion_wa}.")
 
-if not df_resumen.empty:
-    st.dataframe(df_resumen, use_container_width=True)
-else:
-    st.info(f"No hay registros actuales para {seleccion_wa}.")
+# ---------- PESTAÑA 3: REPORTE VISUAL ----------
+with tab3:
+    st.header("Generar Reporte Visual")
+    
+    df_resumen = conn.query("SELECT nombre, cantidad FROM base_anterior WHERE sucursal = :suc", params={"suc": seleccion_wa}, ttl=0)
+    
+    datos_plantilla = []
+    fecha_img_str = datetime.now(zona_mx).strftime('%d %m %Y - %H:%M')
+    
+    if not df_resumen.empty:
+        # Agrupar por nombre por si hay repetidos en la BD para sacar el total
+        df_agrupado = df_resumen.groupby('nombre')['cantidad'].sum().reset_index()
+        
+        for index, row in df_agrupado.iterrows():
+            prod_db = str(row['nombre']).upper()
+            totales = int(row['cantidad'])
+            
+            linea = "-"
+            cant_texto = f"{totales} pz"
+            
+            # Buscar coincidencia en diccionario para calcular paquetes
+            for p_key, p_data in EMPAQUES.items():
+                if p_key in prod_db:
+                    linea = p_data["categoria"]
+                    pz_x_paq = p_data["piezas_x_paq"]
+                    paquetes = totales // pz_x_paq
+                    sueltas = totales % pz_x_paq
+                    
+                    if paquetes > 0 and sueltas == 0:
+                        cant_texto = f"{paquetes} pq"
+                    elif paquetes == 0 and sueltas > 0:
+                        cant_texto = f"{sueltas} pz"
+                    else:
+                        cant_texto = f"{paquetes} pq + {sueltas} pz"
+                    break
+                    
+            datos_plantilla.append({
+                "producto": prod_db,
+                "linea": linea,
+                "cantidad": cant_texto,
+                "totales": totales
+            })
+            
+    ruta_img = generar_plantilla_sugeridos(datos_plantilla, fecha_img_str)
+    st.image(ruta_img, caption="Reporte generado automáticamente", use_container_width=True)
+    
+    if seleccion_wa:
+        mensaje_wa = f"Sugeridos ({seleccion_wa} | {fecha_img_str})"
+        url_wa = f"https://wa.me/{numero_whatsapp}?text={urllib.parse.quote(mensaje_wa)}"
+        boton_whatsapp_bonito(url_wa, f"Enviar Reporte a {seleccion_wa}")
+    else:
+        st.info("ℹ️ Selecciona una sucursal en el menú lateral para enviar por WhatsApp.")
