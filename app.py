@@ -108,6 +108,21 @@ st.markdown("""
 
     div[data-baseweb="select"] div { color: #FFFFFF !important; }
     div[data-baseweb="select"] svg { fill: #FFFFFF !important; }
+
+    /* ESTILOS PARA LOS BOTONES DEL POP-UP (Rojo y Traslúcido) */
+    button[kind="primary"] {
+        background-color: #ff4b4b !important; /* Rojito */
+        color: white !important;
+        border: none !important;
+    }
+    button[kind="secondary"] {
+        background-color: transparent !important; /* Traslúcido */
+        border: 1px solid rgba(136, 136, 136, 0.5) !important;
+        color: rgba(136, 136, 136, 0.9) !important;
+    }
+    button[kind="secondary"]:hover {
+        background-color: rgba(136, 136, 136, 0.1) !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -173,6 +188,7 @@ def verificar_login():
                     if not df_check.empty:
                         st.session_state.autenticado = True
                         st.session_state.usuario_actual = usuario_input.strip()
+                        st.session_state.inicio_popup_mostrado = False # Bandera para mostrar el pop-up al iniciar
                         st.session_state.show_toast = "✅ ¡Bienvenid@!"
                         st.rerun()
                     else:
@@ -434,6 +450,26 @@ def guardar_datos_voz(sucursal):
 # ------------------------------------------------------------
 # DEFINICIÓN DE POP-UPS (st.dialog)
 # ------------------------------------------------------------
+@st.dialog("⚠️ Nueva Captura")
+def popup_inicio_captura(sucursal):
+    st.markdown(f"¿Deseas iniciar una nueva captura de sugeridos para **{sucursal}**?")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Sí, continuar", type="primary", use_container_width=True):
+            with conn.session as s:
+                s.execute(text("DELETE FROM base_anterior WHERE sucursal = :suc"), {"suc": sucursal})
+                s.execute(text("DELETE FROM captura_actual WHERE sucursal = :suc"), {"suc": sucursal})
+                s.commit()
+            st.session_state.inicio_popup_mostrado = True
+            st.session_state.show_toast = f"✅ Base de {sucursal} reiniciada para nueva captura."
+            st.rerun()
+    with col2:
+        if st.button("No, mantener captura actual", type="secondary", use_container_width=True):
+            st.session_state.inicio_popup_mostrado = True
+            st.rerun()
+
+
 @st.dialog("🗣️")
 def popup_voz():
     datos = st.session_state.get("confirmacion_voz")
@@ -534,6 +570,16 @@ def popup_manual(nombre_final):
             st.rerun()
         else:
             st.warning("Agrega una cantidad mayor a 0.")
+
+
+# ------------------ TRIGGER DEL POPUP DE INICIO ------------------
+# Revisar si se debe mostrar el popup al momento de iniciar sesión y cargar la sucursal actual
+if "inicio_popup_mostrado" not in st.session_state:
+    st.session_state.inicio_popup_mostrado = False
+
+if not st.session_state.inicio_popup_mostrado:
+    popup_inicio_captura(seleccion_wa)
+
 
 # ------------------ TABS ------------------
 tab1, tab2, tab3 = st.tabs(["📝 Registro", "📦 Archivo", "🖼️ Reporte Visual"])
