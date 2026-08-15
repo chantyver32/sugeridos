@@ -10,7 +10,7 @@ import os
 import streamlit.components.v1 as components
 from streamlit_mic_recorder import speech_to_text
 import pytesseract
-from PIL import Image
+from PIL import Image, ImageOps, ImageEnhance
 
 # ------------------ CONFIGURACIÓN GENERAL ------------------
 with st.spinner('Iniciando sistema Champlitte... 🥐'):
@@ -469,7 +469,6 @@ def popup_inicio_captura(sucursal):
             st.session_state.inicio_popup_mostrado = True
             st.rerun()
 
-
 @st.dialog("🗣️")
 def popup_voz():
     datos = st.session_state.get("confirmacion_voz")
@@ -602,13 +601,27 @@ with tab1:
     
     if foto_etiqueta is not None:
         imagen = Image.open(foto_etiqueta)
-        with st.spinner("Analizando etiqueta con IA..."):
-            texto_extraido = pytesseract.image_to_string(imagen)
+        with st.spinner("Mejorando imagen y analizando etiqueta con IA..."):
+            
+            # --- PREPROCESAMIENTO DE IMAGEN ---
+            # Convertir a blanco y negro y aumentar el contraste
+            imagen_gris = ImageOps.grayscale(imagen)
+            mejorador = ImageEnhance.Contrast(imagen_gris)
+            imagen_mejorada = mejorador.enhance(2.0)
+            
+            # Extracción con Tesseract OCR
+            texto_extraido = pytesseract.image_to_string(imagen_mejorada, config='--psm 3')
+            
+            # --- CAJA DE DEPURACIÓN (Muestra lo que la IA vio) ---
+            with st.expander("👁️ Ver texto crudo detectado (Para depurar)"):
+                st.text(texto_extraido)
+            
+            # Limpieza y obtención del nombre (primera línea relevante)
             lineas = [linea.strip() for linea in texto_extraido.split('\n') if len(linea.strip()) > 3]
             nombre_detectado = lineas[0] if lineas else ""
             
-            # Buscar formato DD/MM/YY o similar
-            coincidencia_fecha = re.search(r'(\d{2}/\d{2}/\d{2,4})', texto_extraido)
+            # Búsqueda de fecha flexible
+            coincidencia_fecha = re.search(r'(\d{2}[\/\-]\d{2}[\/\-]\d{2,4})', texto_extraido.replace(" ", ""))
             fecha_detectada = coincidencia_fecha.group(1) if coincidencia_fecha else ""
             
         with st.form("form_camara"):
@@ -623,13 +636,13 @@ with tab1:
             
             if st.form_submit_button("Guardar Escaneo", type="primary", use_container_width=True):
                 try:
-                    # Convierte la fecha del input (texto) a un objeto DATE para la base de datos
+                    # Convierte la fecha adaptando años de 2 o 4 dígitos
                     if len(fec_f.split('/')[-1]) == 2:
                         fec_obj = datetime.strptime(fec_f, "%d/%m/%y").date()
                     else:
                         fec_obj = datetime.strptime(fec_f, "%d/%m/%Y").date()
                 except ValueError:
-                    # Fallback si Tesseract leyó mal la fecha o se introdujo incorrectamente
+                    # Fallback si falla la lectura de fecha
                     fec_obj = fecha_hoy_mx
                     
                 with conn.session as s:
