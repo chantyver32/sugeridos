@@ -8,13 +8,9 @@ import io
 import re
 import os
 import streamlit.components.v1 as components
-from streamlit_mic_recorder import speech_to_text  
-
-# NUEVAS IMPORTACIONES PARA CÁMARA Y OCR
-from PIL import Image
-import numpy as np
-from pyzbar.pyzbar import decode
+from streamlit_mic_recorder import speech_to_text
 import pytesseract
+from PIL import Image
 
 # ------------------ CONFIGURACIÓN GENERAL ------------------
 with st.spinner('Iniciando sistema Champlitte... 🥐'):
@@ -23,7 +19,7 @@ with st.spinner('Iniciando sistema Champlitte... 🥐'):
     
     st.set_page_config(page_title="Sugeridos", page_icon="🥐", layout="wide")
 
-# CSS personalizado[span_1](start_span)[span_1](end_span)
+# CSS personalizado 
 st.markdown("""
     <style>
     ul[role="listbox"] li[aria-selected="true"] {
@@ -132,7 +128,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# ------------------ SISTEMA DE NOTIFICACIONES POST-RERUN ------------------[span_2](start_span)[span_2](end_span)
+# ------------------ SISTEMA DE NOTIFICACIONES POST-RERUN ------------------
 if "show_toast" in st.session_state:
     st.toast(st.session_state.show_toast)
     del st.session_state.show_toast
@@ -146,7 +142,7 @@ if "show_warning" in st.session_state:
     st.warning(st.session_state.show_warning)
     del st.session_state.show_warning
 
-# ------------------ BASE DE DATOS (SUPABASE) ------------------[span_3](start_span)[span_3](end_span)
+# ------------------ BASE DE DATOS (SUPABASE) ------------------
 db_url = os.environ.get("DATABASE_URL")
 if not db_url:
     try:
@@ -172,7 +168,7 @@ with conn.session as s:
     )'''))
     s.commit()
 
-# ------------------ SISTEMA DE LOGIN ------------------[span_4](start_span)[span_4](end_span)
+# ------------------ SISTEMA DE LOGIN ------------------
 def verificar_login():
     if "autenticado" not in st.session_state:
         st.session_state.autenticado = False
@@ -205,7 +201,7 @@ def verificar_login():
 if not verificar_login():
     st.stop()
 
-# ------------------ FUNCIONES ------------------[span_5](start_span)[span_5](end_span)
+# ------------------ FUNCIONES ------------------
 def sonido_click():
     st.markdown(
         """
@@ -349,7 +345,7 @@ def analizar_dictado(texto, fecha_base):
     producto = re.sub(r'\s+', ' ', texto).strip().upper()
     return producto, cantidad, fecha_calc
 
-# ------------------ SIDEBAR ------------------[span_6](start_span)[span_6](end_span)
+# ------------------ SIDEBAR ------------------
 st.sidebar.markdown("### 🏢 Datos de Sesión")
 st.sidebar.caption(f"👤 Conectado como: **{st.session_state.get('usuario_actual', 'Usuario')}**")
 if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True):
@@ -421,7 +417,9 @@ if st.session_state.get('usuario_actual', '').lower() == 'admin':
             else:
                 st.sidebar.error("Debes confirmar primero seleccionando la casilla.")
 
-# ------------------ CALLBACKS ------------------[span_7](start_span)[span_7](end_span)
+# ------------------------------------------------------------
+# LÓGICA DE CALLBACKS PARA POPUP VOZ 
+# ------------------------------------------------------------
 def guardar_datos_voz(sucursal):
     cant = st.session_state.voz_input_cant
     prod = st.session_state.voz_input_prod.strip().upper()
@@ -449,7 +447,9 @@ def guardar_datos_voz(sucursal):
     st.session_state.mic_key += 1 
     st.session_state.show_toast = f"✅ Ingreso directo: {int(cant)} {prod}"
 
-# ------------------ POP-UPS ------------------[span_8](start_span)[span_8](end_span)
+# ------------------------------------------------------------
+# DEFINICIÓN DE POP-UPS (st.dialog)
+# ------------------------------------------------------------
 @st.dialog("⚠️ Nueva Captura")
 def popup_inicio_captura(sucursal):
     st.markdown(f"¿Deseas iniciar una nueva captura de sugeridos para **{sucursal}**?")
@@ -571,6 +571,8 @@ def popup_manual(nombre_final):
         else:
             st.warning("Agrega una cantidad mayor a 0.")
 
+
+# ------------------ TRIGGER DEL POPUP DE INICIO ------------------
 if "inicio_popup_mostrado" not in st.session_state:
     st.session_state.inicio_popup_mostrado = False
 
@@ -578,9 +580,12 @@ if not st.session_state.inicio_popup_mostrado:
     popup_inicio_captura(seleccion_wa)
 
 
-# ------------------ TABS ------------------[span_9](start_span)[span_9](end_span)
+# ------------------ TABS ------------------
 tab1, tab2, tab3 = st.tabs(["📝 Registro", "📦 Archivo", "🖼️ Reporte Visual"])
 
+# ------------------------------------------------------------
+# TAB 1: CONTEO
+# ------------------------------------------------------------
 with tab1:
     if "conteo_temp" not in st.session_state:
         st.session_state.conteo_temp = 0
@@ -591,7 +596,58 @@ with tab1:
 
     st.markdown(f"### 📍 Estás en la sucursal: **{seleccion_wa}**")
 
-    # --- 1. INGRESO POR VOZ ---[span_10](start_span)[span_10](end_span)
+    # --- 1. ESCÁNER DE CÁMARA ---
+    st.markdown("📷 **Escaneo de Etiqueta**")
+    foto_etiqueta = st.camera_input("Toma foto de la etiqueta", key="camara_ocr")
+    
+    if foto_etiqueta is not None:
+        imagen = Image.open(foto_etiqueta)
+        with st.spinner("Analizando etiqueta con IA..."):
+            texto_extraido = pytesseract.image_to_string(imagen)
+            lineas = [linea.strip() for linea in texto_extraido.split('\n') if len(linea.strip()) > 3]
+            nombre_detectado = lineas[0] if lineas else ""
+            
+            # Buscar formato DD/MM/YY o similar
+            coincidencia_fecha = re.search(r'(\d{2}/\d{2}/\d{2,4})', texto_extraido)
+            fecha_detectada = coincidencia_fecha.group(1) if coincidencia_fecha else ""
+            
+        with st.form("form_camara"):
+            st.write("Verifica los datos extraídos:")
+            col_c1, col_c2 = st.columns(2)
+            with col_c1:
+                nom_f = st.text_input("Producto", value=nombre_detectado)
+            with col_c2:
+                fec_f = st.text_input("Fecha (DD/MM/AA o DD/MM/AAAA)", value=fecha_detectada)
+            
+            cant_f = st.number_input("Cantidad", min_value=1, value=1, step=1)
+            
+            if st.form_submit_button("Guardar Escaneo", type="primary", use_container_width=True):
+                try:
+                    # Convierte la fecha del input (texto) a un objeto DATE para la base de datos
+                    if len(fec_f.split('/')[-1]) == 2:
+                        fec_obj = datetime.strptime(fec_f, "%d/%m/%y").date()
+                    else:
+                        fec_obj = datetime.strptime(fec_f, "%d/%m/%Y").date()
+                except ValueError:
+                    # Fallback si Tesseract leyó mal la fecha o se introdujo incorrectamente
+                    fec_obj = fecha_hoy_mx
+                    
+                with conn.session as s:
+                    existe_stock = s.execute(text("SELECT cantidad FROM base_anterior WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                                             {"nom": nom_f.upper(), "fec": str(fec_obj), "suc": seleccion_wa}).fetchone()
+                    if existe_stock:
+                        s.execute(text("UPDATE base_anterior SET cantidad=cantidad+:can WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
+                                  {"can": cant_f, "nom": nom_f.upper(), "fec": str(fec_obj), "suc": seleccion_wa})
+                    else:
+                        s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
+                                  {"suc": seleccion_wa, "nom": nom_f.upper(), "fec": str(fec_obj), "can": cant_f})
+                    s.commit()
+                st.session_state.show_toast = f"✅ Escaneo guardado: {cant_f} {nom_f.upper()}"
+                st.rerun()
+
+    st.divider()
+
+    # --- 2. INGRESO POR VOZ ---
     st.markdown("🎤 **Ingreso por Voz**")
     
     texto_capturado = speech_to_text(
@@ -614,7 +670,7 @@ with tab1:
         
     st.divider()
 
-    # --- 2. AÑADIR PRODUCTO (TEXT INPUT) ---[span_11](start_span)[span_11](end_span)
+    # --- 3. AÑADIR PRODUCTO (TEXT INPUT) ---
     def on_buscar_prod_change():
         texto = st.session_state.buscar_prod.strip().upper()
         if texto:
@@ -646,91 +702,7 @@ with tab1:
         st.session_state.enfocar_buscador = False
 
     st.divider()
-
-    # ------------------------------------------------------------
-    # --- 3. INGRESO POR CÁMARA (NUEVO MODO) ---
-    # ------------------------------------------------------------
-    st.markdown("📷 **Ingreso por Cámara (Escáner)**")
-    foto = st.camera_input("📸 Centra la etiqueta (nombre y código/fecha impresos)", key="camara_captura")
     
-    if foto:
-        try:
-            img = Image.open(foto)
-            img_array = np.array(img)
-            
-            # OCR en español para detectar todo el texto
-            texto_etiqueta = pytesseract.image_to_string(img, lang='spa').strip()
-            
-            # Extraer Nombre (Primera línea de texto no vacía)
-            lineas = [l for l in texto_etiqueta.split('\n') if l.strip()]
-            nombre_detectado = lineas[0].upper() if lineas else ""
-            
-            # Buscar Fecha en el Código de Barras
-            fecha_escaneada = None
-            codigos = decode(img_array)
-            for cod in codigos:
-                texto_cod = cod.data.decode('utf-8').strip()
-                if len(texto_cod) == 6 and texto_cod.isdigit():
-                    dia = int(texto_cod[:2])
-                    mes = int(texto_cod[2:4])
-                    anio = int("20" + texto_cod[4:6])
-                    try:
-                        fecha_escaneada = datetime(anio, mes, dia).date()
-                        break 
-                    except ValueError:
-                        pass
-            
-            # RESPALDO: Buscar Fecha Impresa (OCR) si el código falla
-            if not fecha_escaneada:
-                # Busca formatos como dd/mm/aa, dd-mm-aaaa, dd.mm.aa
-                match_fecha = re.search(r'\b(\d{2})[/.-](\d{2})[/.-](\d{2}|\d{4})\b', texto_etiqueta)
-                if match_fecha:
-                    dia = int(match_fecha.group(1))
-                    mes = int(match_fecha.group(2))
-                    anio_str = match_fecha.group(3)
-                    anio = int(anio_str) if len(anio_str) == 4 else int("20" + anio_str)
-                    try:
-                        fecha_escaneada = datetime(anio, mes, dia).date()
-                    except ValueError:
-                        fecha_escaneada = fecha_hoy_mx
-                else:
-                    fecha_escaneada = fecha_hoy_mx
-            
-            st.success("✅ Lectura completada.")
-            
-            with st.form("form_camara"):
-                col_c1, col_c2, col_c3 = st.columns(3)
-                with col_c1:
-                    cam_prod = st.text_input("Producto", value=nombre_detectado)
-                with col_c2:
-                    cam_fech = st.date_input("Caducidad", value=fecha_escaneada)
-                with col_c3:
-                    cam_cant = st.number_input("Cantidad", value=1, min_value=1)
-                    
-                if st.form_submit_button("🥖 Ingresar Captura Visual", type="primary", use_container_width=True):
-                    if cam_prod.strip():
-                        with conn.session as s: 
-                            existe_stock = s.execute(text("SELECT cantidad FROM base_anterior WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
-                                                     {"nom": cam_prod.upper(), "fec": str(cam_fech), "suc": seleccion_wa}).fetchone()
-                            
-                            if existe_stock:
-                                s.execute(text("UPDATE base_anterior SET cantidad=cantidad+:can WHERE nombre=:nom AND fecha_cad=:fec AND sucursal=:suc"), 
-                                          {"can": int(cam_cant), "nom": cam_prod.upper(), "fec": str(cam_fech), "suc": seleccion_wa})
-                            else:
-                                s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
-                                          {"suc": seleccion_wa, "nom": cam_prod.upper(), "fec": str(cam_fech), "can": int(cam_cant)})
-                            s.commit()
-                            
-                        st.session_state.show_toast = f"✅ Ingreso visual: {int(cam_cant)} {cam_prod.upper()}"
-                        st.rerun()
-                    else:
-                        st.error("⚠️ Falta el nombre del producto.")
-        except Exception as e:
-            st.error(f"⚠️ Error al procesar: {e}")
-
-    st.divider()
-    
-    # --- TABLA DE CAPTURA ACTUAL ---[span_12](start_span)[span_12](end_span)
     df_hoy_captura = conn.query("SELECT id, nombre, fecha_cad AS \"Fecha\", cantidad FROM captura_actual WHERE sucursal=:suc", params={"suc": seleccion_wa}, ttl=0)
     
     if not df_hoy_captura.empty:
@@ -756,6 +728,9 @@ with tab1:
                 st.session_state.show_toast = "✅ Cambios guardados."
                 st.rerun()
 
+# ------------------------------------------------------------
+# TAB 2: INVENTARIO Y CORTE
+# ------------------------------------------------------------
 with tab2:
     st.markdown("### 📦 Gestión de Sugeridos")
     
@@ -816,6 +791,9 @@ with tab2:
         with col_down2:
             st.link_button("💬 2. Abrir WhatsApp", link_st, use_container_width=True, type="primary")
 
+# ------------------------------------------------------------
+# TAB 3: REPORTE VISUAL
+# ------------------------------------------------------------
 with tab3:
     st.markdown(f"### 🖼️ Tarjeta de Sugeridos - {seleccion_wa}")
     
