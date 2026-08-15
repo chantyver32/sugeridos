@@ -1,7 +1,10 @@
 streamlit
 pandas
-SQLAlchemy
+sqlalchemy
 pytz
-XlsxWriter
+xlsxwriter
 streamlit-mic-recorder
-psycopg2-binary 
+Pillow
+pyzbar
+pytesseract
+numpy
