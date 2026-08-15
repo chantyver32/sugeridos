@@ -600,30 +600,48 @@ with tab1:
     foto_etiqueta = st.camera_input("Toma foto de la etiqueta", key="camara_ocr")
     
     if foto_etiqueta is not None:
+        from PIL import ImageEnhance, ImageOps
+        
         imagen = Image.open(foto_etiqueta)
         with st.spinner("Mejorando imagen y analizando etiqueta con IA..."):
             
             # --- PREPROCESAMIENTO DE IMAGEN ---
-            # Convertir a blanco y negro y aumentar el contraste
             imagen_gris = ImageOps.grayscale(imagen)
             mejorador = ImageEnhance.Contrast(imagen_gris)
             imagen_mejorada = mejorador.enhance(2.0)
             
-            # Extracción con Tesseract OCR
-            texto_extraido = pytesseract.image_to_string(imagen_mejorada, config='--psm 3')
+            # --- ROTACIÓN INTELIGENTE ---
+            # La IA probará la foto normal, y luego la girará para encontrar el texto correcto
+            angulos_a_probar = [0, 270, 90, 180] 
+            texto_extraido = ""
+            nombre_detectado = ""
+            fecha_detectada = ""
             
-            # --- CAJA DE DEPURACIÓN (Muestra lo que la IA vio) ---
+            for angulo in angulos_a_probar:
+                img_prueba = imagen_mejorada.rotate(angulo, expand=True)
+                texto_prueba = pytesseract.image_to_string(img_prueba, config='--psm 3')
+                
+                # Buscamos un patrón que parezca fecha
+                coincidencia = re.search(r'(\d{2}[\/\-]\d{2}[\/\-]\d{2,4})', texto_prueba.replace(" ", ""))
+                
+                if coincidencia:
+                    texto_extraido = texto_prueba
+                    fecha_detectada = coincidencia.group(1)
+                    
+                    lineas = [linea.strip() for linea in texto_extraido.split('\n') if len(linea.strip()) > 3]
+                    nombre_detectado = lineas[0] if lineas else ""
+                    break # Detenemos la búsqueda si ya encontró algo
+            
+            # Si después de girarla no encontró nada, dejamos el texto crudo normal para depurar
+            if not texto_extraido:
+                texto_extraido = pytesseract.image_to_string(imagen_mejorada, config='--psm 3')
+                lineas = [linea.strip() for linea in texto_extraido.split('\n') if len(linea.strip()) > 3]
+                nombre_detectado = lineas[0] if lineas else ""
+            
+            # --- CAJA DE DEPURACIÓN ---
             with st.expander("👁️ Ver texto crudo detectado (Para depurar)"):
                 st.text(texto_extraido)
-            
-            # Limpieza y obtención del nombre (primera línea relevante)
-            lineas = [linea.strip() for linea in texto_extraido.split('\n') if len(linea.strip()) > 3]
-            nombre_detectado = lineas[0] if lineas else ""
-            
-            # Búsqueda de fecha flexible
-            coincidencia_fecha = re.search(r'(\d{2}[\/\-]\d{2}[\/\-]\d{2,4})', texto_extraido.replace(" ", ""))
-            fecha_detectada = coincidencia_fecha.group(1) if coincidencia_fecha else ""
-            
+                
         with st.form("form_camara"):
             st.write("Verifica los datos extraídos:")
             col_c1, col_c2 = st.columns(2)
@@ -636,13 +654,11 @@ with tab1:
             
             if st.form_submit_button("Guardar Escaneo", type="primary", use_container_width=True):
                 try:
-                    # Convierte la fecha adaptando años de 2 o 4 dígitos
                     if len(fec_f.split('/')[-1]) == 2:
                         fec_obj = datetime.strptime(fec_f, "%d/%m/%y").date()
                     else:
                         fec_obj = datetime.strptime(fec_f, "%d/%m/%Y").date()
                 except ValueError:
-                    # Fallback si falla la lectura de fecha
                     fec_obj = fecha_hoy_mx
                     
                 with conn.session as s:
