@@ -1,20 +1,25 @@
-# Usamos una imagen ligera de Python
-FROM python:3.9-slim
+# Usar una imagen oficial de Python ligera
+FROM python:3.11-slim
 
-# Establecemos el directorio de trabajo
+# Instalar dependencias del sistema (Zbar y Tesseract en español)
+RUN apt-get update && apt-get install -y \
+    libzbar0 \
+    tesseract-ocr \
+    tesseract-ocr-spa \
+    && rm -rf /var/lib/apt/lists/*
+
+# Configurar el directorio de trabajo en el contenedor
 WORKDIR /app
 
-# Copiamos primero el requirements para aprovechar el caché de Docker
-COPY requirements.txt ./requirements.txt
-
-# Instalamos las dependencias
+# Copiar el archivo de requerimientos e instalar las dependencias de Python
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copiamos el resto de tu desmadre al contenedor
+# Copiar el resto del código de la aplicación
 COPY . .
 
-# Exponemos el puerto que usa Streamlit por defecto
-EXPOSE 8501
+# Exponer el puerto que Render asigna por defecto
+EXPOSE 10000
 
-# Comando para ejecutar la aplicación (CAMBIA 'app.py' POR EL NOMBRE DE TU ARCHIVO PRINCIPAL)
-CMD mkdir -p .streamlit && echo "[connections.supabase]" > .streamlit/secrets.toml && echo "url = \"$SUPABASE_URL\"" >> .streamlit/secrets.toml && streamlit run app.py --server.port=8501 --server.address=0.0.0.0
+# Ejecutar Streamlit usando la variable de entorno PORT de Render
+CMD streamlit run "app (38).py" --server.port=${PORT:-10000} --server.address=0.0.0.0
