@@ -22,4 +22,4 @@ COPY . .
 EXPOSE 10000
 
 # Ejecutar Streamlit usando la variable de entorno PORT de Render
-CMD streamlit run "app (38).py" --server.port=${PORT:-10000} --server.address=0.0.0.0
+CMD streamlit run "app.py" --server.port=${PORT:-10000} --server.address=0.0.0.0
