@@ -188,7 +188,7 @@ def verificar_login():
                     if not df_check.empty:
                         st.session_state.autenticado = True
                         st.session_state.usuario_actual = usuario_input.strip()
-                        st.session_state.inicio_popup_mostrado = False # Bandera para mostrar el pop-up al iniciar
+                        st.session_state.inicio_popup_mostrado = False 
                         st.session_state.show_toast = "✅ ¡Bienvenid@!"
                         st.rerun()
                     else:
@@ -253,13 +253,11 @@ def generar_excel_formato(df, sucursal, titulo="PASTELERÍA CHAMPLITTE, S.A. DE 
     sheet.write('A3', 'SUCURSAL', fmt_etiqueta)
     sheet.merge_range('B3:D3', sucursal.upper(), fmt_valor)
     
-    # MODIFICADO: Agregar hora a la fecha en formato 24hrs y zona horaria de México
     sheet.write('A4', 'ACTUALIZADO', fmt_etiqueta)
     zona_mx = pytz.timezone('America/Mexico_City')
     fecha_str = datetime.now(zona_mx).strftime("%d/%m/%Y %H:%M")
     sheet.merge_range('B4:D4', fecha_str, fmt_valor)
 
-    # MODIFICADO: Se elimina "ELABORA" y se suben las cabeceras de la tabla
     sheet.write('A5', '', fmt_valor)
     sheet.write('B5', 'PRODUCTO', fmt_header_tabla)
     sheet.write('C5', 'CANTIDAD', fmt_header_tabla)
@@ -418,7 +416,7 @@ if st.session_state.get('usuario_actual', '').lower() == 'admin':
                 st.sidebar.error("Debes confirmar primero seleccionando la casilla.")
 
 # ------------------------------------------------------------
-# LÓGICA DE CALLBACKS PARA POPUP VOZ (Evita Bugs y Ghosting)
+# LÓGICA DE CALLBACKS PARA POPUP VOZ 
 # ------------------------------------------------------------
 def guardar_datos_voz(sucursal):
     cant = st.session_state.voz_input_cant
@@ -468,7 +466,6 @@ def popup_inicio_captura(sucursal):
         if st.button("No, mantener captura actual", type="secondary", use_container_width=True):
             st.session_state.inicio_popup_mostrado = True
             st.rerun()
-
 
 @st.dialog("🗣️")
 def popup_voz():
@@ -571,9 +568,7 @@ def popup_manual(nombre_final):
         else:
             st.warning("Agrega una cantidad mayor a 0.")
 
-
 # ------------------ TRIGGER DEL POPUP DE INICIO ------------------
-# Revisar si se debe mostrar el popup al momento de iniciar sesión y cargar la sucursal actual
 if "inicio_popup_mostrado" not in st.session_state:
     st.session_state.inicio_popup_mostrado = False
 
@@ -582,7 +577,7 @@ if not st.session_state.inicio_popup_mostrado:
 
 
 # ------------------ TABS ------------------
-tab1, tab2, tab3 = st.tabs(["📝 Registro", "📦 Archivo", "🖼️ Reporte Visual"])
+tab1, tab2, tab3, tab4 = st.tabs(["📝 Registro", "📦 Archivo", "🖼️ Reporte Visual", "🔄 Intertiendas"])
 
 # ------------------------------------------------------------
 # TAB 1: CONTEO
@@ -597,7 +592,6 @@ with tab1:
 
     st.markdown(f"### 📍 Estás en la sucursal: **{seleccion_wa}**")
 
-    # --- 1. INGRESO POR VOZ AL INICIO ---
     st.markdown("🎤 **Ingreso por Voz**")
     
     texto_capturado = speech_to_text(
@@ -620,7 +614,6 @@ with tab1:
         
     st.divider()
 
-    # --- 2. AÑADIR PRODUCTO (TEXT INPUT) ---
     def on_buscar_prod_change():
         texto = st.session_state.buscar_prod.strip().upper()
         if texto:
@@ -724,11 +717,9 @@ with tab2:
     if df_stock_final.empty:
         st.warning("No hay datos para generar el Excel.")
     else:
-        # MODIFICADO: Se elimina el campo de entrada "Elabora"
         msg_stock = f""
         link_st = f"https://wa.me/{numero_whatsapp.strip()}?text={urllib.parse.quote(msg_stock)}"
         
-        # MODIFICADO: Se remueve el parámetro elabora de la función
         excel_stock = generar_excel_formato(df_stock_final, sucursal=seleccion_wa, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V.")
         
         col_down1, col_down2 = st.columns(2)
@@ -754,7 +745,6 @@ with tab3:
     if df_visual.empty:
         st.warning(f"No hay productos registrados para {seleccion_wa}.")
     else:
-        # Generar las filas de la tabla en HTML (se hace en UNA SOLA LÍNEA para evitar el bug de Markdown de Streamlit)
         filas_html = ""
         for i, fila in df_visual.iterrows():
             color_fondo = "#FFFFFF" if i % 2 == 0 else "#FFF5F5"
@@ -772,12 +762,68 @@ with tab3:
             
         fecha_hora_actual = datetime.now(zona_mx).strftime("%d/%m/%Y %H:%M")
         
-        # Construcción de la tarjeta visual en una sola línea continua
         tarjeta_html = f"<div style='background-color: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); width: 100%; max-width: 500px; margin: auto; text-align: center; margin-bottom: 20px;'><h1 style='color: #6D1427; font-family: \"Times New Roman\", serif; font-size: 38px; margin: 0;'>Champlitte</h1><p style='font-family: sans-serif; font-size: 10px; font-weight: bold; letter-spacing: 3px; margin: 0 0 20px 0; color: #000;'>PASTELERÍA</p><h2 style='color: #6D1427; font-family: sans-serif; font-weight: 900; margin: 0; font-size: 22px;'>SUGERIDOS {seleccion_wa.upper()}</h2><p style='font-family: sans-serif; font-size: 12px; font-weight: bold; color: #666; margin: 5px 0 20px 0;'>{fecha_hora_actual}</p><table style='width: 100%; border-collapse: collapse; font-family: sans-serif;'><thead><tr style='background-color: #8C1C31; color: white;'><th style='padding: 12px; text-align: left; font-size: 11px; letter-spacing: 1px;'>PRODUCTO</th><th style='padding: 12px; text-align: center; font-size: 11px; letter-spacing: 1px;'>CANTIDAD</th><th style='padding: 12px; text-align: center; font-size: 11px; letter-spacing: 1px;'>FECHA</th></tr></thead><tbody>{filas_html}</tbody></table></div><p style='text-align: center; color: gray; font-size: 13px; margin-top: 15px; margin-bottom: 20px;'>Reporte generado automáticamente</p>"
         
         st.markdown(tarjeta_html, unsafe_allow_html=True)
         
-        # Botón estilo WhatsApp
         link_wp = f"https://wa.me/{numero_whatsapp.strip()}"
         boton_wp_html = f"<a href='{link_wp}' target='_blank' style='display: block; width: 100%; max-width: 500px; margin: auto; background-color: #25D366; color: white; text-align: center; padding: 15px; border-radius: 10px; font-size: 18px; font-weight: bold; text-decoration: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: background-color 0.3s;'>📞 Enviar Reporte a {seleccion_wa.upper()}</a><br><br>"
         st.markdown(boton_wp_html, unsafe_allow_html=True)
+
+# ------------------------------------------------------------
+# TAB 4: INTERTIENDAS (Buscador Rápido de Códigos)
+# ------------------------------------------------------------
+with tab4:
+    st.markdown("### 🔄 Búsqueda Rápida para Intertiendas")
+    st.caption("Escanea o busca un producto para obtener su código de traslado rápidamente.")
+    
+    if "df_codigos" not in st.session_state:
+        st.session_state.df_codigos = pd.DataFrame({
+            "Producto": [
+                "MALTEADAS", 
+                "PASTEL TRES LECHES", 
+                "TARTA DE FRUTAS", 
+                "CROISSANT", 
+                "GELATINA DE MOSAICO",
+                "PAY DE QUESO",
+                "TIRAMISÚ"
+            ],
+            "Código": [
+                "MLT-100", 
+                "PTL-201", 
+                "TFR-305", 
+                "CRO-010", 
+                "GEL-402",
+                "PAY-500",
+                "TIR-603"
+            ]
+        })
+
+    busqueda_codigo = st.text_input(
+        "🔍 Escanea o escribe el nombre/código del producto:", 
+        key="input_intertiendas",
+        placeholder="Ej. MALTEADAS o MLT-100..."
+    ).strip().upper()
+    
+    st.divider()
+
+    if busqueda_codigo:
+        resultados = st.session_state.df_codigos[
+            st.session_state.df_codigos['Producto'].str.contains(busqueda_codigo, case=False, na=False) |
+            st.session_state.df_codigos['Código'].str.contains(busqueda_codigo, case=False, na=False)
+        ]
+        
+        if not resultados.empty:
+            st.success("✅ Producto encontrado:")
+            
+            codigo_encontrado = resultados.iloc[0]['Código']
+            nombre_encontrado = resultados.iloc[0]['Producto']
+            
+            st.metric(label=f"Código para: {nombre_encontrado}", value=codigo_encontrado)
+            
+            st.dataframe(resultados, use_container_width=True, hide_index=True)
+        else:
+            st.warning("⚠️ Producto no encontrado. Verifica el nombre o intenta escanear de nuevo.")
+    else:
+        st.info("Escribe el nombre del producto arriba para revelar su código de captura.")
+        st.dataframe(st.session_state.df_codigos, use_container_width=True, hide_index=True)
