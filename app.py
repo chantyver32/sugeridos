@@ -7,6 +7,7 @@ import urllib.parse
 import io
 import re
 import os
+import random
 import streamlit.components.v1 as components
 from streamlit_mic_recorder import speech_to_text  
 
@@ -111,12 +112,12 @@ st.markdown("""
 
     /* ESTILOS PARA LOS BOTONES DEL POP-UP (Rojo y Traslúcido) */
     button[kind="primary"] {
-        background-color: #ff4b4b !important; /* Rojito */
+        background-color: #ff4b4b !important; 
         color: white !important;
         border: none !important;
     }
     button[kind="secondary"] {
-        background-color: transparent !important; /* Traslúcido */
+        background-color: transparent !important; 
         border: 1px solid rgba(136, 136, 136, 0.5) !important;
         color: rgba(136, 136, 136, 0.9) !important;
     }
@@ -188,7 +189,7 @@ def verificar_login():
                     if not df_check.empty:
                         st.session_state.autenticado = True
                         st.session_state.usuario_actual = usuario_input.strip()
-                        st.session_state.inicio_popup_mostrado = False
+                        st.session_state.inicio_popup_mostrado = False 
                         st.session_state.show_toast = "✅ ¡Bienvenid@!"
                         st.rerun()
                     else:
@@ -217,9 +218,6 @@ def sumar(valor):
 def resetear():
     st.session_state.conteo_temp = 0
     sonido_click()
-
-def limpiar_buscador():
-    st.session_state.buscar_prod = ""
 
 def generar_excel_formato(df, sucursal, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V."):
     output = io.BytesIO()
@@ -579,7 +577,8 @@ if not st.session_state.inicio_popup_mostrado:
 
 
 # ------------------ TABS ------------------
-tab1, tab2, tab3 = st.tabs(["📝 Registro", "📦 Archivo", "🖼️ Reporte Visual"])
+# Aquí restauramos la PESTAÑA 4: Intertiendas
+tab1, tab2, tab3, tab4 = st.tabs(["📝 Registro", "📦 Archivo", "🖼️ Reporte Visual", "🔄 Intertiendas"])
 
 # ------------------------------------------------------------
 # TAB 1: CONTEO
@@ -737,45 +736,87 @@ with tab2:
             st.link_button("💬 2. Abrir WhatsApp", link_st, use_container_width=True, type="primary")
 
 # ------------------------------------------------------------
-# TAB 3: REPORTE VISUAL Y RECOMENDACIONES
+# TAB 3: REPORTE VISUAL Y RECOMENDACIONES DE VENTA DINÁMICAS
 # ------------------------------------------------------------
 with tab3:
-    st.markdown(f"### 🖼️ Tarjeta de Sugeridos - {seleccion_wa}")
+    st.markdown(f"### 🖼️ Estrategia y Tarjeta - {seleccion_wa}")
     
     df_visual = conn.query('SELECT nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc ORDER BY fecha_cad ASC', params={"suc": seleccion_wa}, ttl=0)
     
     if df_visual.empty:
         st.warning(f"No hay productos registrados para {seleccion_wa}.")
     else:
-        # --- MÓDULO DE RECOMENDACIONES (SIEMPRE VISIBLE) ---
+        # --- MÓDULO DE RECOMENDACIONES (ESQUEMA VISUAL DE TARJETAS) ---
         st.markdown("#### 🎯 Qué ofrecer al cliente hoy")
-        st.caption("Aprovecha estos productos de pronta caducidad para completar la compra del cliente.")
+        st.caption("Aprovecha estos productos de pronta caducidad. Las sugerencias cambian para mantener fresco el guion.")
         
         df_urgentes = df_visual.head(3)
+        
+        # Inicio del esquema visual (HTML y Flexbox para hacerlo "bonito")
+        cards_html = "<div style='display: flex; gap: 15px; flex-wrap: wrap; justify-content: center; margin-bottom: 20px;'>"
         
         for i, fila in df_urgentes.iterrows():
             prod_nombre = str(fila['Producto']).upper()
             cant = fila['Existencia']
             
+            # LÓGICA DE ROTACIÓN DE FRASES SEGÚN EL MANUAL 
             if "PASTEL" in prod_nombre:
-                guion = "¿Es para alguna celebración? Como es para celebración, ¿también necesita velitas para el pastel?"
+                guion = random.choice([
+                    "¿Es para alguna celebración? ¿También necesita velitas para el pastel?",
+                    "¿Ya tiene algo para acompañar el pastel? Podemos complementar con bocadillos o bebidas.",
+                    "¿Desea agregar velas o algún complemento para el festejo?",
+                    "Si es para compartir, puedo recomendarle también una opción de bocadillos."
+                ])
             elif "ROSCA" in prod_nombre:
-                guion = "Si es para compartir, ¿quiere llevar también pan o algún bocadillo para acompañarla?"
+                guion = random.choice([
+                    "Si es para compartir, ¿quiere llevar también pan o algún bocadillo para acompañarla?",
+                    "Podemos complementar la rosca con piezas individuales para que alcance mejor."
+                ])
             elif "PAN" in prod_nombre or "CROISSANT" in prod_nombre:
-                guion = "Para acompañar el pan, ¿desea agregar alguna bebida o producto complementario?"
+                guion = random.choice([
+                    "Si es para compartir, ¿quiere llevar algunas piezas más o probar otra variedad?",
+                    "Para acompañar el pan, ¿desea agregar alguna bebida o producto complementario?",
+                    "Podemos armar una combinación con diferentes piezas. ¿Quiere agregar una variedad?"
+                ])
             elif "BOCADILLO" in prod_nombre:
-                guion = "Para que tenga todo completo, ¿desea agregar bebidas o algún postre?"
+                guion = random.choice([
+                    "Si es para una reunión, ¿quiere complementar con alguna opción dulce o salada?",
+                    "Para que tenga todo completo, ¿desea agregar bebidas o algún postre?"
+                ])
             elif "BEBIDA" in prod_nombre or "MALTEADA" in prod_nombre:
-                guion = "¿Es para acompañar lo que lleva? ¿Le agrego una bebida para acompañarlo?"
+                guion = random.choice([
+                    "¿Es para acompañar lo que lleva? ¿Le agrego una bebida para acompañarlo?",
+                    "Si es para varias personas, ¿necesita alguna opción adicional para acompañar?"
+                ])
             else:
-                guion = f"Tenemos esta opción ({prod_nombre}) que combina muy bien con lo que lleva. ¿Quiere agregarla?"
+                guion = random.choice([
+                    f"Tenemos esta opción ({prod_nombre}) que combina muy bien con lo que lleva. ¿Quiere agregarla?",
+                    "Antes de cobrarle, ¿necesita alguna vela, bebida o complemento?",
+                    "Para que tenga todo completo, ¿necesita algún complemento?"
+                ])
             
-            st.info(f"📦 **Prioridad:** Quedan {cant} de **{prod_nombre}** \n\n🗣️ **Dile al cliente:** *\"{guion}\"*")
+            # Agregar la tarjeta al HTML
+            cards_html += f"""
+            <div style='background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%); border-left: 5px solid #8C1C31; border-radius: 10px; padding: 20px; width: 30%; min-width: 260px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: left;'>
+                <p style='margin: 0; color: #8C1C31; font-weight: 900; font-size: 14px; letter-spacing: 1px;'>URGE VENDER</p>
+                <h3 style='margin: 5px 0 10px 0; font-size: 18px; color: #333;'>{prod_nombre}</h3>
+                <div style='display: flex; align-items: center; margin-bottom: 15px;'>
+                    <span style='background-color: #FCE4D6; color: #8C0000; padding: 5px 10px; border-radius: 5px; font-weight: bold; font-size: 14px;'>📦 Quedan: {cant}</span>
+                </div>
+                <p style='margin: 0; font-size: 12px; color: #666; font-weight: bold;'>🗣️ DILE AL CLIENTE:</p>
+                <p style='margin: 5px 0 0 0; font-size: 14px; font-style: italic; color: #444;'>" {guion} "</p>
+            </div>
+            """
+        
+        cards_html += "</div>"
+        
+        # Renderizar las tarjetas visuales bonitas
+        st.markdown(cards_html, unsafe_allow_html=True)
             
         st.divider()
 
         # --- ESQUEMA VISUAL (OCULTO EN UN EXPANDER) ---
-        with st.expander("👀 Ver y Enviar Esquema Visual", expanded=False):
+        with st.expander("👀 Ver y Enviar Tarjeta para WhatsApp", expanded=False):
             st.caption("Aquí está la tarjeta lista para compartir por WhatsApp.")
             
             filas_html = ""
@@ -802,3 +843,85 @@ with tab3:
             link_wp = f"https://wa.me/{numero_whatsapp.strip()}"
             boton_wp_html = f"<a href='{link_wp}' target='_blank' style='display: block; width: 100%; max-width: 500px; margin: auto; background-color: #25D366; color: white; text-align: center; padding: 15px; border-radius: 10px; font-size: 18px; font-weight: bold; text-decoration: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: background-color 0.3s;'>📞 Enviar Reporte a {seleccion_wa.upper()}</a><br><br>"
             st.markdown(boton_wp_html, unsafe_allow_html=True)
+
+# ------------------------------------------------------------
+# TAB 4: INTERTIENDAS (Buscador Rápido de Códigos)
+# ------------------------------------------------------------
+with tab4:
+    st.markdown("### 🔄 Búsqueda Rápida para Intertiendas")
+    st.caption("Escanea, busca o filtra por fecha. Puedes editar la tabla directamente o agregar filas abajo.")
+    
+    # 1. Asegurar que el catálogo exista con una columna de Fecha
+    if "df_codigos" not in st.session_state:
+        st.session_state.df_codigos = pd.DataFrame({
+            "Producto": [
+                "MALTEADAS", "PASTEL TRES LECHES", "TARTA DE FRUTAS", 
+                "CROISSANT", "GELATINA DE MOSAICO", "PAY DE QUESO", "TIRAMISÚ"
+            ],
+            "Código": [
+                "MLT-100", "PTL-201", "TFR-305", 
+                "CRO-010", "GEL-402", "PAY-500", "TIR-603"
+            ],
+            "Fecha": [fecha_hoy_mx] * 7 # Columna de fecha por defecto (Hoy)
+        })
+
+    # 2. Controles de búsqueda y filtro
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        busqueda_codigo = st.text_input(
+            "🔍 Escanea o escribe el nombre/código:", 
+            key="input_intertiendas",
+            placeholder="Ej. MALTEADAS o MLT-100..."
+        ).strip().upper()
+        
+    with col2:
+        # Checkbox para activar la búsqueda específica por fecha
+        activar_filtro = st.checkbox("📅 Filtrar por Fecha", value=False)
+        if activar_filtro:
+            fecha_filtro = st.date_input("Selecciona fecha:", value=fecha_hoy_mx)
+        else:
+            fecha_filtro = None
+
+    st.divider()
+
+    # 3. Lógica de Filtrado
+    df_filtrado = st.session_state.df_codigos.copy()
+    
+    # Asegurar que la columna Fecha sea tipo Date para poder compararla
+    df_filtrado['Fecha'] = pd.to_datetime(df_filtrado['Fecha']).dt.date
+    
+    if activar_filtro and fecha_filtro:
+        df_filtrado = df_filtrado[df_filtrado['Fecha'] == fecha_filtro]
+
+    if busqueda_codigo:
+        df_filtrado = df_filtrado[
+            df_filtrado['Producto'].str.contains(busqueda_codigo, case=False, na=False) |
+            df_filtrado['Código'].str.contains(busqueda_codigo, case=False, na=False)
+        ]
+    
+    # 4. Mostrar Resultados (Métrica y Editor)
+    if busqueda_codigo and not df_filtrado.empty:
+        st.success("✅ Producto encontrado:")
+        codigo_encontrado = df_filtrado.iloc[0]['Código']
+        nombre_encontrado = df_filtrado.iloc[0]['Producto']
+        st.metric(label=f"Código para: {nombre_encontrado}", value=codigo_encontrado)
+
+    st.markdown("**Catálogo Editable (Modifica datos, agrega o elimina filas)**")
+    
+    # Renderizamos la tabla editable
+    df_editado = st.data_editor(
+        df_filtrado, 
+        use_container_width=True, 
+        hide_index=True,
+        num_rows="dynamic", # ¡Esto permite al usuario añadir o quitar filas!
+        key="editor_cat_intertiendas"
+    )
+    
+    # 5. Guardar cambios
+    if st.button("💾 Guardar Catálogo", type="primary", use_container_width=True):
+        if activar_filtro or busqueda_codigo:
+            st.warning("⚠️ Se recomienda guardar cambios de estructura (agregar/quitar filas) con los filtros desactivados para no borrar datos del catálogo que no estás viendo.")
+        else:
+            st.session_state.df_codigos = df_editado
+            st.session_state.show_toast = "✅ Catálogo actualizado en esta sesión."
+            st.rerun()
