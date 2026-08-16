@@ -317,6 +317,7 @@ def analizar_dictado(texto, fecha_base):
         except ValueError:
             pass
         texto = texto.replace(match_fecha.group(0), "")
+    # Se evalúa en orden inverso para asegurar match exacto
     elif "extra" in texto:
         fecha_calc = fecha_base + timedelta(days=3)
         texto = texto.replace("día extra", "").replace("dia extra", "").replace("extra", "")
@@ -455,7 +456,7 @@ def guardar_datos_voz(sucursal):
 # ------------------------------------------------------------
 @st.dialog("⚠️ Nueva Captura")
 def popup_inicio_captura(sucursal):
-    st.markdown(f"¿Deseas iniciar una nueva captura de sugeridos para **{sucursal}**?")
+    st.markdown(f"¿Deseas iniciar una nueva captura para **{sucursal}**?")
     
     col1, col2 = st.columns(2)
     with col1:
@@ -517,19 +518,20 @@ def popup_manual(nombre_final):
     st.markdown(f"### 📦 {nombre_final}")
     
     fecha_sugerido = fecha_hoy_mx + timedelta(days=1)
-    fecha_dia_mas = fecha_hoy_mx + timedelta(days=2)
+    fecha_pasado_manana = fecha_hoy_mx + timedelta(days=2)
     fecha_extra = fecha_hoy_mx + timedelta(days=3)
     
+    # ORDEN EXACTO SOLICITADO
     opcion_fecha = st.radio(
         "📅 Fecha:",
-        options=["Sugerido (Mañana)", "Día Más (Pasado Mañana)", "Día Extra (3 Días)"], 
+        options=["Sugeridos (Mañana)", "Pasado Mañana", "Extra"], 
         horizontal=True
     )
     
-    if opcion_fecha == "Sugerido (Mañana)":
+    if opcion_fecha == "Sugeridos (Mañana)":
         f_cad = fecha_sugerido
-    elif opcion_fecha == "Día Más (Pasado Mañana)":
-        f_cad = fecha_dia_mas
+    elif opcion_fecha == "Pasado Mañana":
+        f_cad = fecha_pasado_manana
     else:
         f_cad = fecha_extra
 
@@ -719,7 +721,8 @@ with tab2:
     
     st.markdown("### 📥 Descargar Excel Actualizado")
     
-    df_stock_final = conn.query('SELECT nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc', params={"suc": seleccion_wa}, ttl=0)
+    # Aquí el query trae los datos ordenados por fecha_cad ASC automáticamente.
+    df_stock_final = conn.query('SELECT nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc ORDER BY fecha_cad ASC', params={"suc": seleccion_wa}, ttl=0)
     
     if df_stock_final.empty:
         st.warning("No hay datos para generar el Excel.")
@@ -755,6 +758,7 @@ with tab3:
         else:
             fecha_filtro_visual = None
             
+    # El ORDER BY asegura que visualmente se ordene: 1. Sugeridos, 2. Pasado Mañana, 3. Extra
     df_visual_completo = conn.query('SELECT id, nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc AND cantidad > 0 ORDER BY fecha_cad ASC', params={"suc": seleccion_wa}, ttl=0)
     
     if df_visual_completo.empty:
@@ -776,10 +780,8 @@ with tab3:
             if st.button("🔄 Generar nuevas frases", use_container_width=True):
                 st.rerun()
             
-            # Mostramos hasta 6 productos para tener variedad
             df_urgentes = df_visual.head(6)
             
-            # Columnas para alinear tarjeta y botón
             cols = st.columns(3)
             
             for idx, (_, fila) in enumerate(df_urgentes.iterrows()):
@@ -787,7 +789,6 @@ with tab3:
                 cant = fila['Existencia']
                 prod_id = fila['id']
                 
-                # CÁLCULO EXACTO Y A PRUEBA DE FALLOS PARA EL SEMÁFORO
                 fecha_str_db = str(fila['Fecha'])
                 try:
                     if '-' in fecha_str_db:
@@ -804,26 +805,25 @@ with tab3:
                     diferencia_dias = 0
                     fecha_str = fecha_str_db
                 
-                # LÓGICA DE SEMÁFORO DE FECHAS
+                # LÓGICA DE CATEGORÍAS CON LOS NOMBRES EXACTOS
                 if diferencia_dias <= 1:
                     color_borde = "#8C1C31" 
-                    label_texto = "URGE VENDER"
+                    label_texto = "SUGERIDOS"
                     badge_bg = "#FCE4D6"
                     badge_color = "#8C0000"
                 elif diferencia_dias == 2:
                     color_borde = "#E67E22" 
-                    label_texto = "RECOMENDADO VENDER"
+                    label_texto = "PASADO MAÑANA"
                     badge_bg = "#FDEBD0"
                     badge_color = "#A04000"
                 else:
                     color_borde = "#27AE60" 
-                    label_texto = "OPCIONAL VENDER"
+                    label_texto = "EXTRA"
                     badge_bg = "#D5F5E3"
                     badge_color = "#145A32"
 
-                # AMPLIACIÓN MASIVA DE FRASES SEGÚN MANUAL
+                # AMPLIACIÓN DE FRASES ESTRICTAMENTE DEL MANUAL PARA VENDER ADICIONALES ANTES DE COBRAR
                 if any(kw in prod_nombre for kw in ["PASTEL", "TRES LECHES", "TIRAMISÚ", "PAY", "TARTA", "CHEESECAKE"]):
-                    #[span_2](start_span)[span_2](end_span)
                     guion = random.choice([
                         "¿Es para alguna celebración? Como es para celebración, ¿también necesita velitas para el pastel?",
                         "¿Ya tiene algo para acompañar el pastel? Podemos complementar con bocadillos o bebidas. ¿Le gustaría agregar alguno?",
@@ -834,35 +834,30 @@ with tab3:
                         "¿Ya tiene todo lo necesario para servir? ¿Necesita algún complemento para la celebración?"
                     ])
                 elif "ROSCA" in prod_nombre:
-                    #[span_3](start_span)[span_3](end_span)
                     guion = random.choice([
                         "¿Es para compartir en casa o para una reunión? Si es para compartir, ¿quiere llevar también pan o algún bocadillo para acompañarla?",
                         "¿Cuántas personas asistirán? Podemos complementar la rosca con piezas individuales para que alcance mejor."
                     ])
                 elif any(kw in prod_nombre for kw in ["PAN", "CROISSANT", "CONCHA", "OREJA", "HOJALDRE", "BISQUET", "CUERNO"]):
-                    #[span_4](start_span)[span_4](end_span)
                     guion = random.choice([
                         "¿Es para usted o para compartir? Si es para compartir, ¿quiere llevar algunas piezas más o probar otra variedad?",
                         "¿Es para desayuno, reunión o consumo en casa? Para acompañar el pan, ¿desea agregar alguna bebida o producto complementario?",
                         "¿Le gusta más lo dulce o quiere combinar? Podemos armar una combinación con diferentes piezas. ¿Quiere agregar una variedad?"
                     ])
                 elif any(kw in prod_nombre for kw in ["BOCADILLO", "GELATINA", "DEDO", "EMPANADA"]):
-                    #[span_5](start_span)[span_5](end_span)
                     guion = random.choice([
                         "¿Para cuántas personas son? Si es para una reunión, ¿quiere complementar con alguna opción dulce o salada?",
                         "¿Ya tiene bebidas y postre? Para que tenga todo completo, ¿desea agregar bebidas o algún postre?"
                     ])
                 elif any(kw in prod_nombre for kw in ["BEBIDA", "MALTEADA", "CAFÉ", "FRAPPE", "JUGO"]):
-                    #[span_6](start_span)[span_6](end_span)
                     guion = random.choice([
                         "¿Es para acompañar lo que lleva? ¿Le agrego una bebida para acompañarlo?",
                         "¿Es para compartir? Si es para varias personas, ¿necesita alguna opción adicional para acompañar?"
                     ])
                 else:
-                    #[span_7](start_span)[span_7](end_span)
                     guion = random.choice([
                         "¿Desea complementar su compra con algo más?",
-                        "Ya que lleva este producto, ¿le gustaría agregar algo para acompañarlo?",
+                        f"Ya que lleva {prod_nombre.lower()}, ¿le gustaría agregar algo para acompañarlo?",
                         "Para que tenga todo completo, ¿necesita algún producto adicional?",
                         "Si es para compartir, podemos agregar algo más, ¿le gustaría?",
                         "¿Le agrego alguna bebida o bocadillo para acompañarlo?",
@@ -872,10 +867,9 @@ with tab3:
                         "¿Qué desea llevar? ¿Para qué ocasión es? ¿Para cuántas personas?"
                     ])
                 
-                # Diseño visual forzando el 100% del ancho para que empate perfecto con el botón
+                # Diseño visual forzando el 100% del ancho
                 tarjeta_html = f"<div style='background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%); border-left: 5px solid {color_borde}; border-radius: 10px; padding: 20px; width: 100%; box-sizing: border-box; box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: left; margin-bottom: 5px;'><p style='margin: 0; color: {color_borde}; font-weight: 900; font-size: 14px; letter-spacing: 1px;'>{label_texto}</p><h3 style='margin: 5px 0 5px 0; font-size: 18px; color: #333;'>{prod_nombre}</h3><p style='margin: 0 0 10px 0; color: {color_borde}; font-weight: bold; font-size: 13px;'>📅 Fecha: {fecha_str}</p><div style='display: flex; align-items: center; margin-bottom: 15px;'><span style='background-color: {badge_bg}; color: {badge_color}; padding: 5px 10px; border-radius: 5px; font-weight: bold; font-size: 14px;'>📦 Quedan: {cant}</span></div><p style='margin: 0; font-size: 12px; color: #666; font-weight: bold;'>🗣️ DILE AL CLIENTE:</p><p style='margin: 5px 0 0 0; font-size: 14px; font-style: italic; color: #444;'>\" {guion} \"</p></div>"
                 
-                # Insertamos tarjeta y botón dentro del mismo contenedor de columna para alinear ambos
                 with cols[idx % 3]:
                     st.markdown(tarjeta_html, unsafe_allow_html=True)
                     st.button("✅ Vendido (-1)", key=f"btn_vender_{prod_id}_{cant}", use_container_width=True, on_click=marcar_vendido, args=(prod_id, prod_nombre))
@@ -910,3 +904,4 @@ with tab3:
                 link_wp = f"https://wa.me/{numero_whatsapp.strip()}"
                 boton_wp_html = f"<a href='{link_wp}' target='_blank' style='display: block; width: 100%; max-width: 500px; margin: auto; background-color: #25D366; color: white; text-align: center; padding: 15px; border-radius: 10px; font-size: 18px; font-weight: bold; text-decoration: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: background-color 0.3s;'>📞 Enviar Reporte a {seleccion_wa.upper()}</a><br><br>"
                 st.markdown(boton_wp_html, unsafe_allow_html=True)
+
