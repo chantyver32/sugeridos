@@ -188,7 +188,7 @@ def verificar_login():
                     if not df_check.empty:
                         st.session_state.autenticado = True
                         st.session_state.usuario_actual = usuario_input.strip()
-                        st.session_state.inicio_popup_mostrado = False 
+                        st.session_state.inicio_popup_mostrado = False
                         st.session_state.show_toast = "✅ ¡Bienvenid@!"
                         st.rerun()
                     else:
@@ -467,6 +467,7 @@ def popup_inicio_captura(sucursal):
             st.session_state.inicio_popup_mostrado = True
             st.rerun()
 
+
 @st.dialog("🗣️")
 def popup_voz():
     datos = st.session_state.get("confirmacion_voz")
@@ -568,6 +569,7 @@ def popup_manual(nombre_final):
         else:
             st.warning("Agrega una cantidad mayor a 0.")
 
+
 # ------------------ TRIGGER DEL POPUP DE INICIO ------------------
 if "inicio_popup_mostrado" not in st.session_state:
     st.session_state.inicio_popup_mostrado = False
@@ -577,7 +579,7 @@ if not st.session_state.inicio_popup_mostrado:
 
 
 # ------------------ TABS ------------------
-tab1, tab2, tab3, tab4 = st.tabs(["📝 Registro", "📦 Archivo", "🖼️ Reporte Visual", "🔄 Intertiendas"])
+tab1, tab2, tab3 = st.tabs(["📝 Registro", "📦 Archivo", "🖼️ Reporte Visual"])
 
 # ------------------------------------------------------------
 # TAB 1: CONTEO
@@ -735,7 +737,7 @@ with tab2:
             st.link_button("💬 2. Abrir WhatsApp", link_st, use_container_width=True, type="primary")
 
 # ------------------------------------------------------------
-# TAB 3: REPORTE VISUAL
+# TAB 3: REPORTE VISUAL Y RECOMENDACIONES
 # ------------------------------------------------------------
 with tab3:
     st.markdown(f"### 🖼️ Tarjeta de Sugeridos - {seleccion_wa}")
@@ -745,85 +747,58 @@ with tab3:
     if df_visual.empty:
         st.warning(f"No hay productos registrados para {seleccion_wa}.")
     else:
-        filas_html = ""
-        for i, fila in df_visual.iterrows():
-            color_fondo = "#FFFFFF" if i % 2 == 0 else "#FFF5F5"
-            
-            fecha_str = str(fila['Fecha'])
-            try:
-                if '-' in fecha_str:
-                    partes = fecha_str.split('-')
-                    if len(partes) == 3:
-                        fecha_str = f"{partes[2]}/{partes[1]}/{partes[0]}"
-            except:
-                pass
-
-            filas_html += f"<tr style='background-color: {color_fondo}; border-bottom: 1px solid #f0f0f0;'><td style='padding: 10px; text-align: left; color: #333; font-size: 13px;'>{fila['Producto']}</td><td style='padding: 10px; text-align: center; color: #8C1C31; font-weight: bold; font-size: 14px;'>{fila['Existencia']}</td><td style='padding: 10px; text-align: center; color: #555; font-size: 13px;'>{fecha_str}</td></tr>"
-            
-        fecha_hora_actual = datetime.now(zona_mx).strftime("%d/%m/%Y %H:%M")
+        # --- MÓDULO DE RECOMENDACIONES (SIEMPRE VISIBLE) ---
+        st.markdown("#### 🎯 Qué ofrecer al cliente hoy")
+        st.caption("Aprovecha estos productos de pronta caducidad para completar la compra del cliente.")
         
-        tarjeta_html = f"<div style='background-color: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); width: 100%; max-width: 500px; margin: auto; text-align: center; margin-bottom: 20px;'><h1 style='color: #6D1427; font-family: \"Times New Roman\", serif; font-size: 38px; margin: 0;'>Champlitte</h1><p style='font-family: sans-serif; font-size: 10px; font-weight: bold; letter-spacing: 3px; margin: 0 0 20px 0; color: #000;'>PASTELERÍA</p><h2 style='color: #6D1427; font-family: sans-serif; font-weight: 900; margin: 0; font-size: 22px;'>SUGERIDOS {seleccion_wa.upper()}</h2><p style='font-family: sans-serif; font-size: 12px; font-weight: bold; color: #666; margin: 5px 0 20px 0;'>{fecha_hora_actual}</p><table style='width: 100%; border-collapse: collapse; font-family: sans-serif;'><thead><tr style='background-color: #8C1C31; color: white;'><th style='padding: 12px; text-align: left; font-size: 11px; letter-spacing: 1px;'>PRODUCTO</th><th style='padding: 12px; text-align: center; font-size: 11px; letter-spacing: 1px;'>CANTIDAD</th><th style='padding: 12px; text-align: center; font-size: 11px; letter-spacing: 1px;'>FECHA</th></tr></thead><tbody>{filas_html}</tbody></table></div><p style='text-align: center; color: gray; font-size: 13px; margin-top: 15px; margin-bottom: 20px;'>Reporte generado automáticamente</p>"
+        df_urgentes = df_visual.head(3)
         
-        st.markdown(tarjeta_html, unsafe_allow_html=True)
-        
-        link_wp = f"https://wa.me/{numero_whatsapp.strip()}"
-        boton_wp_html = f"<a href='{link_wp}' target='_blank' style='display: block; width: 100%; max-width: 500px; margin: auto; background-color: #25D366; color: white; text-align: center; padding: 15px; border-radius: 10px; font-size: 18px; font-weight: bold; text-decoration: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: background-color 0.3s;'>📞 Enviar Reporte a {seleccion_wa.upper()}</a><br><br>"
-        st.markdown(boton_wp_html, unsafe_allow_html=True)
-
-# ------------------------------------------------------------
-# TAB 4: INTERTIENDAS (Buscador Rápido de Códigos)
-# ------------------------------------------------------------
-with tab4:
-    st.markdown("### 🔄 Búsqueda Rápida para Intertiendas")
-    st.caption("Escanea o busca un producto para obtener su código de traslado rápidamente.")
-    
-    if "df_codigos" not in st.session_state:
-        st.session_state.df_codigos = pd.DataFrame({
-            "Producto": [
-                "MALTEADAS", 
-                "PASTEL TRES LECHES", 
-                "TARTA DE FRUTAS", 
-                "CROISSANT", 
-                "GELATINA DE MOSAICO",
-                "PAY DE QUESO",
-                "TIRAMISÚ"
-            ],
-            "Código": [
-                "MLT-100", 
-                "PTL-201", 
-                "TFR-305", 
-                "CRO-010", 
-                "GEL-402",
-                "PAY-500",
-                "TIR-603"
-            ]
-        })
-
-    busqueda_codigo = st.text_input(
-        "🔍 Escanea o escribe el nombre/código del producto:", 
-        key="input_intertiendas",
-        placeholder="Ej. MALTEADAS o MLT-100..."
-    ).strip().upper()
-    
-    st.divider()
-
-    if busqueda_codigo:
-        resultados = st.session_state.df_codigos[
-            st.session_state.df_codigos['Producto'].str.contains(busqueda_codigo, case=False, na=False) |
-            st.session_state.df_codigos['Código'].str.contains(busqueda_codigo, case=False, na=False)
-        ]
-        
-        if not resultados.empty:
-            st.success("✅ Producto encontrado:")
+        for i, fila in df_urgentes.iterrows():
+            prod_nombre = str(fila['Producto']).upper()
+            cant = fila['Existencia']
             
-            codigo_encontrado = resultados.iloc[0]['Código']
-            nombre_encontrado = resultados.iloc[0]['Producto']
+            if "PASTEL" in prod_nombre:
+                guion = "¿Es para alguna celebración? Como es para celebración, ¿también necesita velitas para el pastel?"
+            elif "ROSCA" in prod_nombre:
+                guion = "Si es para compartir, ¿quiere llevar también pan o algún bocadillo para acompañarla?"
+            elif "PAN" in prod_nombre or "CROISSANT" in prod_nombre:
+                guion = "Para acompañar el pan, ¿desea agregar alguna bebida o producto complementario?"
+            elif "BOCADILLO" in prod_nombre:
+                guion = "Para que tenga todo completo, ¿desea agregar bebidas o algún postre?"
+            elif "BEBIDA" in prod_nombre or "MALTEADA" in prod_nombre:
+                guion = "¿Es para acompañar lo que lleva? ¿Le agrego una bebida para acompañarlo?"
+            else:
+                guion = f"Tenemos esta opción ({prod_nombre}) que combina muy bien con lo que lleva. ¿Quiere agregarla?"
             
-            st.metric(label=f"Código para: {nombre_encontrado}", value=codigo_encontrado)
+            st.info(f"📦 **Prioridad:** Quedan {cant} de **{prod_nombre}** \n\n🗣️ **Dile al cliente:** *\"{guion}\"*")
             
-            st.dataframe(resultados, use_container_width=True, hide_index=True)
-        else:
-            st.warning("⚠️ Producto no encontrado. Verifica el nombre o intenta escanear de nuevo.")
-    else:
-        st.info("Escribe el nombre del producto arriba para revelar su código de captura.")
-        st.dataframe(st.session_state.df_codigos, use_container_width=True, hide_index=True)
+        st.divider()
+
+        # --- ESQUEMA VISUAL (OCULTO EN UN EXPANDER) ---
+        with st.expander("👀 Ver y Enviar Esquema Visual", expanded=False):
+            st.caption("Aquí está la tarjeta lista para compartir por WhatsApp.")
+            
+            filas_html = ""
+            for i, fila in df_visual.iterrows():
+                color_fondo = "#FFFFFF" if i % 2 == 0 else "#FFF5F5"
+                
+                fecha_str = str(fila['Fecha'])
+                try:
+                    if '-' in fecha_str:
+                        partes = fecha_str.split('-')
+                        if len(partes) == 3:
+                            fecha_str = f"{partes[2]}/{partes[1]}/{partes[0]}"
+                except:
+                    pass
+
+                filas_html += f"<tr style='background-color: {color_fondo}; border-bottom: 1px solid #f0f0f0;'><td style='padding: 10px; text-align: left; color: #333; font-size: 13px;'>{fila['Producto']}</td><td style='padding: 10px; text-align: center; color: #8C1C31; font-weight: bold; font-size: 14px;'>{fila['Existencia']}</td><td style='padding: 10px; text-align: center; color: #555; font-size: 13px;'>{fecha_str}</td></tr>"
+                
+            fecha_hora_actual = datetime.now(zona_mx).strftime("%d/%m/%Y %H:%M")
+            
+            tarjeta_html = f"<div style='background-color: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); width: 100%; max-width: 500px; margin: auto; text-align: center; margin-bottom: 20px;'><h1 style='color: #6D1427; font-family: \"Times New Roman\", serif; font-size: 38px; margin: 0;'>Champlitte</h1><p style='font-family: sans-serif; font-size: 10px; font-weight: bold; letter-spacing: 3px; margin: 0 0 20px 0; color: #000;'>PASTELERÍA</p><h2 style='color: #6D1427; font-family: sans-serif; font-weight: 900; margin: 0; font-size: 22px;'>SUGERIDOS {seleccion_wa.upper()}</h2><p style='font-family: sans-serif; font-size: 12px; font-weight: bold; color: #666; margin: 5px 0 20px 0;'>{fecha_hora_actual}</p><table style='width: 100%; border-collapse: collapse; font-family: sans-serif;'><thead><tr style='background-color: #8C1C31; color: white;'><th style='padding: 12px; text-align: left; font-size: 11px; letter-spacing: 1px;'>PRODUCTO</th><th style='padding: 12px; text-align: center; font-size: 11px; letter-spacing: 1px;'>CANTIDAD</th><th style='padding: 12px; text-align: center; font-size: 11px; letter-spacing: 1px;'>FECHA</th></tr></thead><tbody>{filas_html}</tbody></table></div><p style='text-align: center; color: gray; font-size: 13px; margin-top: 15px; margin-bottom: 20px;'>Reporte generado automáticamente</p>"
+            
+            st.markdown(tarjeta_html, unsafe_allow_html=True)
+            
+            link_wp = f"https://wa.me/{numero_whatsapp.strip()}"
+            boton_wp_html = f"<a href='{link_wp}' target='_blank' style='display: block; width: 100%; max-width: 500px; margin: auto; background-color: #25D366; color: white; text-align: center; padding: 15px; border-radius: 10px; font-size: 18px; font-weight: bold; text-decoration: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: background-color 0.3s;'>📞 Enviar Reporte a {seleccion_wa.upper()}</a><br><br>"
+            st.markdown(boton_wp_html, unsafe_allow_html=True)
