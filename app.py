@@ -99,6 +99,24 @@ st.markdown("""
     button[kind="primary"] { background-color: #ff4b4b !important; color: white !important; border: none !important; }
     button[kind="secondary"] { background-color: transparent !important; border: 1px solid rgba(136, 136, 136, 0.5) !important; color: rgba(136, 136, 136, 0.9) !important; }
     button[kind="secondary"]:hover { background-color: rgba(136, 136, 136, 0.1) !important; }
+
+    /* Centrar textos de notificaciones y alertas */
+    div[data-testid="stToast"] {
+        text-align: center;
+        justify-content: center;
+        align-items: center;
+    }
+    div[data-testid="stAlert"] {
+        text-align: center;
+    }
+    div[data-testid="stAlert"] > div {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+    div[data-testid="stMarkdownContainer"] p {
+        margin-bottom: 0px;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -148,8 +166,10 @@ def verificar_login():
         st.session_state.autenticado = False
 
     if not st.session_state.autenticado:
-        st.markdown("### 🥐 Sugeridos")
-        st.markdown("### Control de Acceso")
+        # Título centrado con ícono como en la imagen
+        st.markdown("<h1 style='text-align: center;'>🥐 Sugeridos</h1>", unsafe_allow_html=True)
+        st.markdown("<h3 style='text-align: center; color: #555; font-weight: 500;'>Control de Acceso</h3>", unsafe_allow_html=True)
+        st.write("")
         
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
@@ -428,7 +448,7 @@ def guardar_datos_voz(sucursal):
     st.session_state.audio_leido = False
     st.session_state.buscar_prod = ""
     st.session_state.mic_key += 1 
-    st.session_state.show_toast = f"✅ Ingreso directo: {int(cant)} {prod}"
+    st.session_state.show_toast = f"✅ Guardado: {int(cant)} {prod} ({fech.strftime('%d/%m/%Y')})"
 
 # ------------------------------------------------------------
 # DEFINICIÓN DE POP-UPS (st.dialog)
@@ -502,7 +522,7 @@ def popup_voz():
     
     col1, col2 = st.columns(2)
     with col1:
-        st.button("🥖 Ingreso directo", use_container_width=True, type="primary", on_click=guardar_datos_voz, args=(seleccion_wa,))
+        st.button("🥖 Guardar", use_container_width=True, type="primary", on_click=guardar_datos_voz, args=(seleccion_wa,))
     with col2:
         if st.button("❌ Cancelar", use_container_width=True):
             st.session_state.confirmacion_voz = None
@@ -552,7 +572,7 @@ def popup_manual(nombre_final):
         unsafe_allow_html=True
     )
     
-    if st.button("🥖 Ingreso directo", use_container_width=True, type="primary"):
+    if st.button("🥖 Guardar", use_container_width=True, type="primary"):
         cant = st.session_state.conteo_temp
         if cant > 0:
             with conn.session as s:
@@ -568,7 +588,7 @@ def popup_manual(nombre_final):
                 
             st.session_state.conteo_temp = 0
             st.session_state.buscar_prod = ""
-            st.session_state.show_toast = f"✅ Ingreso directo: {int(cant)} {nombre_final}"
+            st.session_state.show_toast = f"✅ Guardado: {int(cant)} {nombre_final} ({f_cad.strftime('%d/%m/%Y')})"
             st.rerun()
         else:
             st.warning("Agrega una cantidad mayor a 0.")
