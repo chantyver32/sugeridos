@@ -26,12 +26,9 @@ st.markdown("""
         font-weight: bold !important;
     }
     
-    /* Ajuste equilibrado del espacio superior */
     .block-container { padding-top: 3rem; padding-bottom: 1rem; }
-    
     .main { background-color: #f5f7f9; }
     
-    /* FIX: Remover sombras (ghosting) y duplicados en los botones normales y de formulario */
     .stButton > button, 
     .stFormSubmitButton > button { 
         width: 100%; 
@@ -48,7 +45,6 @@ st.markdown("""
         transform: none !important;
     }
 
-    /* Eliminar transiciones de renderizado en los contenedores y formularios */
     [data-testid="stElementContainer"], 
     [data-testid="stForm"] {
         transition: none !important;
@@ -74,7 +70,6 @@ st.markdown("""
     div[data-testid="stMetricDelta"] { font-size: 30px !important; font-weight: bold !important; }
     div[data-testid="stMetricDelta"] svg { width: 35px !important; height: 35px !important; }
 
-    /* ESTILO OSCURO PARA LISTAS DESPLEGABLES */
     div[data-baseweb="popover"] > div {
         background-color: #1a1a1c !important; 
         border-radius: 8px !important;
@@ -90,40 +85,20 @@ st.markdown("""
         padding-bottom: 10px !important;
     }
     div[data-baseweb="popover"] li:hover { background-color: #2d2d30 !important; }
-    
-    div[data-baseweb="popover"] li[aria-selected="true"] {
-        background-color: #3a3b3e !important; 
-        font-weight: bold !important;
-    }
+    div[data-baseweb="popover"] li[aria-selected="true"] { background-color: #3a3b3e !important; font-weight: bold !important; }
 
     div[data-baseweb="select"] > div {
         background-color: #1a1a1c !important; 
         border-radius: 8px !important;
         border: 1px solid rgba(255, 255, 255, 0.2) !important;
     }
-
-    div[data-baseweb="select"] > div:focus-within {
-        border-color: #ff4b4b !important; 
-        box-shadow: 0 0 0 1px #ff4b4b !important;
-    }
-
+    div[data-baseweb="select"] > div:focus-within { border-color: #ff4b4b !important; box-shadow: 0 0 0 1px #ff4b4b !important; }
     div[data-baseweb="select"] div { color: #FFFFFF !important; }
     div[data-baseweb="select"] svg { fill: #FFFFFF !important; }
 
-    /* ESTILOS PARA LOS BOTONES DEL POP-UP (Rojo y Traslúcido) */
-    button[kind="primary"] {
-        background-color: #ff4b4b !important; 
-        color: white !important;
-        border: none !important;
-    }
-    button[kind="secondary"] {
-        background-color: transparent !important; 
-        border: 1px solid rgba(136, 136, 136, 0.5) !important;
-        color: rgba(136, 136, 136, 0.9) !important;
-    }
-    button[kind="secondary"]:hover {
-        background-color: rgba(136, 136, 136, 0.1) !important;
-    }
+    button[kind="primary"] { background-color: #ff4b4b !important; color: white !important; border: none !important; }
+    button[kind="secondary"] { background-color: transparent !important; border: 1px solid rgba(136, 136, 136, 0.5) !important; color: rgba(136, 136, 136, 0.9) !important; }
+    button[kind="secondary"]:hover { background-color: rgba(136, 136, 136, 0.1) !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -200,7 +175,7 @@ def verificar_login():
 if not verificar_login():
     st.stop()
 
-# ------------------ FUNCIONES ------------------
+# ------------------ FUNCIONES GLOBALES ------------------
 def sonido_click():
     st.markdown(
         """
@@ -218,6 +193,12 @@ def sumar(valor):
 def resetear():
     st.session_state.conteo_temp = 0
     sonido_click()
+
+def restar_dia():
+    st.session_state.voz_input_fech -= timedelta(days=1)
+    
+def sumar_dia():
+    st.session_state.voz_input_fech += timedelta(days=1)
 
 def generar_excel_formato(df, sucursal, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V."):
     output = io.BytesIO()
@@ -317,7 +298,6 @@ def analizar_dictado(texto, fecha_base):
         except ValueError:
             pass
         texto = texto.replace(match_fecha.group(0), "")
-    # Se evalúa en orden inverso para asegurar match exacto
     elif "extra" in texto:
         fecha_calc = fecha_base + timedelta(days=3)
         texto = texto.replace("día extra", "").replace("dia extra", "").replace("extra", "")
@@ -342,7 +322,6 @@ def analizar_dictado(texto, fecha_base):
     producto = re.sub(r'\s+', ' ', texto).strip().upper()
     return producto, cantidad, fecha_calc
 
-# Función para restar 1 producto vendido desde el botón de la tarjeta
 def marcar_vendido(prod_id, prod_nombre):
     with conn.session as s:
         s.execute(text("UPDATE base_anterior SET cantidad = GREATEST(cantidad - 1, 0) WHERE id = :id"), {"id": int(prod_id)})
@@ -427,7 +406,7 @@ if st.session_state.get('usuario_actual', '').lower() == 'admin':
 def guardar_datos_voz(sucursal):
     cant = st.session_state.voz_input_cant
     prod = st.session_state.voz_input_prod.strip().upper()
-    fech = st.session_state.voz_input_fech  # Tomamos la fecha del nuevo sistema de botones
+    fech = st.session_state.voz_input_fech  
     
     if not prod:
         st.session_state.show_error = "El nombre no puede estar vacío."
@@ -498,7 +477,6 @@ def popup_voz():
         
     st.success(f"**Escuché:** '{datos['original']}'")
     
-    # Inicializar la fecha interactiva en el state si es una captura nueva
     if "voz_input_fech" not in st.session_state or st.session_state.get("voz_id_original") != datos['original']:
         st.session_state.voz_input_fech = datos['fecha']
         st.session_state.voz_id_original = datos['original']
@@ -506,24 +484,21 @@ def popup_voz():
     st.number_input("Cantidad", value=int(datos['cant']), min_value=1, key="voz_input_cant")
     st.text_input("Producto", value=datos['prod'], key="voz_input_prod")
     
-    # CONTROL DE FECHA CON BOTONES DE + / - DÍA
-    st.markdown("**📅 Fecha Sugerido:**")
+    # NUEVO: Botones usando callbacks (on_click) para evitar parpadeo y error de doble renderizado
+    st.markdown("**📅 Fecha Sugerida:**")
     col_f1, col_f2, col_f3 = st.columns([1, 2, 1])
     with col_f1:
-        if st.button("➖ Día", use_container_width=True):
-            st.session_state.voz_input_fech -= timedelta(days=1)
-            st.rerun()
+        st.button("➖ Día", use_container_width=True, on_click=restar_dia)
     with col_f2:
+        # NUEVO: Fondo gris clarito y letra blanca para la fecha
         st.markdown(
-            f"<div style='text-align: center; font-size: 20px; font-weight: bold; padding: 5px; background: white; border-radius: 5px; border: 1px solid #ccc; color: #333;'>{st.session_state.voz_input_fech.strftime('%d/%m/%Y')}</div>", 
+            f"<div style='text-align: center; font-size: 20px; font-weight: bold; padding: 5px; background: #A9A9A9; border-radius: 5px; border: 1px solid #999; color: white;'>{st.session_state.voz_input_fech.strftime('%d/%m/%Y')}</div>", 
             unsafe_allow_html=True
         )
     with col_f3:
-        if st.button("➕ Día", use_container_width=True):
-            st.session_state.voz_input_fech += timedelta(days=1)
-            st.rerun()
+        st.button("➕ Día", use_container_width=True, on_click=sumar_dia)
             
-    st.write("") # Espacio
+    st.write("") 
     
     col1, col2 = st.columns(2)
     with col1:
@@ -544,7 +519,6 @@ def popup_manual(nombre_final):
     fecha_pasado_manana = fecha_hoy_mx + timedelta(days=2)
     fecha_extra = fecha_hoy_mx + timedelta(days=3)
     
-    # ORDEN EXACTO SOLICITADO
     opcion_fecha = st.radio(
         "📅 Fecha:",
         options=["Sugeridos (Mañana)", "Pasado Mañana", "Extra"], 
@@ -599,14 +573,12 @@ def popup_manual(nombre_final):
         else:
             st.warning("Agrega una cantidad mayor a 0.")
 
-
 # ------------------ TRIGGER DEL POPUP DE INICIO ------------------
 if "inicio_popup_mostrado" not in st.session_state:
     st.session_state.inicio_popup_mostrado = False
 
 if not st.session_state.inicio_popup_mostrado:
     popup_inicio_captura(seleccion_wa)
-
 
 # ------------------ TABS ------------------
 tab1, tab2, tab3 = st.tabs(["📝 Registro", "📦 Archivo", "🖼️ Reporte Visual"])
@@ -678,12 +650,10 @@ with tab1:
 
     st.divider()
     
-    # ORDENADO POR FECHA DE CADUCIDAD ASCENDENTE
     df_hoy_captura = conn.query("SELECT id, nombre, fecha_cad AS \"Fecha\", cantidad FROM captura_actual WHERE sucursal=:suc ORDER BY fecha_cad ASC", params={"suc": seleccion_wa}, ttl=0)
     
     if not df_hoy_captura.empty:
         with st.expander("📋 Productos registrados al momento", expanded=False):
-            # APLICAMOS EL FORMATO DD/MM/AAAA a la columna Fecha
             df_editado = st.data_editor(
                 df_hoy_captura, 
                 column_config={
@@ -714,12 +684,17 @@ with tab1:
 with tab2:
     st.markdown("### 📦 Gestión de Sugeridos")
     
-    # NUEVO: Filtro por fecha para editar
-    usar_filtro = st.checkbox("📅 Filtrar sugeridos por fecha para editar")
-    if usar_filtro:
-        fecha_filtro_edit = st.date_input("Selecciona la fecha a filtrar:", value=fecha_hoy_mx, format="DD/MM/YYYY")
+    # NUEVO: Filtro MUY visible y forzado
+    st.markdown("#### 🔍 Filtro de Búsqueda")
+    col_filt_1, col_filt_2 = st.columns([1, 2])
+    with col_filt_1:
+        usar_filtro = st.checkbox("📅 Habilitar filtro por fecha", key="filtro_tab2")
+    with col_filt_2:
+        if usar_filtro:
+            fecha_filtro_edit = st.date_input("Selecciona la fecha:", value=fecha_hoy_mx, format="DD/MM/YYYY", key="date_tab2")
+            
+    st.divider()
     
-    # Query dinámico
     query_str = 'SELECT id, nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc '
     params = {"suc": seleccion_wa}
     
@@ -735,7 +710,6 @@ with tab2:
         if df_stock.empty:
             st.info("No hay stock registrado para esta selección.")
         else:
-            # FORMATO DD/MM/AAAA en la tabla de edición de stock
             df_editado_stock = st.data_editor(
                 df_stock, 
                 column_config={
@@ -804,7 +778,6 @@ with tab3:
     with col_filtro1:
         activar_filtro_visual = st.checkbox("📅 Filtrar Sugeridos por Fecha", key="check_filtro_visual")
         if activar_filtro_visual:
-            # FORMATO DD/MM/AAAA en filtro visual
             fecha_filtro_visual = st.date_input("Selecciona fecha:", value=fecha_hoy_mx, format="DD/MM/YYYY", key="date_filtro_visual")
         else:
             fecha_filtro_visual = None
@@ -814,6 +787,10 @@ with tab3:
     if df_visual_completo.empty:
         st.warning(f"No hay productos sugeridos disponibles para {seleccion_wa}.")
     else:
+        # NUEVO: FORZAR ORDENAMIENTO CRONOLÓGICO DESDE PANDAS PARA GARANTIZAR EL ORDEN EN TARJETAS
+        df_visual_completo['Fecha_orden'] = pd.to_datetime(df_visual_completo['Fecha'])
+        df_visual_completo = df_visual_completo.sort_values(by='Fecha_orden', ascending=True).drop(columns=['Fecha_orden']).reset_index(drop=True)
+        
         if activar_filtro_visual and fecha_filtro_visual:
             df_visual_completo['Fecha_obj'] = pd.to_datetime(df_visual_completo['Fecha']).dt.date
             df_visual = df_visual_completo[df_visual_completo['Fecha_obj'] == fecha_filtro_visual].drop(columns=['Fecha_obj'])
@@ -823,7 +800,6 @@ with tab3:
         if df_visual.empty:
             st.info("No hay productos sugeridos para la fecha seleccionada.")
         else:
-            # --- MÓDULO DE RECOMENDACIONES (ESQUEMA VISUAL CENTRADO CON SEMÁFORO DE FECHAS) ---
             st.markdown("#### 🎯 Qué ofrecer al cliente")
             st.caption("Aprovecha estos productos de pronta caducidad. Las sugerencias cambian para mantener fresco el guion.")
             
@@ -855,7 +831,6 @@ with tab3:
                     diferencia_dias = 0
                     fecha_str = fecha_str_db
                 
-                # LÓGICA DE CATEGORÍAS CON LOS NOMBRES EXACTOS
                 if diferencia_dias <= 1:
                     color_borde = "#8C1C31" 
                     label_texto = "SUGERIDO"
@@ -872,7 +847,6 @@ with tab3:
                     badge_bg = "#D5F5E3"
                     badge_color = "#145A32"
 
-                # AMPLIACIÓN DE FRASES ESTRICTAMENTE DEL MANUAL PARA VENDER ADICIONALES ANTES DE COBRAR
                 if any(kw in prod_nombre for kw in ["PASTEL", "TRES LECHES", "TIRAMISÚ", "PAY", "TARTA", "CHEESECAKE"]):
                     guion = random.choice([
                         "¿Es para alguna celebración? Como es para celebración, ¿también necesita velitas para el pastel?",
@@ -899,7 +873,6 @@ with tab3:
                         "¿Para cuántas personas son? Si es para una reunión, ¿quiere complementar con alguna opción dulce o salada?",
                         "¿Ya tiene bebidas y postre? Para que tenga todo completo, ¿desea agregar bebidas o algún postre?"
                     ])
-                # CAMBIO A SUGERIR BOCADILLOS O PAN EN LUGAR DE BEBIDAS
                 elif any(kw in prod_nombre for kw in ["BEBIDA", "MALTEADA", "CAFÉ", "FRAPPE", "JUGO"]):
                     guion = random.choice([
                         "¿Es para acompañar lo que lleva? ¿Le agrego un bocadillo o pan dulce para acompañarlo?",
@@ -918,7 +891,6 @@ with tab3:
                         "¿Qué desea llevar? ¿Para qué ocasión es? ¿Para cuántas personas?"
                     ])
                 
-                # Diseño visual forzando el 100% del ancho
                 tarjeta_html = f"<div style='background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%); border-left: 5px solid {color_borde}; border-radius: 10px; padding: 20px; width: 100%; box-sizing: border-box; box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: left; margin-bottom: 5px;'><p style='margin: 0; color: {color_borde}; font-weight: 900; font-size: 14px; letter-spacing: 1px;'>{label_texto}</p><h3 style='margin: 5px 0 5px 0; font-size: 18px; color: #333;'>{prod_nombre}</h3><p style='margin: 0 0 10px 0; color: {color_borde}; font-weight: bold; font-size: 13px;'>📅 Fecha: {fecha_str}</p><div style='display: flex; align-items: center; margin-bottom: 15px;'><span style='background-color: {badge_bg}; color: {badge_color}; padding: 5px 10px; border-radius: 5px; font-weight: bold; font-size: 14px;'>📦 Quedan: {cant}</span></div><p style='margin: 0; font-size: 12px; color: #666; font-weight: bold;'>🗣️ DILE AL CLIENTE:</p><p style='margin: 5px 0 0 0; font-size: 14px; font-style: italic; color: #444;'>\" {guion} \"</p></div>"
                 
                 with cols[idx % 3]:
@@ -927,7 +899,6 @@ with tab3:
             
             st.divider()
 
-            # --- ESQUEMA VISUAL (OCULTO EN UN EXPANDER) ---
             with st.expander("👀 Ver y Enviar Tarjeta para WhatsApp", expanded=False):
                 st.caption("Aquí está la tarjeta lista para compartir por WhatsApp.")
                 
