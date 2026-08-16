@@ -577,7 +577,8 @@ if not st.session_state.inicio_popup_mostrado:
 
 
 # ------------------ TABS ------------------
-tab1, tab2, tab3, tab4 = st.tabs(["📝 Registro", "📦 Archivo", "🖼️ Reporte Visual", "🔄 Intertiendas"])
+# Regresamos a solo 3 pestañas
+tab1, tab2, tab3 = st.tabs(["📝 Registro", "📦 Archivo", "🖼️ Reporte Visual"])
 
 # ------------------------------------------------------------
 # TAB 1: CONTEO
@@ -740,7 +741,6 @@ with tab2:
 with tab3:
     st.markdown(f"### 🖼️ Estrategia y Tarjeta - {seleccion_wa}")
     
-    # 1. Agregamos el filtro de fecha igual que en Intertiendas
     col_filtro1, col_filtro2 = st.columns([1, 2])
     with col_filtro1:
         activar_filtro_visual = st.checkbox("📅 Filtrar Sugeridos por Fecha", key="check_filtro_visual")
@@ -749,13 +749,11 @@ with tab3:
         else:
             fecha_filtro_visual = None
             
-    # 2. Consultamos la base completa de la sucursal
     df_visual_completo = conn.query('SELECT nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc ORDER BY fecha_cad ASC', params={"suc": seleccion_wa}, ttl=0)
     
     if df_visual_completo.empty:
         st.warning(f"No hay productos registrados para {seleccion_wa}.")
     else:
-        # 3. Aplicamos el filtro si está activado
         if activar_filtro_visual and fecha_filtro_visual:
             df_visual_completo['Fecha_obj'] = pd.to_datetime(df_visual_completo['Fecha']).dt.date
             df_visual = df_visual_completo[df_visual_completo['Fecha_obj'] == fecha_filtro_visual].drop(columns=['Fecha_obj'])
@@ -769,9 +767,12 @@ with tab3:
             st.markdown("#### 🎯 Qué ofrecer al cliente")
             st.caption("Aprovecha estos productos de pronta caducidad. Las sugerencias cambian para mantener fresco el guion.")
             
+            # Botón para forzar la recarga y obtener nuevas frases
+            if st.button("🔄 Generar nuevas frases", use_container_width=True):
+                st.rerun()
+            
             df_urgentes = df_visual.head(3)
             
-            # Construcción HTML sin espacios iniciales para evitar el bug de Streamlit de formato de código
             cards_html = "<div style='display: flex; gap: 15px; flex-wrap: wrap; justify-content: center; margin-bottom: 20px;'>"
             
             for i, fila in df_urgentes.iterrows():
@@ -814,12 +815,11 @@ with tab3:
                         "Para que tenga todo completo, ¿necesita algún complemento?"
                     ])
                 
-                # HTML en una sola línea para evitar el error de renderizado
-                cards_html += f"<div style='background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%); border-left: 5px solid #8C1C31; border-radius: 10px; padding: 20px; width: 30%; min-width: 260px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: left;'><p style='margin: 0; color: #8C1C31; font-weight: 900; font-size: 14px; letter-spacing: 1px;'>URGE VENDER</p><h3 style='margin: 5px 0 10px 0; font-size: 18px; color: #333;'>{prod_nombre}</h3><div style='display: flex; align-items: center; margin-bottom: 15px;'><span style='background-color: #FCE4D6; color: #8C0000; padding: 5px 10px; border-radius: 5px; font-weight: bold; font-size: 14px;'>📦 Quedan: {cant}</span></div><p style='margin: 0; font-size: 12px; color: #666; font-weight: bold;'>🗣️ DILE AL CLIENTE:</p><p style='margin: 5px 0 0 0; font-size: 14px; font-style: italic; color: #444;'>\" {guion} \"</p></div>"
+                # Tarjeta centrada (margin: 0 auto;) y ajustable
+                cards_html += f"<div style='background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%); border-left: 5px solid #8C1C31; border-radius: 10px; padding: 20px; width: 100%; max-width: 350px; margin: 0 auto; box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: left;'><p style='margin: 0; color: #8C1C31; font-weight: 900; font-size: 14px; letter-spacing: 1px;'>URGE VENDER</p><h3 style='margin: 5px 0 10px 0; font-size: 18px; color: #333;'>{prod_nombre}</h3><div style='display: flex; align-items: center; margin-bottom: 15px;'><span style='background-color: #FCE4D6; color: #8C0000; padding: 5px 10px; border-radius: 5px; font-weight: bold; font-size: 14px;'>📦 Quedan: {cant}</span></div><p style='margin: 0; font-size: 12px; color: #666; font-weight: bold;'>🗣️ DILE AL CLIENTE:</p><p style='margin: 5px 0 0 0; font-size: 14px; font-style: italic; color: #444;'>\" {guion} \"</p></div>"
             
             cards_html += "</div>"
             
-            # Renderizar las tarjetas visuales bonitas (ya sin bug de código de texto)
             st.markdown(cards_html, unsafe_allow_html=True)
                 
             st.divider()
@@ -852,85 +852,3 @@ with tab3:
                 link_wp = f"https://wa.me/{numero_whatsapp.strip()}"
                 boton_wp_html = f"<a href='{link_wp}' target='_blank' style='display: block; width: 100%; max-width: 500px; margin: auto; background-color: #25D366; color: white; text-align: center; padding: 15px; border-radius: 10px; font-size: 18px; font-weight: bold; text-decoration: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: background-color 0.3s;'>📞 Enviar Reporte a {seleccion_wa.upper()}</a><br><br>"
                 st.markdown(boton_wp_html, unsafe_allow_html=True)
-
-# ------------------------------------------------------------
-# TAB 4: INTERTIENDAS (Buscador Rápido de Códigos)
-# ------------------------------------------------------------
-with tab4:
-    st.markdown("### 🔄 Búsqueda Rápida para Intertiendas")
-    st.caption("Escanea, busca o filtra por fecha. Puedes editar la tabla directamente o agregar filas abajo.")
-    
-    # 1. Asegurar que el catálogo exista con una columna de Fecha
-    if "df_codigos" not in st.session_state:
-        st.session_state.df_codigos = pd.DataFrame({
-            "Producto": [
-                "MALTEADAS", "PASTEL TRES LECHES", "TARTA DE FRUTAS", 
-                "CROISSANT", "GELATINA DE MOSAICO", "PAY DE QUESO", "TIRAMISÚ"
-            ],
-            "Código": [
-                "MLT-100", "PTL-201", "TFR-305", 
-                "CRO-010", "GEL-402", "PAY-500", "TIR-603"
-            ],
-            "Fecha": [fecha_hoy_mx] * 7 # Columna de fecha por defecto (Hoy)
-        })
-
-    # 2. Controles de búsqueda y filtro
-    col1, col2 = st.columns([2, 1])
-    with col1:
-        busqueda_codigo = st.text_input(
-            "🔍 Escanea o escribe el nombre/código:", 
-            key="input_intertiendas",
-            placeholder="Ej. MALTEADAS o MLT-100..."
-        ).strip().upper()
-        
-    with col2:
-        # Checkbox para activar la búsqueda específica por fecha
-        activar_filtro = st.checkbox("📅 Filtrar por Fecha", value=False)
-        if activar_filtro:
-            fecha_filtro = st.date_input("Selecciona fecha:", value=fecha_hoy_mx)
-        else:
-            fecha_filtro = None
-
-    st.divider()
-
-    # 3. Lógica de Filtrado
-    df_filtrado = st.session_state.df_codigos.copy()
-    
-    # Asegurar que la columna Fecha sea tipo Date para poder compararla
-    df_filtrado['Fecha'] = pd.to_datetime(df_filtrado['Fecha']).dt.date
-    
-    if activar_filtro and fecha_filtro:
-        df_filtrado = df_filtrado[df_filtrado['Fecha'] == fecha_filtro]
-
-    if busqueda_codigo:
-        df_filtrado = df_filtrado[
-            df_filtrado['Producto'].str.contains(busqueda_codigo, case=False, na=False) |
-            df_filtrado['Código'].str.contains(busqueda_codigo, case=False, na=False)
-        ]
-    
-    # 4. Mostrar Resultados (Métrica y Editor)
-    if busqueda_codigo and not df_filtrado.empty:
-        st.success("✅ Producto encontrado:")
-        codigo_encontrado = df_filtrado.iloc[0]['Código']
-        nombre_encontrado = df_filtrado.iloc[0]['Producto']
-        st.metric(label=f"Código para: {nombre_encontrado}", value=codigo_encontrado)
-
-    st.markdown("**Catálogo Editable (Modifica datos, agrega o elimina filas)**")
-    
-    # Renderizamos la tabla editable
-    df_editado = st.data_editor(
-        df_filtrado, 
-        use_container_width=True, 
-        hide_index=True,
-        num_rows="dynamic", # ¡Esto permite al usuario añadir o quitar filas!
-        key="editor_cat_intertiendas"
-    )
-    
-    # 5. Guardar cambios
-    if st.button("💾 Guardar Catálogo", type="primary", use_container_width=True):
-        if activar_filtro or busqueda_codigo:
-            st.warning("⚠️ Se recomienda guardar cambios de estructura (agregar/quitar filas) con los filtros desactivados para no borrar datos del catálogo que no estás viendo.")
-        else:
-            st.session_state.df_codigos = df_editado
-            st.session_state.show_toast = "✅ Catálogo actualizado en esta sesión."
-            st.rerun()
