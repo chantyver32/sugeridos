@@ -427,7 +427,7 @@ if st.session_state.get('usuario_actual', '').lower() == 'admin':
 def guardar_datos_voz(sucursal):
     cant = st.session_state.voz_input_cant
     prod = st.session_state.voz_input_prod.strip().upper()
-    fech = st.session_state.voz_input_fech
+    fech = st.session_state.voz_input_fech  # Tomamos la fecha del nuevo sistema de botones
     
     if not prod:
         st.session_state.show_error = "El nombre no puede estar vacío."
@@ -498,9 +498,32 @@ def popup_voz():
         
     st.success(f"**Escuché:** '{datos['original']}'")
     
+    # Inicializar la fecha interactiva en el state si es una captura nueva
+    if "voz_input_fech" not in st.session_state or st.session_state.get("voz_id_original") != datos['original']:
+        st.session_state.voz_input_fech = datos['fecha']
+        st.session_state.voz_id_original = datos['original']
+    
     st.number_input("Cantidad", value=int(datos['cant']), min_value=1, key="voz_input_cant")
     st.text_input("Producto", value=datos['prod'], key="voz_input_prod")
-    st.date_input("Fecha", value=datos['fecha'], key="voz_input_fech")
+    
+    # CONTROL DE FECHA CON BOTONES DE + / - DÍA
+    st.markdown("**📅 Fecha Sugerido:**")
+    col_f1, col_f2, col_f3 = st.columns([1, 2, 1])
+    with col_f1:
+        if st.button("➖ Día", use_container_width=True):
+            st.session_state.voz_input_fech -= timedelta(days=1)
+            st.rerun()
+    with col_f2:
+        st.markdown(
+            f"<div style='text-align: center; font-size: 20px; font-weight: bold; padding: 5px; background: white; border-radius: 5px; border: 1px solid #ccc; color: #333;'>{st.session_state.voz_input_fech.strftime('%d/%m/%Y')}</div>", 
+            unsafe_allow_html=True
+        )
+    with col_f3:
+        if st.button("➕ Día", use_container_width=True):
+            st.session_state.voz_input_fech += timedelta(days=1)
+            st.rerun()
+            
+    st.write("") # Espacio
     
     col1, col2 = st.columns(2)
     with col1:
@@ -660,9 +683,13 @@ with tab1:
     
     if not df_hoy_captura.empty:
         with st.expander("📋 Productos registrados al momento", expanded=False):
+            # APLICAMOS EL FORMATO DD/MM/AAAA a la columna Fecha
             df_editado = st.data_editor(
                 df_hoy_captura, 
-                column_config={"id": None}, 
+                column_config={
+                    "id": None,
+                    "Fecha": st.column_config.DateColumn("Fecha", format="DD/MM/YYYY")
+                }, 
                 num_rows="dynamic", 
                 height=300, 
                 use_container_width=True, 
@@ -687,16 +714,34 @@ with tab1:
 with tab2:
     st.markdown("### 📦 Gestión de Sugeridos")
     
-    # ORDENADO POR FECHA DE CADUCIDAD ASCENDENTE
-    df_stock = conn.query('SELECT id, nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc ORDER BY fecha_cad ASC', params={"suc": seleccion_wa}, ttl=0)
+    # NUEVO: Filtro por fecha para editar
+    usar_filtro = st.checkbox("📅 Filtrar sugeridos por fecha para editar")
+    if usar_filtro:
+        fecha_filtro_edit = st.date_input("Selecciona la fecha a filtrar:", value=fecha_hoy_mx, format="DD/MM/YYYY")
+    
+    # Query dinámico
+    query_str = 'SELECT id, nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc '
+    params = {"suc": seleccion_wa}
+    
+    if usar_filtro:
+        query_str += "AND fecha_cad = :fec_filtro "
+        params["fec_filtro"] = str(fecha_filtro_edit)
+        
+    query_str += 'ORDER BY fecha_cad ASC'
+    
+    df_stock = conn.query(query_str, params=params, ttl=0)
     
     with st.expander(f"✏️ Editar Sugeridos de {seleccion_wa}", expanded=False):
         if df_stock.empty:
-            st.info("No hay stock registrado. Realiza un ingreso directo en la pestaña de Registro.")
+            st.info("No hay stock registrado para esta selección.")
         else:
+            # FORMATO DD/MM/AAAA en la tabla de edición de stock
             df_editado_stock = st.data_editor(
                 df_stock, 
-                column_config={"id": None}, 
+                column_config={
+                    "id": None,
+                    "Fecha": st.column_config.DateColumn("Fecha", format="DD/MM/YYYY")
+                }, 
                 num_rows="dynamic", 
                 use_container_width=True, 
                 hide_index=True, 
@@ -705,7 +750,11 @@ with tab2:
             
             if st.button("💾 Confirmar Cambios", use_container_width=True, type="primary"):
                 with conn.session as s:
-                    s.execute(text("DELETE FROM base_anterior WHERE sucursal = :suc"), {"suc": seleccion_wa})
+                    if usar_filtro:
+                        s.execute(text("DELETE FROM base_anterior WHERE sucursal = :suc AND fecha_cad = :fec_filtro"), params)
+                    else:
+                        s.execute(text("DELETE FROM base_anterior WHERE sucursal = :suc"), {"suc": seleccion_wa})
+                        
                     for _, fila in df_editado_stock.iterrows():
                         if pd.notna(fila["Producto"]) and str(fila["Producto"]).strip() != "":
                             s.execute(text("INSERT INTO base_anterior (sucursal, nombre, fecha_cad, cantidad) VALUES (:suc, :nom, :fec, :can)"), 
@@ -755,7 +804,8 @@ with tab3:
     with col_filtro1:
         activar_filtro_visual = st.checkbox("📅 Filtrar Sugeridos por Fecha", key="check_filtro_visual")
         if activar_filtro_visual:
-            fecha_filtro_visual = st.date_input("Selecciona fecha:", value=fecha_hoy_mx, key="date_filtro_visual")
+            # FORMATO DD/MM/AAAA en filtro visual
+            fecha_filtro_visual = st.date_input("Selecciona fecha:", value=fecha_hoy_mx, format="DD/MM/YYYY", key="date_filtro_visual")
         else:
             fecha_filtro_visual = None
             
@@ -808,7 +858,7 @@ with tab3:
                 # LÓGICA DE CATEGORÍAS CON LOS NOMBRES EXACTOS
                 if diferencia_dias <= 1:
                     color_borde = "#8C1C31" 
-                    label_texto = "SUGERIDOS"
+                    label_texto = "SUGERIDO"
                     badge_bg = "#FCE4D6"
                     badge_color = "#8C0000"
                 elif diferencia_dias == 2:
@@ -849,13 +899,13 @@ with tab3:
                         "¿Para cuántas personas son? Si es para una reunión, ¿quiere complementar con alguna opción dulce o salada?",
                         "¿Ya tiene bebidas y postre? Para que tenga todo completo, ¿desea agregar bebidas o algún postre?"
                     ])
+                # CAMBIO A SUGERIR BOCADILLOS O PAN EN LUGAR DE BEBIDAS
                 elif any(kw in prod_nombre for kw in ["BEBIDA", "MALTEADA", "CAFÉ", "FRAPPE", "JUGO"]):
                     guion = random.choice([
-                        "¿Es para acompañar lo que lleva? ¿Le agrego una bebida para acompañarlo?",
-                        "¿Es para compartir? Si es para varias personas, ¿necesita alguna opción adicional para acompañar?"
+                        "¿Es para acompañar lo que lleva? ¿Le agrego un bocadillo o pan dulce para acompañarlo?",
+                        "¿Es para compartir? Si es para varias personas, ¿necesita algún pan o bocadillo extra para acompañar?"
                     ])
                 else:
-                    # AJUSTE EN LA FRASE PARA NO MENCIONAR EL NOMBRE DEL PRODUCTO ESPECÍFICO
                     guion = random.choice([
                         "¿Desea complementar su compra con algo más?",
                         "Ya que lleva esto, ¿le gustaría agregar algo para acompañarlo?",
@@ -905,4 +955,3 @@ with tab3:
                 link_wp = f"https://wa.me/{numero_whatsapp.strip()}"
                 boton_wp_html = f"<a href='{link_wp}' target='_blank' style='display: block; width: 100%; max-width: 500px; margin: auto; background-color: #25D366; color: white; text-align: center; padding: 15px; border-radius: 10px; font-size: 18px; font-weight: bold; text-decoration: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: background-color 0.3s;'>📞 Enviar Reporte a {seleccion_wa.upper()}</a><br><br>"
                 st.markdown(boton_wp_html, unsafe_allow_html=True)
-
