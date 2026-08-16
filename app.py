@@ -255,8 +255,8 @@ def generar_excel_formato(df, sucursal, titulo="PASTELERÍA CHAMPLITTE, S.A. DE 
         col_cant = 'Existencia' if 'Existencia' in df.columns else 'cantidad'
         col_fecha = 'Fecha' if 'Fecha' in df.columns else 'fecha_cad'
 
-        # Modificación para ordenar estrictamente de forma alfabética y por fecha como orden secundario
-        df = df.sort_values(by=[col_nombre, col_fecha]).reset_index(drop=True)
+        # Modificación: Primero por Fecha (Sugerido -> Pasado Mañana -> Extra) y luego alfabéticamente
+        df = df.sort_values(by=[col_fecha, col_nombre]).reset_index(drop=True)
         fecha_proxima_vencer = df[col_fecha].min()
 
         for _, fila in df.iterrows():
@@ -655,8 +655,8 @@ with tab1:
 
     st.divider()
     
-    # Modificado para ordenar alfabéticamente
-    df_hoy_captura = conn.query("SELECT id, nombre, fecha_cad AS \"Fecha\", cantidad FROM captura_actual WHERE sucursal=:suc ORDER BY nombre ASC, fecha_cad ASC", params={"suc": seleccion_wa}, ttl=0)
+    # Ordenar primero por fecha (categoría) y luego alfabéticamente
+    df_hoy_captura = conn.query("SELECT id, nombre, fecha_cad AS \"Fecha\", cantidad FROM captura_actual WHERE sucursal=:suc ORDER BY fecha_cad ASC, nombre ASC", params={"suc": seleccion_wa}, ttl=0)
     
     if not df_hoy_captura.empty:
         with st.expander("📋 Productos registrados al momento", expanded=False):
@@ -707,8 +707,8 @@ with tab2:
         query_str += "AND fecha_cad = :fec_filtro "
         params["fec_filtro"] = str(fecha_filtro_edit)
         
-    # Modificado para ordenar alfabéticamente
-    query_str += 'ORDER BY nombre ASC, fecha_cad ASC'
+    # Ordenar primero por fecha y luego alfabéticamente
+    query_str += 'ORDER BY fecha_cad ASC, nombre ASC'
     
     df_stock = conn.query(query_str, params=params, ttl=0)
     
@@ -752,8 +752,8 @@ with tab2:
     
     st.markdown("### 📥 Descargar Excel Actualizado")
     
-    # Modificado para ordenar alfabéticamente en la exportación
-    df_stock_final = conn.query('SELECT nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc ORDER BY nombre ASC, fecha_cad ASC', params={"suc": seleccion_wa}, ttl=0)
+    # Exportar ordenado por fecha y luego alfabéticamente
+    df_stock_final = conn.query('SELECT nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc ORDER BY fecha_cad ASC, nombre ASC', params={"suc": seleccion_wa}, ttl=0)
     
     if df_stock_final.empty:
         st.warning("No hay datos para generar el Excel.")
@@ -789,15 +789,15 @@ with tab3:
         else:
             fecha_filtro_visual = None
             
-    # Modificado para ordenar alfabéticamente
-    df_visual_completo = conn.query('SELECT id, nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc AND cantidad > 0 ORDER BY nombre ASC, fecha_cad ASC', params={"suc": seleccion_wa}, ttl=0)
+    # Orden visual por fecha primero y alfabético después
+    df_visual_completo = conn.query('SELECT id, nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc AND cantidad > 0 ORDER BY fecha_cad ASC, nombre ASC', params={"suc": seleccion_wa}, ttl=0)
     
     if df_visual_completo.empty:
         st.warning(f"No hay productos sugeridos disponibles para {seleccion_wa}.")
     else:
         df_visual_completo['Fecha_orden'] = pd.to_datetime(df_visual_completo['Fecha'])
-        # Modificado para mantener la ordenación alfabética pura y fecha como secundario
-        df_visual_completo = df_visual_completo.sort_values(by=['Producto', 'Fecha_orden'], ascending=[True, True]).drop(columns=['Fecha_orden']).reset_index(drop=True)
+        # Mantener orden cronológico por categoría como primario y alfabético como secundario
+        df_visual_completo = df_visual_completo.sort_values(by=['Fecha_orden', 'Producto'], ascending=[True, True]).drop(columns=['Fecha_orden']).reset_index(drop=True)
         
         if activar_filtro_visual and fecha_filtro_visual:
             df_visual_completo['Fecha_obj'] = pd.to_datetime(df_visual_completo['Fecha']).dt.date
