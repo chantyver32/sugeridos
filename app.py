@@ -207,6 +207,19 @@ def restar_dia():
 def sumar_dia():
     st.session_state.voz_input_fech += timedelta(days=1)
 
+# Funciones de suma y resta para filtros
+def restar_dia_tab2():
+    st.session_state.fecha_filtro_tab2 -= timedelta(days=1)
+
+def sumar_dia_tab2():
+    st.session_state.fecha_filtro_tab2 += timedelta(days=1)
+
+def restar_dia_tab3():
+    st.session_state.fecha_filtro_tab3 -= timedelta(days=1)
+
+def sumar_dia_tab3():
+    st.session_state.fecha_filtro_tab3 += timedelta(days=1)
+
 def generar_excel_formato(df, sucursal, titulo="PASTELERÍA CHAMPLITTE, S.A. DE C.V."):
     output = io.BytesIO()
     writer = pd.ExcelWriter(output, engine='xlsxwriter')
@@ -688,15 +701,23 @@ with tab1:
 # TAB 2: INVENTARIO Y CORTE
 # ------------------------------------------------------------
 with tab2:
+    if "fecha_filtro_tab2" not in st.session_state:
+        st.session_state.fecha_filtro_tab2 = fecha_hoy_mx + timedelta(days=1)
+
     st.markdown("### 📦 Gestión de Sugeridos")
     
     st.markdown("#### 🔍 Filtro de Búsqueda")
-    col_filt_1, col_filt_2 = st.columns([1, 2])
-    with col_filt_1:
-        usar_filtro = st.checkbox("📅 Habilitar filtro por fecha", key="filtro_tab2")
-    with col_filt_2:
-        if usar_filtro:
-            fecha_filtro_edit = st.date_input("Selecciona la fecha:", value=fecha_hoy_mx, format="DD/MM/YYYY", key="date_tab2")
+    
+    usar_filtro = st.checkbox("📅 Habilitar filtro por fecha", key="filtro_tab2")
+    
+    if usar_filtro:
+        col_f1, col_f2, col_f3 = st.columns([1, 2, 1])
+        with col_f1:
+            st.button("➖ Día", key="btn_menos_t2", use_container_width=True, on_click=restar_dia_tab2)
+        with col_f2:
+            fecha_filtro_edit = st.date_input("Selecciona la fecha:", key="fecha_filtro_tab2", format="DD/MM/YYYY", label_visibility="collapsed")
+        with col_f3:
+            st.button("➕ Día", key="btn_mas_t2", use_container_width=True, on_click=sumar_dia_tab2)
             
     st.divider()
     
@@ -779,15 +800,23 @@ with tab2:
 # TAB 3: REPORTE VISUAL Y RECOMENDACIONES DE VENTA DINÁMICAS
 # ------------------------------------------------------------
 with tab3:
+    if "fecha_filtro_tab3" not in st.session_state:
+        st.session_state.fecha_filtro_tab3 = fecha_hoy_mx + timedelta(days=1)
+
     st.markdown(f"### 🖼️ Estrategia y Tarjeta - {seleccion_wa}")
     
-    col_filtro1, col_filtro2 = st.columns([1, 2])
-    with col_filtro1:
-        activar_filtro_visual = st.checkbox("📅 Filtrar Sugeridos por Fecha", key="check_filtro_visual")
-        if activar_filtro_visual:
-            fecha_filtro_visual = st.date_input("Selecciona fecha:", value=fecha_hoy_mx, format="DD/MM/YYYY", key="date_filtro_visual")
-        else:
-            fecha_filtro_visual = None
+    activar_filtro_visual = st.checkbox("📅 Filtrar Sugeridos por Fecha", key="check_filtro_visual")
+    
+    if activar_filtro_visual:
+        col_fv1, col_fv2, col_fv3 = st.columns([1, 2, 1])
+        with col_fv1:
+            st.button("➖ Día", key="btn_menos_t3", use_container_width=True, on_click=restar_dia_tab3)
+        with col_fv2:
+            fecha_filtro_visual = st.date_input("Selecciona fecha:", key="fecha_filtro_tab3", format="DD/MM/YYYY", label_visibility="collapsed")
+        with col_fv3:
+            st.button("➕ Día", key="btn_mas_t3", use_container_width=True, on_click=sumar_dia_tab3)
+    else:
+        fecha_filtro_visual = None
             
     # Orden visual por fecha primero y alfabético después
     df_visual_completo = conn.query('SELECT id, nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc AND cantidad > 0 ORDER BY fecha_cad ASC, nombre ASC', params={"suc": seleccion_wa}, ttl=0)
