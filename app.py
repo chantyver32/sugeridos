@@ -584,7 +584,6 @@ if not st.session_state.inicio_popup_mostrado:
 
 
 # ------------------ TABS ------------------
-# Eliminamos pestaña de intertiendas
 tab1, tab2, tab3 = st.tabs(["📝 Registro", "📦 Archivo", "🖼️ Reporte Visual"])
 
 # ------------------------------------------------------------
@@ -687,7 +686,7 @@ with tab2:
     
     df_stock = conn.query('SELECT id, nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc', params={"suc": seleccion_wa}, ttl=0)
     
-    with st.expander(f"✏️ Editar Sugeridos de {seleccion_wa}", expanded=True):
+    with st.expander(f"✏️ Editar Sugeridos de {seleccion_wa}", expanded=False):
         if df_stock.empty:
             st.info("No hay stock registrado. Realiza un ingreso directo en la pestaña de Registro.")
         else:
@@ -756,7 +755,6 @@ with tab3:
         else:
             fecha_filtro_visual = None
             
-    # IMPORTANTE: Ahora la consulta trae el 'id' de la tabla para poder ejecutar el UPDATE al presionar "Vendido"
     df_visual_completo = conn.query('SELECT id, nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc AND cantidad > 0 ORDER BY fecha_cad ASC', params={"suc": seleccion_wa}, ttl=0)
     
     if df_visual_completo.empty:
@@ -780,8 +778,6 @@ with tab3:
             
             df_urgentes = df_visual.head(3)
             
-            # Creamos columnas de Streamlit para que las tarjetas e interacciones queden alineadas y centradas
-            # Dependiendo de la cantidad de urgentes (1 a 3), Streamlit centrará los elementos en la cuadrícula.
             cols = st.columns(3)
             
             for idx, (_, fila) in enumerate(df_urgentes.iterrows()):
@@ -789,7 +785,6 @@ with tab3:
                 cant = fila['Existencia']
                 prod_id = fila['id']
                 
-                # Formateo visual de fecha
                 fecha_str = str(fila['Fecha'])
                 try:
                     if '-' in fecha_str:
@@ -799,7 +794,6 @@ with tab3:
                 except:
                     pass
                 
-                # AMPLIACIÓN DE FRASES SEGÚN MANUAL
                 if "PASTEL" in prod_nombre:
                     guion = random.choice([
                         "¿Es para alguna celebración? Como es para celebración, ¿también necesita velitas para el pastel?",
@@ -839,14 +833,10 @@ with tab3:
                         "Tenemos esta opción que combina muy bien con lo que lleva. ¿Quiere agregarla?"
                     ])
                 
-                # HTML de la tarjeta adaptado al ancho de la columna 
                 tarjeta_html = f"<div style='background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%); border-left: 5px solid #8C1C31; border-radius: 10px; padding: 20px; width: 100%; box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: left; margin: 0 auto; margin-bottom: 10px;'><p style='margin: 0; color: #8C1C31; font-weight: 900; font-size: 14px; letter-spacing: 1px;'>URGE VENDER</p><h3 style='margin: 5px 0 5px 0; font-size: 18px; color: #333;'>{prod_nombre}</h3><p style='margin: 0 0 10px 0; color: #d9534f; font-weight: bold; font-size: 13px;'>📅 Fecha: {fecha_str}</p><div style='display: flex; align-items: center; margin-bottom: 15px;'><span style='background-color: #FCE4D6; color: #8C0000; padding: 5px 10px; border-radius: 5px; font-weight: bold; font-size: 14px;'>📦 Quedan: {cant}</span></div><p style='margin: 0; font-size: 12px; color: #666; font-weight: bold;'>🗣️ DILE AL CLIENTE:</p><p style='margin: 5px 0 0 0; font-size: 14px; font-style: italic; color: #444;'>\" {guion} \"</p></div>"
                 
-                # Mostramos la tarjeta y su botón en su respectiva columna
-                # (Se usa módulo % 3 por si hay menos de 3 para que respete el orden de columnas)
                 with cols[idx % 3]:
                     st.markdown(tarjeta_html, unsafe_allow_html=True)
-                    # Botón que acciona la función de descontar de base de datos
                     st.button("✅ Vendido (-1)", key=f"btn_vender_{prod_id}_{cant}", use_container_width=True, on_click=marcar_vendido, args=(prod_id, prod_nombre))
             
             st.divider()
