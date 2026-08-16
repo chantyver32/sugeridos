@@ -341,6 +341,13 @@ def analizar_dictado(texto, fecha_base):
     producto = re.sub(r'\s+', ' ', texto).strip().upper()
     return producto, cantidad, fecha_calc
 
+# Función para restar 1 producto vendido desde el botón de la tarjeta
+def marcar_vendido(prod_id, prod_nombre):
+    with conn.session as s:
+        s.execute(text("UPDATE base_anterior SET cantidad = GREATEST(cantidad - 1, 0) WHERE id = :id"), {"id": int(prod_id)})
+        s.commit()
+    st.session_state.show_toast = f"✅ Venta registrada: se descontó 1 de {prod_nombre}."
+
 # ------------------ SIDEBAR ------------------
 st.sidebar.markdown("### 🏢 Datos de Sesión")
 st.sidebar.caption(f"👤 Conectado como: **{st.session_state.get('usuario_actual', 'Usuario')}**")
@@ -577,7 +584,7 @@ if not st.session_state.inicio_popup_mostrado:
 
 
 # ------------------ TABS ------------------
-# Regresamos a solo 3 pestañas
+# Eliminamos pestaña de intertiendas
 tab1, tab2, tab3 = st.tabs(["📝 Registro", "📦 Archivo", "🖼️ Reporte Visual"])
 
 # ------------------------------------------------------------
@@ -749,10 +756,11 @@ with tab3:
         else:
             fecha_filtro_visual = None
             
-    df_visual_completo = conn.query('SELECT nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc ORDER BY fecha_cad ASC', params={"suc": seleccion_wa}, ttl=0)
+    # IMPORTANTE: Ahora la consulta trae el 'id' de la tabla para poder ejecutar el UPDATE al presionar "Vendido"
+    df_visual_completo = conn.query('SELECT id, nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc AND cantidad > 0 ORDER BY fecha_cad ASC', params={"suc": seleccion_wa}, ttl=0)
     
     if df_visual_completo.empty:
-        st.warning(f"No hay productos registrados para {seleccion_wa}.")
+        st.warning(f"No hay productos sugeridos disponibles para {seleccion_wa}.")
     else:
         if activar_filtro_visual and fecha_filtro_visual:
             df_visual_completo['Fecha_obj'] = pd.to_datetime(df_visual_completo['Fecha']).dt.date
@@ -763,65 +771,84 @@ with tab3:
         if df_visual.empty:
             st.info("No hay productos sugeridos para la fecha seleccionada.")
         else:
-            # --- MÓDULO DE RECOMENDACIONES (ESQUEMA VISUAL DE TARJETAS) ---
+            # --- MÓDULO DE RECOMENDACIONES (ESQUEMA VISUAL CENTRADO) ---
             st.markdown("#### 🎯 Qué ofrecer al cliente")
             st.caption("Aprovecha estos productos de pronta caducidad. Las sugerencias cambian para mantener fresco el guion.")
             
-            # Botón para forzar la recarga y obtener nuevas frases
             if st.button("🔄 Generar nuevas frases", use_container_width=True):
                 st.rerun()
             
             df_urgentes = df_visual.head(3)
             
-            cards_html = "<div style='display: flex; gap: 15px; flex-wrap: wrap; justify-content: center; margin-bottom: 20px;'>"
+            # Creamos columnas de Streamlit para que las tarjetas e interacciones queden alineadas y centradas
+            # Dependiendo de la cantidad de urgentes (1 a 3), Streamlit centrará los elementos en la cuadrícula.
+            cols = st.columns(3)
             
-            for i, fila in df_urgentes.iterrows():
+            for idx, (_, fila) in enumerate(df_urgentes.iterrows()):
                 prod_nombre = str(fila['Producto']).upper()
                 cant = fila['Existencia']
+                prod_id = fila['id']
                 
-                # LÓGICA DE ROTACIÓN DE FRASES SEGÚN EL MANUAL 
+                # Formateo visual de fecha
+                fecha_str = str(fila['Fecha'])
+                try:
+                    if '-' in fecha_str:
+                        partes = fecha_str.split('-')
+                        if len(partes) == 3:
+                            fecha_str = f"{partes[2]}/{partes[1]}/{partes[0]}"
+                except:
+                    pass
+                
+                # AMPLIACIÓN DE FRASES SEGÚN MANUAL
                 if "PASTEL" in prod_nombre:
                     guion = random.choice([
-                        "¿Es para alguna celebración? ¿También necesita velitas para el pastel?",
-                        "¿Ya tiene algo para acompañar el pastel? Podemos complementar con bocadillos o bebidas.",
-                        "¿Desea agregar velas o algún complemento para el festejo?",
-                        "Si es para compartir, puedo recomendarle también una opción de bocadillos."
+                        "¿Es para alguna celebración? Como es para celebración, ¿también necesita velitas para el pastel?",
+                        "¿Ya tiene algo para acompañar el pastel? Podemos complementar con bocadillos o bebidas. ¿Le gustaría agregar alguno?",
+                        "¿Ya tiene todo para la celebración? ¿Desea agregar velas o algún complemento para el festejo?",
+                        "¿Es para compartir? Si es para varias personas, puedo recomendarle también una opción de bocadillos para complementar.",
+                        "Para acompañar el pastel, ¿prefiere llevar bocadillos o bebidas?"
                     ])
                 elif "ROSCA" in prod_nombre:
                     guion = random.choice([
-                        "Si es para compartir, ¿quiere llevar también pan o algún bocadillo para acompañarla?",
-                        "Podemos complementar la rosca con piezas individuales para que alcance mejor."
+                        "¿Es para compartir en casa o para una reunión? Si es para compartir, ¿quiere llevar también pan o algún bocadillo para acompañarla?",
+                        "¿Cuántas personas asistirán? Podemos complementar la rosca con piezas individuales para que alcance mejor."
                     ])
                 elif "PAN" in prod_nombre or "CROISSANT" in prod_nombre:
                     guion = random.choice([
-                        "Si es para compartir, ¿quiere llevar algunas piezas más o probar otra variedad?",
-                        "Para acompañar el pan, ¿desea agregar alguna bebida o producto complementario?",
-                        "Podemos armar una combinación con diferentes piezas. ¿Quiere agregar una variedad?"
+                        "¿Es para usted o para compartir? Si es para compartir, ¿quiere llevar algunas piezas más o probar otra variedad?",
+                        "¿Es para desayuno, reunión o consumo en casa? Para acompañar el pan, ¿desea agregar alguna bebida o producto complementario?",
+                        "¿Le gusta más lo dulce o quiere combinar? Podemos armar una combinación con diferentes piezas. ¿Quiere agregar una variedad?"
                     ])
                 elif "BOCADILLO" in prod_nombre:
                     guion = random.choice([
-                        "Si es para una reunión, ¿quiere complementar con alguna opción dulce o salada?",
-                        "Para que tenga todo completo, ¿desea agregar bebidas o algún postre?"
+                        "¿Para cuántas personas son? Si es para una reunión, ¿quiere complementar con alguna opción dulce o salada?",
+                        "¿Ya tiene bebidas y postre? Para que tenga todo completo, ¿desea agregar bebidas o algún postre?"
                     ])
                 elif "BEBIDA" in prod_nombre or "MALTEADA" in prod_nombre:
                     guion = random.choice([
                         "¿Es para acompañar lo que lleva? ¿Le agrego una bebida para acompañarlo?",
-                        "Si es para varias personas, ¿necesita alguna opción adicional para acompañar?"
+                        "¿Es para compartir? Si es para varias personas, ¿necesita alguna opción adicional para acompañar?"
                     ])
                 else:
                     guion = random.choice([
-                        f"Tenemos esta opción ({prod_nombre}) que combina muy bien con lo que lleva. ¿Quiere agregarla?",
+                        "¿Desea complementar su compra con…?",
+                        "Ya que lleva este producto, ¿le gustaría agregar algo más?",
+                        "Para que tenga todo completo, ¿necesita algún complemento?",
+                        "Si es para compartir, podemos agregar algo más, ¿le gustaría?",
                         "Antes de cobrarle, ¿necesita alguna vela, bebida o complemento?",
-                        "Para que tenga todo completo, ¿necesita algún complemento?"
+                        "Tenemos esta opción que combina muy bien con lo que lleva. ¿Quiere agregarla?"
                     ])
                 
-                # Tarjeta centrada (margin: 0 auto;) y ajustable
-                cards_html += f"<div style='background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%); border-left: 5px solid #8C1C31; border-radius: 10px; padding: 20px; width: 100%; max-width: 350px; margin: 0 auto; box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: left;'><p style='margin: 0; color: #8C1C31; font-weight: 900; font-size: 14px; letter-spacing: 1px;'>URGE VENDER</p><h3 style='margin: 5px 0 10px 0; font-size: 18px; color: #333;'>{prod_nombre}</h3><div style='display: flex; align-items: center; margin-bottom: 15px;'><span style='background-color: #FCE4D6; color: #8C0000; padding: 5px 10px; border-radius: 5px; font-weight: bold; font-size: 14px;'>📦 Quedan: {cant}</span></div><p style='margin: 0; font-size: 12px; color: #666; font-weight: bold;'>🗣️ DILE AL CLIENTE:</p><p style='margin: 5px 0 0 0; font-size: 14px; font-style: italic; color: #444;'>\" {guion} \"</p></div>"
-            
-            cards_html += "</div>"
-            
-            st.markdown(cards_html, unsafe_allow_html=True)
+                # HTML de la tarjeta adaptado al ancho de la columna 
+                tarjeta_html = f"<div style='background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%); border-left: 5px solid #8C1C31; border-radius: 10px; padding: 20px; width: 100%; box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: left; margin: 0 auto; margin-bottom: 10px;'><p style='margin: 0; color: #8C1C31; font-weight: 900; font-size: 14px; letter-spacing: 1px;'>URGE VENDER</p><h3 style='margin: 5px 0 5px 0; font-size: 18px; color: #333;'>{prod_nombre}</h3><p style='margin: 0 0 10px 0; color: #d9534f; font-weight: bold; font-size: 13px;'>📅 Fecha: {fecha_str}</p><div style='display: flex; align-items: center; margin-bottom: 15px;'><span style='background-color: #FCE4D6; color: #8C0000; padding: 5px 10px; border-radius: 5px; font-weight: bold; font-size: 14px;'>📦 Quedan: {cant}</span></div><p style='margin: 0; font-size: 12px; color: #666; font-weight: bold;'>🗣️ DILE AL CLIENTE:</p><p style='margin: 5px 0 0 0; font-size: 14px; font-style: italic; color: #444;'>\" {guion} \"</p></div>"
                 
+                # Mostramos la tarjeta y su botón en su respectiva columna
+                # (Se usa módulo % 3 por si hay menos de 3 para que respete el orden de columnas)
+                with cols[idx % 3]:
+                    st.markdown(tarjeta_html, unsafe_allow_html=True)
+                    # Botón que acciona la función de descontar de base de datos
+                    st.button("✅ Vendido (-1)", key=f"btn_vender_{prod_id}_{cant}", use_container_width=True, on_click=marcar_vendido, args=(prod_id, prod_nombre))
+            
             st.divider()
 
             # --- ESQUEMA VISUAL (OCULTO EN UN EXPANDER) ---
@@ -832,22 +859,22 @@ with tab3:
                 for i, fila in df_visual.iterrows():
                     color_fondo = "#FFFFFF" if i % 2 == 0 else "#FFF5F5"
                     
-                    fecha_str = str(fila['Fecha'])
+                    fecha_str_tarjeta = str(fila['Fecha'])
                     try:
-                        if '-' in fecha_str:
-                            partes = fecha_str.split('-')
+                        if '-' in fecha_str_tarjeta:
+                            partes = fecha_str_tarjeta.split('-')
                             if len(partes) == 3:
-                                fecha_str = f"{partes[2]}/{partes[1]}/{partes[0]}"
+                                fecha_str_tarjeta = f"{partes[2]}/{partes[1]}/{partes[0]}"
                     except:
                         pass
 
-                    filas_html += f"<tr style='background-color: {color_fondo}; border-bottom: 1px solid #f0f0f0;'><td style='padding: 10px; text-align: left; color: #333; font-size: 13px;'>{fila['Producto']}</td><td style='padding: 10px; text-align: center; color: #8C1C31; font-weight: bold; font-size: 14px;'>{fila['Existencia']}</td><td style='padding: 10px; text-align: center; color: #555; font-size: 13px;'>{fecha_str}</td></tr>"
+                    filas_html += f"<tr style='background-color: {color_fondo}; border-bottom: 1px solid #f0f0f0;'><td style='padding: 10px; text-align: left; color: #333; font-size: 13px;'>{fila['Producto']}</td><td style='padding: 10px; text-align: center; color: #8C1C31; font-weight: bold; font-size: 14px;'>{fila['Existencia']}</td><td style='padding: 10px; text-align: center; color: #555; font-size: 13px;'>{fecha_str_tarjeta}</td></tr>"
                     
                 fecha_hora_actual = datetime.now(zona_mx).strftime("%d/%m/%Y %H:%M")
                 
-                tarjeta_html = f"<div style='background-color: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); width: 100%; max-width: 500px; margin: auto; text-align: center; margin-bottom: 20px;'><h1 style='color: #6D1427; font-family: \"Times New Roman\", serif; font-size: 38px; margin: 0;'>Champlitte</h1><p style='font-family: sans-serif; font-size: 10px; font-weight: bold; letter-spacing: 3px; margin: 0 0 20px 0; color: #000;'>PASTELERÍA</p><h2 style='color: #6D1427; font-family: sans-serif; font-weight: 900; margin: 0; font-size: 22px;'>SUGERIDOS {seleccion_wa.upper()}</h2><p style='font-family: sans-serif; font-size: 12px; font-weight: bold; color: #666; margin: 5px 0 20px 0;'>{fecha_hora_actual}</p><table style='width: 100%; border-collapse: collapse; font-family: sans-serif;'><thead><tr style='background-color: #8C1C31; color: white;'><th style='padding: 12px; text-align: left; font-size: 11px; letter-spacing: 1px;'>PRODUCTO</th><th style='padding: 12px; text-align: center; font-size: 11px; letter-spacing: 1px;'>CANTIDAD</th><th style='padding: 12px; text-align: center; font-size: 11px; letter-spacing: 1px;'>FECHA</th></tr></thead><tbody>{filas_html}</tbody></table></div><p style='text-align: center; color: gray; font-size: 13px; margin-top: 15px; margin-bottom: 20px;'>Reporte generado automáticamente</p>"
+                tarjeta_html_general = f"<div style='background-color: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); width: 100%; max-width: 500px; margin: auto; text-align: center; margin-bottom: 20px;'><h1 style='color: #6D1427; font-family: \"Times New Roman\", serif; font-size: 38px; margin: 0;'>Champlitte</h1><p style='font-family: sans-serif; font-size: 10px; font-weight: bold; letter-spacing: 3px; margin: 0 0 20px 0; color: #000;'>PASTELERÍA</p><h2 style='color: #6D1427; font-family: sans-serif; font-weight: 900; margin: 0; font-size: 22px;'>SUGERIDOS {seleccion_wa.upper()}</h2><p style='font-family: sans-serif; font-size: 12px; font-weight: bold; color: #666; margin: 5px 0 20px 0;'>{fecha_hora_actual}</p><table style='width: 100%; border-collapse: collapse; font-family: sans-serif;'><thead><tr style='background-color: #8C1C31; color: white;'><th style='padding: 12px; text-align: left; font-size: 11px; letter-spacing: 1px;'>PRODUCTO</th><th style='padding: 12px; text-align: center; font-size: 11px; letter-spacing: 1px;'>CANTIDAD</th><th style='padding: 12px; text-align: center; font-size: 11px; letter-spacing: 1px;'>FECHA</th></tr></thead><tbody>{filas_html}</tbody></table></div><p style='text-align: center; color: gray; font-size: 13px; margin-top: 15px; margin-bottom: 20px;'>Reporte generado automáticamente</p>"
                 
-                st.markdown(tarjeta_html, unsafe_allow_html=True)
+                st.markdown(tarjeta_html_general, unsafe_allow_html=True)
                 
                 link_wp = f"https://wa.me/{numero_whatsapp.strip()}"
                 boton_wp_html = f"<a href='{link_wp}' target='_blank' style='display: block; width: 100%; max-width: 500px; margin: auto; background-color: #25D366; color: white; text-align: center; padding: 15px; border-radius: 10px; font-size: 18px; font-weight: bold; text-decoration: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: background-color 0.3s;'>📞 Enviar Reporte a {seleccion_wa.upper()}</a><br><br>"
