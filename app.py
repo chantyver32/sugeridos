@@ -70,6 +70,11 @@ st.markdown("""
     div[data-testid="stMetricDelta"] { font-size: 30px !important; font-weight: bold !important; }
     div[data-testid="stMetricDelta"] svg { width: 35px !important; height: 35px !important; }
 
+    /* Asegurar que los popovers/flotantes se vean por encima de todo */
+    div[data-baseweb="popover"] {
+        z-index: 999999 !important;
+    }
+    
     div[data-baseweb="popover"] > div {
         background-color: #1a1a1c !important; 
         border-radius: 8px !important;
@@ -100,23 +105,6 @@ st.markdown("""
     button[kind="secondary"] { background-color: transparent !important; border: 1px solid rgba(136, 136, 136, 0.5) !important; color: rgba(136, 136, 136, 0.9) !important; }
     button[kind="secondary"]:hover { background-color: rgba(136, 136, 136, 0.1) !important; }
 
-    /* Centrar textos de notificaciones y alertas */
-    div[data-testid="stToast"] {
-        text-align: center;
-        justify-content: center;
-        align-items: center;
-    }
-    div[data-testid="stAlert"] {
-        text-align: center;
-    }
-    div[data-testid="stAlert"] > div {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-    }
-    div[data-testid="stMarkdownContainer"] p {
-        margin-bottom: 0px;
-    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -504,13 +492,11 @@ def popup_voz():
     st.number_input("Cantidad", value=int(datos['cant']), min_value=1, key="voz_input_cant")
     st.text_input("Producto", value=datos['prod'], key="voz_input_prod")
     
-    # NUEVO: Botones usando callbacks (on_click) para evitar parpadeo y error de doble renderizado
     st.markdown("**📅 Fecha Sugerida:**")
     col_f1, col_f2, col_f3 = st.columns([1, 2, 1])
     with col_f1:
         st.button("➖ Día", use_container_width=True, on_click=restar_dia)
     with col_f2:
-        # NUEVO: Fondo gris clarito y letra blanca para la fecha
         st.markdown(
             f"<div style='text-align: center; font-size: 20px; font-weight: bold; padding: 5px; background: #A9A9A9; border-radius: 5px; border: 1px solid #999; color: white;'>{st.session_state.voz_input_fech.strftime('%d/%m/%Y')}</div>", 
             unsafe_allow_html=True
@@ -704,7 +690,6 @@ with tab1:
 with tab2:
     st.markdown("### 📦 Gestión de Sugeridos")
     
-    # NUEVO: Filtro MUY visible y forzado
     st.markdown("#### 🔍 Filtro de Búsqueda")
     col_filt_1, col_filt_2 = st.columns([1, 2])
     with col_filt_1:
@@ -807,7 +792,6 @@ with tab3:
     if df_visual_completo.empty:
         st.warning(f"No hay productos sugeridos disponibles para {seleccion_wa}.")
     else:
-        # NUEVO: FORZAR ORDENAMIENTO CRONOLÓGICO DESDE PANDAS PARA GARANTIZAR EL ORDEN EN TARJETAS
         df_visual_completo['Fecha_orden'] = pd.to_datetime(df_visual_completo['Fecha'])
         df_visual_completo = df_visual_completo.sort_values(by='Fecha_orden', ascending=True).drop(columns=['Fecha_orden']).reset_index(drop=True)
         
@@ -882,7 +866,7 @@ with tab3:
                     ])
                 elif any(kw in prod_nombre for kw in ["PAY"]):
                     guion = random.choice([
-                        "Pra compartir, ¿quiere llevar algunas piezas de bocadillos o pan?",
+                        "Para compartir, ¿quiere llevar algunas piezas de bocadillos o pan?",
                         "Para acompañar el pay, ¿desea agregar alguna bolsa de café?",
                         "Podemos armar una combinación con diferentes piezas de bocadillos o pan, ¿gusta agregar alguno?"
                     ])
@@ -897,7 +881,8 @@ with tab3:
                         "Tenemos bocadillos que combinan muy bien con lo que lleva, ¿quiere agregar alguno?"
                     ])
                 
-                tarjeta_html = f"<div style='background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%); border-left: 5px solid {color_borde}; border-radius: 10px; padding: 20px; width: 100%; box-sizing: border-box; box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: left; margin-bottom: 5px;'><p style='margin: 0; color: {color_borde}; font-weight: 900; font-size: 14px; letter-spacing: 1px;'>{label_texto}</p><h3 style='margin: 5px 0 5px 0; font-size: 18px; color: #333;'>{prod_nombre}</h3><p style='margin: 0 0 10px 0; color: {color_borde}; font-weight: bold; font-size: 13px;'>📅 Fecha: {fecha_str}</p><div style='display: flex; align-items: center; margin-bottom: 15px;'><span style='background-color: {badge_bg}; color: {badge_color}; padding: 5px 10px; border-radius: 5px; font-weight: bold; font-size: 14px;'>📦 Quedan: {cant}</span></div><p style='margin: 0; font-size: 12px; color: #666; font-weight: bold;'>🗣️ DILE AL CLIENTE:</p><p style='margin: 5px 0 0 0; font-size: 14px; font-style: italic; color: #444;'>\" {guion} \"</p></div>"
+                # Diseño actualizado para forzar altura fija y alinear el contenido internamente
+                tarjeta_html = f"<div style='background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%); border-left: 5px solid {color_borde}; border-radius: 10px; padding: 20px; width: 100%; height: 280px; display: flex; flex-direction: column; justify-content: flex-start; box-sizing: border-box; box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: left; margin-bottom: 5px;'><p style='margin: 0; color: {color_borde}; font-weight: 900; font-size: 14px; letter-spacing: 1px;'>{label_texto}</p><h3 style='margin: 5px 0 5px 0; font-size: 18px; color: #333;'>{prod_nombre}</h3><p style='margin: 0 0 10px 0; color: {color_borde}; font-weight: bold; font-size: 13px;'>📅 Fecha: {fecha_str}</p><div style='display: flex; align-items: center; margin-bottom: 15px;'><span style='background-color: {badge_bg}; color: {badge_color}; padding: 5px 10px; border-radius: 5px; font-weight: bold; font-size: 14px;'>📦 Quedan: {cant}</span></div><div style='margin-top: auto;'><p style='margin: 0; font-size: 12px; color: #666; font-weight: bold;'>🗣️ DILE AL CLIENTE:</p><p style='margin: 5px 0 0 0; font-size: 14px; font-style: italic; color: #444;'>\" {guion} \"</p></div></div>"
                 
                 with cols[idx % 3]:
                     st.markdown(tarjeta_html, unsafe_allow_html=True)
