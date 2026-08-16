@@ -655,7 +655,8 @@ with tab1:
 
     st.divider()
     
-    df_hoy_captura = conn.query("SELECT id, nombre, fecha_cad AS \"Fecha\", cantidad FROM captura_actual WHERE sucursal=:suc", params={"suc": seleccion_wa}, ttl=0)
+    # ORDENADO POR FECHA DE CADUCIDAD ASCENDENTE
+    df_hoy_captura = conn.query("SELECT id, nombre, fecha_cad AS \"Fecha\", cantidad FROM captura_actual WHERE sucursal=:suc ORDER BY fecha_cad ASC", params={"suc": seleccion_wa}, ttl=0)
     
     if not df_hoy_captura.empty:
         with st.expander("📋 Productos registrados al momento", expanded=False):
@@ -686,7 +687,8 @@ with tab1:
 with tab2:
     st.markdown("### 📦 Gestión de Sugeridos")
     
-    df_stock = conn.query('SELECT id, nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc', params={"suc": seleccion_wa}, ttl=0)
+    # ORDENADO POR FECHA DE CADUCIDAD ASCENDENTE
+    df_stock = conn.query('SELECT id, nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc ORDER BY fecha_cad ASC', params={"suc": seleccion_wa}, ttl=0)
     
     with st.expander(f"✏️ Editar Sugeridos de {seleccion_wa}", expanded=False):
         if df_stock.empty:
@@ -721,7 +723,6 @@ with tab2:
     
     st.markdown("### 📥 Descargar Excel Actualizado")
     
-    # Aquí el query trae los datos ordenados por fecha_cad ASC automáticamente.
     df_stock_final = conn.query('SELECT nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc ORDER BY fecha_cad ASC', params={"suc": seleccion_wa}, ttl=0)
     
     if df_stock_final.empty:
@@ -758,7 +759,6 @@ with tab3:
         else:
             fecha_filtro_visual = None
             
-    # El ORDER BY asegura que visualmente se ordene: 1. Sugeridos, 2. Pasado Mañana, 3. Extra
     df_visual_completo = conn.query('SELECT id, nombre as "Producto", fecha_cad as "Fecha", cantidad as "Existencia" FROM base_anterior WHERE sucursal=:suc AND cantidad > 0 ORDER BY fecha_cad ASC', params={"suc": seleccion_wa}, ttl=0)
     
     if df_visual_completo.empty:
@@ -855,9 +855,10 @@ with tab3:
                         "¿Es para compartir? Si es para varias personas, ¿necesita alguna opción adicional para acompañar?"
                     ])
                 else:
+                    # AJUSTE EN LA FRASE PARA NO MENCIONAR EL NOMBRE DEL PRODUCTO ESPECÍFICO
                     guion = random.choice([
                         "¿Desea complementar su compra con algo más?",
-                        f"Ya que lleva {prod_nombre.lower()}, ¿le gustaría agregar algo para acompañarlo?",
+                        "Ya que lleva esto, ¿le gustaría agregar algo para acompañarlo?",
                         "Para que tenga todo completo, ¿necesita algún producto adicional?",
                         "Si es para compartir, podemos agregar algo más, ¿le gustaría?",
                         "¿Le agrego alguna bebida o bocadillo para acompañarlo?",
