@@ -769,15 +769,17 @@ with tab3:
         if df_visual.empty:
             st.info("No hay productos sugeridos para la fecha seleccionada.")
         else:
-            # --- MÓDULO DE RECOMENDACIONES (ESQUEMA VISUAL CENTRADO) ---
+            # --- MÓDULO DE RECOMENDACIONES (ESQUEMA VISUAL CENTRADO CON SEMÁFORO DE FECHAS) ---
             st.markdown("#### 🎯 Qué ofrecer al cliente")
             st.caption("Aprovecha estos productos de pronta caducidad. Las sugerencias cambian para mantener fresco el guion.")
             
             if st.button("🔄 Generar nuevas frases", use_container_width=True):
                 st.rerun()
             
-            df_urgentes = df_visual.head(3)
+            # Mostramos hasta 6 productos para tener variedad
+            df_urgentes = df_visual.head(6)
             
+            # Columnas para alinear tarjeta y botón
             cols = st.columns(3)
             
             for idx, (_, fila) in enumerate(df_urgentes.iterrows()):
@@ -785,56 +787,95 @@ with tab3:
                 cant = fila['Existencia']
                 prod_id = fila['id']
                 
-                fecha_str = str(fila['Fecha'])
+                # CÁLCULO EXACTO Y A PRUEBA DE FALLOS PARA EL SEMÁFORO
+                fecha_str_db = str(fila['Fecha'])
                 try:
-                    if '-' in fecha_str:
-                        partes = fecha_str.split('-')
-                        if len(partes) == 3:
-                            fecha_str = f"{partes[2]}/{partes[1]}/{partes[0]}"
-                except:
-                    pass
+                    if '-' in fecha_str_db:
+                        partes = fecha_str_db.split('-')
+                        y, m, d = int(partes[0]), int(partes[1]), int(partes[2])
+                        fecha_item = datetime(y, m, d).date()
+                        fecha_str = f"{d:02d}/{m:02d}/{y}"
+                    else:
+                        fecha_item = pd.to_datetime(fecha_str_db).date()
+                        fecha_str = fecha_item.strftime("%d/%m/%Y")
+                        
+                    diferencia_dias = (fecha_item - fecha_hoy_mx).days
+                except Exception:
+                    diferencia_dias = 0
+                    fecha_str = fecha_str_db
                 
-                if "PASTEL" in prod_nombre:
+                # LÓGICA DE SEMÁFORO DE FECHAS
+                if diferencia_dias <= 1:
+                    color_borde = "#8C1C31" 
+                    label_texto = "URGE VENDER"
+                    badge_bg = "#FCE4D6"
+                    badge_color = "#8C0000"
+                elif diferencia_dias == 2:
+                    color_borde = "#E67E22" 
+                    label_texto = "RECOMENDADO VENDER"
+                    badge_bg = "#FDEBD0"
+                    badge_color = "#A04000"
+                else:
+                    color_borde = "#27AE60" 
+                    label_texto = "OPCIONAL VENDER"
+                    badge_bg = "#D5F5E3"
+                    badge_color = "#145A32"
+
+                # AMPLIACIÓN MASIVA DE FRASES SEGÚN MANUAL
+                if any(kw in prod_nombre for kw in ["PASTEL", "TRES LECHES", "TIRAMISÚ", "PAY", "TARTA", "CHEESECAKE"]):
+                    #[span_2](start_span)[span_2](end_span)
                     guion = random.choice([
                         "¿Es para alguna celebración? Como es para celebración, ¿también necesita velitas para el pastel?",
                         "¿Ya tiene algo para acompañar el pastel? Podemos complementar con bocadillos o bebidas. ¿Le gustaría agregar alguno?",
                         "¿Ya tiene todo para la celebración? ¿Desea agregar velas o algún complemento para el festejo?",
                         "¿Es para compartir? Si es para varias personas, puedo recomendarle también una opción de bocadillos para complementar.",
-                        "Para acompañar el pastel, ¿prefiere llevar bocadillos o bebidas?"
+                        "Para acompañar el pastel, ¿prefiere llevar bocadillos o bebidas?",
+                        "¿Ya cuenta con velas? Tenemos velas disponibles. ¿Le agrego unas para que no tenga que buscarlas después?",
+                        "¿Ya tiene todo lo necesario para servir? ¿Necesita algún complemento para la celebración?"
                     ])
                 elif "ROSCA" in prod_nombre:
+                    #[span_3](start_span)[span_3](end_span)
                     guion = random.choice([
                         "¿Es para compartir en casa o para una reunión? Si es para compartir, ¿quiere llevar también pan o algún bocadillo para acompañarla?",
                         "¿Cuántas personas asistirán? Podemos complementar la rosca con piezas individuales para que alcance mejor."
                     ])
-                elif "PAN" in prod_nombre or "CROISSANT" in prod_nombre:
+                elif any(kw in prod_nombre for kw in ["PAN", "CROISSANT", "CONCHA", "OREJA", "HOJALDRE", "BISQUET", "CUERNO"]):
+                    #[span_4](start_span)[span_4](end_span)
                     guion = random.choice([
                         "¿Es para usted o para compartir? Si es para compartir, ¿quiere llevar algunas piezas más o probar otra variedad?",
                         "¿Es para desayuno, reunión o consumo en casa? Para acompañar el pan, ¿desea agregar alguna bebida o producto complementario?",
                         "¿Le gusta más lo dulce o quiere combinar? Podemos armar una combinación con diferentes piezas. ¿Quiere agregar una variedad?"
                     ])
-                elif "BOCADILLO" in prod_nombre:
+                elif any(kw in prod_nombre for kw in ["BOCADILLO", "GELATINA", "DEDO", "EMPANADA"]):
+                    #[span_5](start_span)[span_5](end_span)
                     guion = random.choice([
                         "¿Para cuántas personas son? Si es para una reunión, ¿quiere complementar con alguna opción dulce o salada?",
                         "¿Ya tiene bebidas y postre? Para que tenga todo completo, ¿desea agregar bebidas o algún postre?"
                     ])
-                elif "BEBIDA" in prod_nombre or "MALTEADA" in prod_nombre:
+                elif any(kw in prod_nombre for kw in ["BEBIDA", "MALTEADA", "CAFÉ", "FRAPPE", "JUGO"]):
+                    #[span_6](start_span)[span_6](end_span)
                     guion = random.choice([
                         "¿Es para acompañar lo que lleva? ¿Le agrego una bebida para acompañarlo?",
                         "¿Es para compartir? Si es para varias personas, ¿necesita alguna opción adicional para acompañar?"
                     ])
                 else:
+                    #[span_7](start_span)[span_7](end_span)
                     guion = random.choice([
-                        "¿Desea complementar su compra con…?",
-                        "Ya que lleva este producto, ¿le gustaría agregar algo más?",
-                        "Para que tenga todo completo, ¿necesita algún complemento?",
+                        "¿Desea complementar su compra con algo más?",
+                        "Ya que lleva este producto, ¿le gustaría agregar algo para acompañarlo?",
+                        "Para que tenga todo completo, ¿necesita algún producto adicional?",
                         "Si es para compartir, podemos agregar algo más, ¿le gustaría?",
+                        "¿Le agrego alguna bebida o bocadillo para acompañarlo?",
                         "Antes de cobrarle, ¿necesita alguna vela, bebida o complemento?",
-                        "Tenemos esta opción que combina muy bien con lo que lleva. ¿Quiere agregarla?"
+                        "Tenemos esta opción que combina muy bien con lo que lleva. ¿Quiere agregarla?",
+                        "Ya que es para su ocasión, ¿desea complementar con algo más?",
+                        "¿Qué desea llevar? ¿Para qué ocasión es? ¿Para cuántas personas?"
                     ])
                 
-                tarjeta_html = f"<div style='background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%); border-left: 5px solid #8C1C31; border-radius: 10px; padding: 20px; width: 100%; box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: left; margin: 0 auto; margin-bottom: 10px;'><p style='margin: 0; color: #8C1C31; font-weight: 900; font-size: 14px; letter-spacing: 1px;'>URGE VENDER</p><h3 style='margin: 5px 0 5px 0; font-size: 18px; color: #333;'>{prod_nombre}</h3><p style='margin: 0 0 10px 0; color: #d9534f; font-weight: bold; font-size: 13px;'>📅 Fecha: {fecha_str}</p><div style='display: flex; align-items: center; margin-bottom: 15px;'><span style='background-color: #FCE4D6; color: #8C0000; padding: 5px 10px; border-radius: 5px; font-weight: bold; font-size: 14px;'>📦 Quedan: {cant}</span></div><p style='margin: 0; font-size: 12px; color: #666; font-weight: bold;'>🗣️ DILE AL CLIENTE:</p><p style='margin: 5px 0 0 0; font-size: 14px; font-style: italic; color: #444;'>\" {guion} \"</p></div>"
+                # Diseño visual forzando el 100% del ancho para que empate perfecto con el botón
+                tarjeta_html = f"<div style='background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%); border-left: 5px solid {color_borde}; border-radius: 10px; padding: 20px; width: 100%; box-sizing: border-box; box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: left; margin-bottom: 5px;'><p style='margin: 0; color: {color_borde}; font-weight: 900; font-size: 14px; letter-spacing: 1px;'>{label_texto}</p><h3 style='margin: 5px 0 5px 0; font-size: 18px; color: #333;'>{prod_nombre}</h3><p style='margin: 0 0 10px 0; color: {color_borde}; font-weight: bold; font-size: 13px;'>📅 Fecha: {fecha_str}</p><div style='display: flex; align-items: center; margin-bottom: 15px;'><span style='background-color: {badge_bg}; color: {badge_color}; padding: 5px 10px; border-radius: 5px; font-weight: bold; font-size: 14px;'>📦 Quedan: {cant}</span></div><p style='margin: 0; font-size: 12px; color: #666; font-weight: bold;'>🗣️ DILE AL CLIENTE:</p><p style='margin: 5px 0 0 0; font-size: 14px; font-style: italic; color: #444;'>\" {guion} \"</p></div>"
                 
+                # Insertamos tarjeta y botón dentro del mismo contenedor de columna para alinear ambos
                 with cols[idx % 3]:
                     st.markdown(tarjeta_html, unsafe_allow_html=True)
                     st.button("✅ Vendido (-1)", key=f"btn_vender_{prod_id}_{cant}", use_container_width=True, on_click=marcar_vendido, args=(prod_id, prod_nombre))
