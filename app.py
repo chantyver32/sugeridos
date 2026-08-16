@@ -847,36 +847,24 @@ with tab3:
                     badge_bg = "#D5F5E3"
                     badge_color = "#145A32"
 
-                if any(kw in prod_nombre for kw in ["PASTEL", "TRES LECHES", "TIRAMISÚ", "PAY", "TARTA", "CHEESECAKE"]):
+                if any(kw in prod_nombre for kw in ["PASTEL"]):
                     guion = random.choice([
-                        "¿Es para alguna celebración? Como es para celebración, ¿también necesita velitas para el pastel?",
-                        "¿Ya tiene algo para acompañar el pastel? Podemos complementar con bocadillos o bebidas. ¿Le gustaría agregar alguno?",
-                        "¿Ya tiene todo para la celebración? ¿Desea agregar velas o algún complemento para el festejo?",
+                        "¿Ya tiene algo para acompañar el pastel? Podemos complementar con bocadillos o postres. ¿Le gustaría agregar alguno?",
+                        "¿Ya tiene todo para la celebración? ¿Desea agregar algún complemento para el festejo?",
                         "¿Es para compartir? Si es para varias personas, puedo recomendarle también una opción de bocadillos para complementar.",
-                        "Para acompañar el pastel, ¿prefiere llevar bocadillos o bebidas?",
-                        "¿Ya cuenta con velas? Tenemos velas disponibles. ¿Le agrego unas para que no tenga que buscarlas después?",
+                        "Para acompañar el pastel, ¿prefiere llevar bocadillos o postres?",
                         "¿Ya tiene todo lo necesario para servir? ¿Necesita algún complemento para la celebración?"
                     ])
                 elif "ROSCA" in prod_nombre:
                     guion = random.choice([
-                        "¿Es para compartir en casa o para una reunión? Si es para compartir, ¿quiere llevar también pan o algún bocadillo para acompañarla?",
-                        "¿Cuántas personas asistirán? Podemos complementar la rosca con piezas individuales para que alcance mejor."
+                        "¿Gusta llevar también bolsa de café o algún bocadillo para acompañar?",
+                        "Podemos complementar la rosca con piezas individuales para que alcance mejor."
                     ])
-                elif any(kw in prod_nombre for kw in ["PAN", "CROISSANT", "CONCHA", "OREJA", "HOJALDRE", "BISQUET", "CUERNO"]):
+                elif any(kw in prod_nombre for kw in ["PAY"]):
                     guion = random.choice([
-                        "¿Es para usted o para compartir? Si es para compartir, ¿quiere llevar algunas piezas más o probar otra variedad?",
-                        "¿Es para desayuno, reunión o consumo en casa? Para acompañar el pan, ¿desea agregar alguna bebida o producto complementario?",
-                        "¿Le gusta más lo dulce o quiere combinar? Podemos armar una combinación con diferentes piezas. ¿Quiere agregar una variedad?"
-                    ])
-                elif any(kw in prod_nombre for kw in ["BOCADILLO", "GELATINA", "DEDO", "EMPANADA"]):
-                    guion = random.choice([
-                        "¿Para cuántas personas son? Si es para una reunión, ¿quiere complementar con alguna opción dulce o salada?",
-                        "¿Ya tiene bebidas y postre? Para que tenga todo completo, ¿desea agregar bebidas o algún postre?"
-                    ])
-                elif any(kw in prod_nombre for kw in ["BEBIDA", "MALTEADA", "CAFÉ", "FRAPPE", "JUGO"]):
-                    guion = random.choice([
-                        "¿Es para acompañar lo que lleva? ¿Le agrego un bocadillo o pan dulce para acompañarlo?",
-                        "¿Es para compartir? Si es para varias personas, ¿necesita algún pan o bocadillo extra para acompañar?"
+                        "Pra compartir, ¿quiere llevar algunas piezas de bocadillos o pan?",
+                        "Para acompañar el pay, ¿desea agregar alguna bolsa de café?",
+                        "Podemos armar una combinación con diferentes piezas de bocadillos o pan, ¿gusta agregar alguno?"
                     ])
                 else:
                     guion = random.choice([
@@ -885,10 +873,8 @@ with tab3:
                         "Para que tenga todo completo, ¿necesita algún producto adicional?",
                         "Si es para compartir, podemos agregar algo más, ¿le gustaría?",
                         "¿Le agrego alguna bebida o bocadillo para acompañarlo?",
-                        "Antes de cobrarle, ¿necesita alguna vela, bebida o complemento?",
-                        "Tenemos esta opción que combina muy bien con lo que lleva. ¿Quiere agregarla?",
-                        "Ya que es para su ocasión, ¿desea complementar con algo más?",
-                        "¿Qué desea llevar? ¿Para qué ocasión es? ¿Para cuántas personas?"
+                        "Antes de cobrarle, ¿necesita alguna bebida o complemento?",
+                        "Tenemos bocadillos que combinan muy bien con lo que lleva, ¿quiere agregar alguno?"
                     ])
                 
                 tarjeta_html = f"<div style='background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%); border-left: 5px solid {color_borde}; border-radius: 10px; padding: 20px; width: 100%; box-sizing: border-box; box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: left; margin-bottom: 5px;'><p style='margin: 0; color: {color_borde}; font-weight: 900; font-size: 14px; letter-spacing: 1px;'>{label_texto}</p><h3 style='margin: 5px 0 5px 0; font-size: 18px; color: #333;'>{prod_nombre}</h3><p style='margin: 0 0 10px 0; color: {color_borde}; font-weight: bold; font-size: 13px;'>📅 Fecha: {fecha_str}</p><div style='display: flex; align-items: center; margin-bottom: 15px;'><span style='background-color: {badge_bg}; color: {badge_color}; padding: 5px 10px; border-radius: 5px; font-weight: bold; font-size: 14px;'>📦 Quedan: {cant}</span></div><p style='margin: 0; font-size: 12px; color: #666; font-weight: bold;'>🗣️ DILE AL CLIENTE:</p><p style='margin: 5px 0 0 0; font-size: 14px; font-style: italic; color: #444;'>\" {guion} \"</p></div>"
