@@ -504,17 +504,14 @@ def popup_voz():
     st.number_input("Cantidad", value=int(datos['cant']), min_value=1, key="voz_input_cant")
     st.text_input("Producto", value=datos['prod'], key="voz_input_prod")
     
-    st.markdown("**📅 Fecha Sugerida:**")
+    st.markdown("**📅 Fecha:**")
     col_f1, col_f2, col_f3 = st.columns([1, 2, 1])
     with col_f1:
-        st.button("➖ Día", use_container_width=True, on_click=restar_dia)
+        st.button("➖ Día", key="btn_menos_voz", use_container_width=True, on_click=restar_dia)
     with col_f2:
-        st.markdown(
-            f"<div style='text-align: center; font-size: 20px; font-weight: bold; padding: 5px; background: #A9A9A9; border-radius: 5px; border: 1px solid #999; color: white;'>{st.session_state.voz_input_fech.strftime('%d/%m/%Y')}</div>", 
-            unsafe_allow_html=True
-        )
+        st.date_input("Selecciona fecha:", key="voz_input_fech", format="DD/MM/YYYY", label_visibility="collapsed")
     with col_f3:
-        st.button("➕ Día", use_container_width=True, on_click=sumar_dia)
+        st.button("➕ Día", key="btn_mas_voz", use_container_width=True, on_click=sumar_dia)
             
     st.write("") 
     
