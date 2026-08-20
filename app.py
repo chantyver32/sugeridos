@@ -123,12 +123,12 @@ if "show_warning" in st.session_state:
     del st.session_state.show_warning
 
 # ------------------ BASE DE DATOS (SUPABASE) ------------------
-db_url = os.environ.get("DATABASE_URL")
-if not db_url:
-    try:
-        db_url = st.secrets["DATABASE_URL"]
-    except:
-        pass
+try:
+    # Streamlit Cloud maneja las credenciales a través de st.secrets
+    db_url = st.secrets["DATABASE_URL"]
+except KeyError:
+    st.error("⚠️ Configura 'DATABASE_URL' en los secrets de Streamlit Cloud.")
+    st.stop()
         
 conn = st.connection("supabase", type="sql", url=db_url)
 
