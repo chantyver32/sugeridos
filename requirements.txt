@@ -1,7 +1,7 @@
-​streamlit
-​pandas
-​SQLAlchemy
-​psycopg2-binary
-​pytz
-​streamlit-mic-recorder
-​XlsxWriter
+streamlit
+pandas
+SQLAlchemy
+psycopg2-binary
+pytz
+streamlit-mic-recorder
+XlsxWriter
