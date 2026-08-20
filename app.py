@@ -125,9 +125,9 @@ if "show_warning" in st.session_state:
 # ------------------ BASE DE DATOS (SUPABASE) ------------------
 try:
     # Streamlit Cloud maneja las credenciales a través de st.secrets
-    db_url = st.secrets["DATABASE_URL"]
+    db_url = st.secrets["SUPABASE_URL"]
 except KeyError:
-    st.error("⚠️ Configura 'DATABASE_URL' en los secrets de Streamlit Cloud.")
+    st.error("⚠️ Configura 'SUPABASE_URL' en los secrets de Streamlit Cloud.")
     st.stop()
         
 conn = st.connection("supabase", type="sql", url=db_url)
