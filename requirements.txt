@@ -1,7 +1,5 @@
 streamlit
+libsql-experimental
 pandas
-SQLAlchemy
-psycopg2-binary
 pytz
 streamlit-mic-recorder
-XlsxWriter
